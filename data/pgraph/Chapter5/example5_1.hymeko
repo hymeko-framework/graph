@@ -1,0 +1,48 @@
+// Converted from example5_1.pgip by scripts/pgip_to_hymeko.py
+// Source: P-graph Studio .pgip (SQLite) format,
+// materials=9  units=6
+//
+// Type-tag mapping:
+//   typeId=0 → Intermediate
+//   typeId=1 → Raw material
+//   typeId=2 → Product
+
+example5_1 {}
+
+context
+{
+    // ── Raw material materials ──
+    C <material, raw>;
+    G <material, raw>;
+    H <material, raw>;
+    I <material, raw>;
+
+    // ── Product materials ──
+    A <material, product>;
+
+    // ── Intermediate materials ──
+    B <material>;
+    D <material>;
+    E <material>;
+    F <material>;
+
+    // ── Operating units ──
+    @O1 <unit> 0.0 {
+        (-B, +A, +F);
+    }
+    @O2 <unit> 0.0 {
+        (-C, -D, +B);
+    }
+    @O3 <unit> 0.0 {
+        (-E, +A, +B);
+    }
+    @O4 <unit> 0.0 {
+        (-F, -G, +D);
+    }
+    @O5 <unit> 0.0 {
+        (-H, +E);
+    }
+    @O6 <unit> 0.0 {
+        (-I, +E);
+    }
+}

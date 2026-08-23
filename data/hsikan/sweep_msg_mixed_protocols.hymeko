@@ -1,0 +1,107 @@
+// HSiKAN-MIXED × protocol-axis P-graph sweep.
+//
+// Companion to data/hsikan/sweep_msg.hymeko, but the structural
+// primitive is FIXED to the HSiKAN-mixed family (c3,c4,w2,w3 — the
+// JOINT_BA_SLOTS default) and the P-graph instead ranges over the
+// *other protocols* layered on top of it:
+//
+//     attention(none|dot|quaternion)
+//       × edge-gate(scalar|edge_cr)
+//       × direct-messaging(off|on)
+//       × hidden-width(8|16|32)
+//       × training-length(short|long)
+//
+// The chain struct → attn → gate → msg → embedding → auc makes every
+// axis MANDATORY: a feasible solution must pick exactly one unit from
+// each layer (you cannot reach `auc_score` otherwise). MSG (canonical
+// Friedler) enumerates the feasible space; ABB returns the
+// cost-minimal launchable candidate; SSG the Pareto subset.
+//
+// No-Excess demonstration: `@attn_quaternion` emits an extra
+// `attn_excess` by-product that NO downstream unit consumes. Under the
+// canonical regime it survives in the maximal structure; under
+// `--regime canonical+no-excess` (Composite) it is pruned as waste.
+// This is the observable difference the smoke + tests assert.
+//
+// Read by hymeko_pgraph::lower. Solve with:
+//   hymeko_pgraph_dump sweep_msg_mixed_protocols.hymeko \
+//       --algorithm abb --regime canonical+no-excess
+
+HSiKAN_Mixed_Protocols_MSG {}
+
+context
+{
+    // ─── Resource budgets (raw materials) ────────────────────────
+    gpu_memory   <material, raw>;     // 8 GB on the user's RTX 2070S
+    train_time   <material, raw>;     // overnight wall budget
+
+    // ─── Pipeline intermediates (one per mandatory layer) ────────
+    cycle_base         <material>;    // fixed mixed primitive (c3,c4,w2,w3)
+    attn_pool          <material>;    // pooled cycle/walk embeddings
+    gated_signal       <material>;    // post edge-gate signal
+    msg_signal         <material>;    // post direct-messaging signal
+    embedding_quality  <material>;    // HSiKAN forward output
+
+    // ─── No-Excess hook: produced by quaternion attn, consumed by
+    //     nobody → pruned under the no-excess regime. ─────────────
+    attn_excess        <material>;
+
+    // ─── Target ──────────────────────────────────────────────────
+    auc_score          <material, product>;
+
+    // ─── Layer 0: fixed HSiKAN-mixed structural primitive ────────
+    @struct_mixed    <unit>  10 {
+        // c3,c4,w2,w3 — the mixed cycles+walks family base.
+        (-gpu_memory, -train_time, +cycle_base);
+    }
+
+    // ─── Layer 1: attention protocol (HSIKAN_ATTENTION_M_E) ──────
+    @attn_none       <unit>   5 {
+        (-cycle_base, +attn_pool);
+    }
+    @attn_dot        <unit>  25 {
+        (-cycle_base, -gpu_memory, +attn_pool);
+    }
+    @attn_quaternion <unit>  60 {
+        // richer 4-channel attention; leaves an unconsumed residual
+        // → No-Excess prunes any structure that selects it.
+        (-cycle_base, -gpu_memory, +attn_pool, +attn_excess);
+    }
+
+    // ─── Layer 2: edge-gate protocol (HSIKAN_PER_EDGE_GATE) ──────
+    @gate_scalar     <unit>   5 {
+        (-attn_pool, +gated_signal);
+    }
+    @gate_edge_cr    <unit>  20 {
+        // per-edge Catmull-Rom highway gate (the Slashdot edge_cr win)
+        (-attn_pool, -gpu_memory, +gated_signal);
+    }
+
+    // ─── Layer 3: direct-messaging protocol (HSIKAN_DIRECT_MESSAGING)
+    @dm_off          <unit>   2 {
+        (-gated_signal, +msg_signal);
+    }
+    @dm_on           <unit>  30 {
+        // SGCN-style sign-conditional parallel message path
+        (-gated_signal, -gpu_memory, +msg_signal);
+    }
+
+    // ─── Layer 4: hidden width (HighwaySignedKAN inner width) ────
+    @model_h8        <unit>  20 {
+        (-msg_signal, -gpu_memory, +embedding_quality);
+    }
+    @model_h16       <unit>  60 {
+        (-msg_signal, -gpu_memory, +embedding_quality);
+    }
+    @model_h32       <unit> 200 {
+        (-msg_signal, -gpu_memory, +embedding_quality);
+    }
+
+    // ─── Layer 5: training length (n_epochs schedule) ────────────
+    @train_short     <unit>  30 {
+        (-train_time, -embedding_quality, +auc_score);
+    }
+    @train_long      <unit> 120 {
+        (-train_time, -embedding_quality, +auc_score);
+    }
+}

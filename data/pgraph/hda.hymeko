@@ -1,0 +1,53 @@
+// HDA-like (toluene → benzene) P-graph in HyMeKo grammar.
+//
+// Idiomatic P-graph encoding on the canonical HyMeKo IR:
+//
+//   Materials     →  hypernodes  (no `@` prefix)
+//   Operating Units → hyperedges (`@`-prefix), since a P-graph
+//                     operating unit IS a hyperedge connecting
+//                     input materials to output materials.
+//
+// Tags pick the bipartite role for the lowering:
+//   <material>           — node is in the M-set
+//   <unit>               — edge is in the O-set
+//   <raw>                — material is in the raw set R
+//   <product>            — material is in the demand set P
+//
+// The (single) signed hyperarc inside an edge body encodes the
+// unit's I/O signature:
+//   "-Material"  → consumed by the unit (M → U directed edge)
+//   "+Material"  → produced by the unit (U → M directed edge)
+//
+// The unit's scalar cost is the edge's numeric value (read by ABB);
+// default 1.0 if absent.
+
+HDA{}
+
+context
+{
+    // ── Materials (hypernodes) ────────────────────────────────
+    Toluene <material, raw>;
+    H2      <material, raw>;
+    Mix     <material>;
+    Benzene <material, product>;
+    Methane <material>;
+
+    // ── Operating units (hyperedges) ──────────────────────────
+    @Mixer <unit> 100 {
+        (-Toluene, -H2, +Mix);
+    }
+
+    @Reactor <unit> 250 {
+        (-Mix, +Benzene, +Methane);
+    }
+
+    // Alternative one-step route (more expensive, no methane).
+    @DirectSynth <unit> 800 {
+        (-Toluene, -H2, +Benzene);
+    }
+
+    // Disposes of methane — only consumes, no output.
+    @Disposal <unit> 50 {
+        (-Methane);
+    }
+}

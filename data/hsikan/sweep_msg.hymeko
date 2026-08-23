@@ -1,0 +1,71 @@
+// P-graph-style axiom-feasibility tuning for HSiKAN.
+//
+// Architecture choices are encoded as a P-graph: "materials" are
+// resource budgets (GPU memory, wall-clock time) and observable
+// quality (AUC headroom); "operating units" (hyperedges) are
+// architecture/training choices that consume budget and produce
+// quality.  The MSG / SSG / ABB pipeline (hymeko_pgraph) picks the
+// feasible-and-optimal selection — exactly the pattern from
+// data/pgraph/hda.hymeko but transposed onto neural-architecture
+// search.
+//
+// Reads as a P-graph by hymeko_pgraph::lower:
+//   <material> + <unit> tags; signed hyperarcs; cost via @U value.
+
+HSiKAN_Sweep_MSG {}
+
+context
+{
+    // ─── Resource budgets (raw materials) ────────────────────────
+    gpu_memory   <material, raw>;     // 8 GB on the user's RTX 2070S
+    train_time   <material, raw>;     // ~2 hours overnight budget
+
+    // ─── Quality dimensions (intermediate materials) ─────────────
+    cycle_quality      <material>;    // produced by cycle-enum
+    embedding_quality  <material>;    // produced by HSiKAN forward
+    auc_score          <material, product>;  // the target
+
+    // ─── Architecture choices as operating units ─────────────────
+    // Each <unit> consumes some resources and produces a quality
+    // contribution. Cost = relative GPU-memory or wall-clock cost.
+
+    @cycle_topk_m4   <unit>  10 {
+        // cheapest cycle setup; produces only modest cycle_quality
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+    @cycle_topk_m16  <unit>  40 {
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+    @cycle_topk_m64  <unit> 160 {
+        // expensive but high-quality cycle set
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+
+    @model_h8        <unit>  20 {
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    @model_h16       <unit>  60 {
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    @model_h32       <unit> 200 {
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+
+    @train_short     <unit>  30 {
+        // 10 epochs
+        (-train_time, -embedding_quality, +auc_score);
+    }
+    @train_long      <unit> 120 {
+        // 60 epochs with entropy regulariser
+        (-train_time, -embedding_quality, +auc_score);
+    }
+}
+
+// ─── Usage ──────────────────────────────────────────────────────
+// `hymeko_pgraph::lower` reads this as a P-graph; MSG trims units
+// that can't reach `auc_score`; ABB picks the cost-minimum subset
+// satisfying the demand for `auc_score`.  In effect this becomes a
+// branch-and-bound architecture search over (cycle_setup × hidden ×
+// training_length) with the P-graph axioms as feasibility
+// constraints (e.g. "you can't have cycle_quality without picking
+// SOME cycle setup").

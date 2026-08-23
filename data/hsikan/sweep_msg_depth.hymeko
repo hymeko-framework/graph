@@ -1,0 +1,42 @@
+// HSIKAN depth-scaling P-graph — Phase 16 (2026-05-20 overnight).
+//
+// 4-unit depth axis for the StackedSignedKAN architecture. Slots
+// in alongside the existing cycle / hidden / training-length axes
+// of sweep_msg.hymeko if combined with that fixture; here it's
+// isolated so the depth-only A/B is reproducible.
+//
+// Empirical finding from Phase 16's 5-seed × L∈{1,2,4,8} A/B on
+// Bitcoin Alpha: deeper HURTS. L=1 mean AUC 0.770; L=8 mean AUC
+// 0.442 (-0.328 from baseline). Both identity-residual and
+// highway-gated skip variants show the same monotonic
+// degradation. The cost-min ABB pick `depth_l1` is therefore also
+// the empirically best architecture — for once the scalar-cost
+// framework wins without needing the multi-objective lever.
+//
+// Mapping: hymeko_neuro/experiments/hsikan_pgraph_mapping.py
+// Driver:  run_hsikan_msg_sweep.py (--algorithm abb / --weights for MO)
+
+HSiKAN_Sweep_Depth {}
+
+context
+{
+    gpu_memory   <material, raw>;
+    train_time   <material, raw>;
+
+    auc_score    <material, product>;
+
+    // Depth axis (4 choices). Costs roughly linear in L because
+    // wall-time and parameter count both scale L.
+    @depth_l1   <unit>  10 {
+        (-gpu_memory, -train_time, +auc_score);
+    }
+    @depth_l2   <unit>  20 {
+        (-gpu_memory, -train_time, +auc_score);
+    }
+    @depth_l4   <unit>  40 {
+        (-gpu_memory, -train_time, +auc_score);
+    }
+    @depth_l8   <unit>  80 {
+        (-gpu_memory, -train_time, +auc_score);
+    }
+}

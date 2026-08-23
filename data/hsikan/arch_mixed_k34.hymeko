@@ -1,0 +1,42 @@
+// Mixed-arity HSiKAN (k=3 + k=4) — the configuration that won
+// Bitcoin Alpha / OTC in the n-tuples paper. αₖ-weighted mixture
+// of two parallel signedkan_layer stacks, fused by an arity_mixer.
+
+HSiKAN_mixed_k34 {
+    const HIDDEN = 16;
+    const GRID   = 5;
+}
+
+context
+{
+    // Tensors
+    t_in       <input>;
+    t_emb_k3   <activation>;
+    t_emb_k4   <activation>;
+    t_emb      <activation>;
+    t_out      <output>;
+
+    // Parallel cycle stacks (k=3 and k=4)
+    sk_k3 : signedkan_layer {
+        hidden 16; arity 3; grid 5; spline_kind "catmull_rom";
+    }
+    sk_k4 : signedkan_layer {
+        hidden 16; arity 4; grid 5; spline_kind "catmull_rom";
+    }
+
+    // Arity mixer fuses the two streams; mix_K = number of arities
+    mixer : arity_mixer {
+        hidden 16; mix_K 2;
+    }
+
+    // Edge classifier head
+    head : signed_classifier {
+        d_in 16; d_out 1;
+    }
+
+    // Dataflow — note multi-input fan-in into mixer
+    @flow_k3   <dataflow> { (+t_in,    ~sk_k3, -t_emb_k3); }
+    @flow_k4   <dataflow> { (+t_in,    ~sk_k4, -t_emb_k4); }
+    @flow_mix  <dataflow> { (+t_emb_k3, +t_emb_k4, ~mixer, -t_emb); }
+    @flow_head <dataflow> { (+t_emb,    ~head, -t_out); }
+}

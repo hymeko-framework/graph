@@ -1,0 +1,73 @@
+// HSiKAN architecture-search P-graph with an explicit by-product
+// injected into the cheap cycle setup.  Used by the
+// `axiom_witness::engine_selection_diverges_under_strict_vs_relaxed`
+// test to demonstrate that the engine's `strict_no_excess` knob
+// materially changes architecture selection when an architectural
+// choice has a non-consumed side product.
+//
+// Compared with `sweep_msg.hymeko`:
+//   * adds a `redundancy_byproduct` intermediate material;
+//   * `cycle_topk_m4` (the cheapest cycle setup) now produces it as
+//     a side-output that no unit consumes.
+//
+// Under canonical Friedler S1..S5: every unit still has a path to
+// `auc_score`, every M-node has ≥ 1 incident edge, every non-raw
+// has a producer, so the schema is canonical-feasible.
+//
+// Under engine `strict_no_excess = true`: MSG drops `cycle_topk_m4`
+// (its `redundancy_byproduct` output is not "useful"), forcing ABB
+// to pick `cycle_topk_m16` (cost 40) instead of `cycle_topk_m4`
+// (cost 10) — a 50-cost-unit penalty.
+//
+// Under engine `strict_no_excess = false`: MSG keeps
+// `cycle_topk_m4`; ABB picks the cheapest path including it.
+//
+// Under extension bundle E-StrictNoExcess: the by-product is
+// flagged at the schema level regardless of which engine mode the
+// caller chooses.
+
+HSiKAN_Sweep_Byproduct {}
+
+context
+{
+    // ─── Resource budgets (raw materials) ────────────────────────
+    gpu_memory   <material, raw>;
+    train_time   <material, raw>;
+
+    // ─── Quality dimensions (intermediates) ──────────────────────
+    cycle_quality      <material>;
+    embedding_quality  <material>;
+    auc_score          <material, product>;
+
+    // ─── Injected by-product (the divergence trigger) ────────────
+    redundancy_byproduct <material>;
+
+    // ─── Architecture choices ────────────────────────────────────
+    // cheapest cycle setup — now leaks a redundancy by-product
+    @cycle_topk_m4   <unit>  10 {
+        (-gpu_memory, -train_time, +cycle_quality, +redundancy_byproduct);
+    }
+    @cycle_topk_m16  <unit>  40 {
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+    @cycle_topk_m64  <unit> 160 {
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+
+    @model_h8        <unit>  20 {
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    @model_h16       <unit>  60 {
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    @model_h32       <unit> 200 {
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+
+    @train_short     <unit>  30 {
+        (-train_time, -embedding_quality, +auc_score);
+    }
+    @train_long      <unit> 120 {
+        (-train_time, -embedding_quality, +auc_score);
+    }
+}

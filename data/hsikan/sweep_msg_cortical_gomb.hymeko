@@ -1,0 +1,64 @@
+// GömbSoma RicciStimBackbone cortical-benchmark P-graph — Phase 12.5
+// (overnight 2026-05-20). Sister of `sweep_msg_cortical.hymeko`
+// (Phase 12 ResNet baseline).
+//
+// Sweeps the HYPERGRAPH MACHINE (RicciStimBackbone) instead of the
+// CNN baseline on the same Cichy-92-shaped synthetic cortical
+// benchmark. Three orthogonal axes:
+//
+//   * Hypergraph d_hidden:   gomb_d4 / gomb_d8 / gomb_d16
+//                            (RicciStimBackbone.d_hidden)
+//   * Binning depths:        binning_shallow / binning_deep
+//                            (V1/V2/V4 retinotopic mapping)
+//   * BrainScorer rank:      pls_25 / pls_50
+//
+// Total search space: 3 × 2 × 2 = 12 candidate hypergraph
+// architectures. Cost-min ABB pick: gomb_d4 + binning_shallow +
+// pls_25 (cost 12).
+//
+// User-requested CV application for hypergraph machines (the
+// 2026-05-20 overnight scope). A/B vs Phase 12's ResNet sweep
+// answers: does the hypergraph backbone match the CNN backbone
+// on synthetic Cichy-92 r²?
+//
+// Mapping: hymeko_neuro/experiments/cortical_pgraph_mapping.py
+// Driver:  run_cortical_msg_sweep.py --backend gomb
+
+Cortical_Gomb_Sweep_MSG {}
+
+context
+{
+    gpu_memory   <material, raw>;
+    train_time   <material, raw>;
+
+    backbone_features   <material>;
+    binned_features     <material>;
+    brain_score         <material, product>;
+
+    // RicciStimBackbone width axis — the hypergraph machine's
+    // d_hidden controls the Bochner-wrapped branch widths.
+    @gomb_d4   <unit>  4 {
+        (-gpu_memory, -train_time, +backbone_features);
+    }
+    @gomb_d8   <unit>  8 {
+        (-gpu_memory, -train_time, +backbone_features);
+    }
+    @gomb_d16  <unit> 16 {
+        (-gpu_memory, -train_time, +backbone_features);
+    }
+
+    // Same binning + scorer axes as the ResNet sister fixture.
+    @binning_shallow <unit> 3 {
+        (-backbone_features, +binned_features);
+    }
+    @binning_deep    <unit> 9 {
+        (-backbone_features, +binned_features);
+    }
+
+    @pls_25  <unit>  5 {
+        (-binned_features, +brain_score);
+    }
+    @pls_50  <unit> 10 {
+        (-binned_features, +brain_score);
+    }
+}

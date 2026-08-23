@@ -1,0 +1,58 @@
+// Example 14.1 from Friedler, Orosz, Pimentel Losada,
+// "P-graphs for Process Systems Engineering: Mathematical Models and
+// Algorithms" (Springer). Operating-unit descriptions and weights are
+// transcribed verbatim from Table 14.1.
+//
+//   Products P = {A1, A2}
+//   Raws     R = {A16, A17, A18}
+//   Units    O = {u1 .. u12}
+//
+// Book result (relaxed / standard P-graph semantics, MSG keeps 5 units):
+//   ABB optimum = {u1, u4, u8, u11}, total weight 16
+//   (the feasible solution extension delta with w(delta) = 16, beating
+//    epsilon = {u1,u4,u8,u9,u11,u12} at w = 28).
+//
+// Unit cost is the edge's numeric value (read by ABB); see hda.hymeko.
+
+Example14_1{}
+
+context
+{
+    // ── Products ──
+    A1 <material, product>;
+    A2 <material, product>;
+
+    // ── Intermediates ──
+    A3 <material>;
+    A4 <material>;
+    A5 <material>;
+    A6 <material>;
+    A7 <material>;
+    A8 <material>;
+    A9 <material>;
+    A10 <material>;
+    A11 <material>;
+    A12 <material>;
+    A13 <material>;
+    A14 <material>;
+    A15 <material>;
+
+    // ── Raw materials ──
+    A16 <material, raw>;
+    A17 <material, raw>;
+    A18 <material, raw>;
+
+    // ── Operating units (Table 14.1) ──
+    @u1  <unit> 3 { (-A3, -A4, -A5, +A1, +A2); }
+    @u2  <unit> 6 { (-A5, -A6, +A1, +A2, +A11); }
+    @u3  <unit> 5 { (-A6, -A7, +A2, +A11); }
+    @u4  <unit> 2 { (-A8, -A9, +A3, +A4, +A5); }
+    @u5  <unit> 4 { (-A9, -A10, -A11, +A4, +A5, +A13); }
+    @u6  <unit> 6 { (-A10, -A11, +A4, +A5, +A6); }
+    @u7  <unit> 5 { (-A11, -A14, +A7); }
+    @u8  <unit> 7 { (-A13, -A14, -A16, +A8, +A9, +A10); }
+    @u9  <unit> 9 { (-A14, -A15, +A9, +A10, +A11); }
+    @u10 <unit> 6 { (-A16, +A12, +A13); }
+    @u11 <unit> 4 { (-A17, +A13, +A14); }
+    @u12 <unit> 3 { (-A11, -A18, +A14, +A15); }
+}

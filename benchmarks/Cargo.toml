@@ -20,7 +20,9 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-hymeko_graph = { path = ".." }
+hymeko_graph = { path = "../hymeko_graph" }
+hymeko_pgraph = { path = "../hymeko_pgraph" }
+parser = { git = "ssh://git@amaterasu.local:2222/hymeko/parser.git", branch = "master" }
 
 [dev-dependencies]
 criterion = "0.8.2"
@@ -36,4 +38,11 @@ harness = false
 
 [[bench]]
 name = "incidence_bench"
+harness = false
+
+# `pgraph_bench` reads its fixtures with `include_str!("../../data/...")`.
+# That resolved to the repo root from `hymeko_pgraph/benches/` and still does
+# from here, so the source needed no change when it moved.
+[[bench]]
+name = "pgraph_bench"
 harness = false

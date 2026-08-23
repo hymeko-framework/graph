@@ -1,0 +1,99 @@
+// HSIKAN architecture-search P-graph with **three cost dimensions**
+// (gpu_cost / time_cost / quality_drop) — Phase 10 (2026-05-19)
+// multi-objective ABB pipeline.
+//
+// Scalar (back-compat) cost is preserved as the leading numeric
+// after `<unit>`; tagged `cost <dim> N;` children populate
+// `LoweredPGraph.cost_vectors` for the multi-objective ABB path.
+//
+// `quality_drop` numbers are derived from the Phase 8 quantitative
+// finding (5-seed AUC on Bitcoin Alpha): smaller cycle pools and
+// shorter training raise AUC drop, m=64 and train_long eliminate
+// it. The dimension is **inverted** so that ABB minimises it
+// (i.e.\ minimise drop = maximise AUC).
+//
+// Three illustrative weight vectors:
+//
+//   --weights "1.0,0.0,0.0"   # gpu only → cheapest architecture (m4+h8+short)
+//   --weights "0.0,0.0,1.0"   # quality only → best AUC architecture (m64+h8+long)
+//   --weights "1.0,1.0,5.0"   # balanced with strong quality bias
+//
+// Sister of:  data/hsikan/sweep_msg.hymeko (scalar-cost original)
+
+HSiKAN_Sweep_Multicost {}
+
+context
+{
+    // ─── Resource budgets (raw materials) ────────────────────────
+    gpu_memory   <material, raw>;
+    train_time   <material, raw>;
+
+    // ─── Quality dimensions (intermediates) ──────────────────────
+    cycle_quality      <material>;
+    embedding_quality  <material>;
+    auc_score          <material, product>;
+
+    // ─── Architecture choices with 3-dim cost vectors ────────────
+    // Cycle-pool axis: smaller pools cost less GPU + time but
+    // sacrifice quality (Phase 8 measured: m=4 → 0.430 AUC at
+    // short epochs; m=64 → 0.476). quality_drop is roughly
+    // 100 × (best_AUC_for_axis − this_AUC), saturated at 0 for the
+    // best-in-axis variant.
+    @cycle_topk_m4   <unit>  10 {
+        cost <gpu_cost>      10;
+        cost <time_cost>     10;
+        cost <quality_drop>  15;
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+    @cycle_topk_m16  <unit>  40 {
+        cost <gpu_cost>      40;
+        cost <time_cost>     40;
+        cost <quality_drop>   3;
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+    @cycle_topk_m64  <unit> 160 {
+        cost <gpu_cost>     160;
+        cost <time_cost>    160;
+        cost <quality_drop>   0;
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+
+    // Hidden-width axis. Phase 8: at short epochs h=8 (0.430) beats
+    // h=16 (0.473 lower) and h=32 (0.516 lower); under-trained
+    // wider models underperform. Encoded as quality_drop on the
+    // wider variants.
+    @model_h8        <unit>  20 {
+        cost <gpu_cost>      20;
+        cost <time_cost>     20;
+        cost <quality_drop>  15;
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    @model_h16       <unit>  60 {
+        cost <gpu_cost>      60;
+        cost <time_cost>     60;
+        cost <quality_drop>  10;
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    @model_h32       <unit> 200 {
+        cost <gpu_cost>     200;
+        cost <time_cost>    200;
+        cost <quality_drop>  10;
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+
+    // Training-length axis. Phase 8: train_long (n_epochs=60) gives
+    // 0.574 vs train_short (n_epochs=10) at 0.430; a ~14 pp gap.
+    // train_long is GPU-cheap (same model size) but time-expensive.
+    @train_short     <unit>  30 {
+        cost <gpu_cost>      10;
+        cost <time_cost>     30;
+        cost <quality_drop>  30;
+        (-train_time, -embedding_quality, +auc_score);
+    }
+    @train_long      <unit> 120 {
+        cost <gpu_cost>      10;
+        cost <time_cost>    120;
+        cost <quality_drop>   0;
+        (-train_time, -embedding_quality, +auc_score);
+    }
+}

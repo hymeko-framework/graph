@@ -1,0 +1,23 @@
+// Tiny P-graph for Gömb driver tests: pick one cycle pool + one train step.
+//
+// Unit names are mapped in hymeko_neuro.experiments.gomb_pgraph_mapping.
+
+Gomb_Sweep_MSG {}
+
+context
+{
+    G_mem   <material, raw>;
+    T_time  <material, raw>;
+    C_pool  <material>;
+    ready   <material, product>;
+
+    @gomb_fast <unit> 10 {
+        (-G_mem, -T_time, +C_pool);
+    }
+    @gomb_slow <unit> 40 {
+        (-G_mem, -T_time, +C_pool);
+    }
+    @gomb_fit <unit> 20 {
+        (-T_time, -C_pool, +ready);
+    }
+}

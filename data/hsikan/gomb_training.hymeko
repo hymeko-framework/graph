@@ -1,0 +1,26 @@
+// Defaults for `hymeko_driver --backend gomb` (optional --training).
+//
+// Extend with @gomb_smoke edges to override cycle / width knobs.
+
+GombTrainingDefaults {
+    const N_EPOCHS = 4;
+    const LR = 0.003;
+    const SEED = 0;
+}
+
+context
+{
+    @load_dataset <dataset> {
+        name "sbm_n200";
+    }
+
+    @gomb_smoke <gomb_smoke> {
+        topk 24;
+        cycle_abb_mode "none";
+        d_embed 16;
+        d_outer 8;
+        M_outer 2;
+        d_middle 16;
+        d_core 16;
+    }
+}

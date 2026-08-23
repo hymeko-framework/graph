@@ -1,0 +1,48 @@
+// Single-arity HSiKAN (k=3, signed-incidence cycle KAN) as a HyMeKo
+// dataflow graph. Per-layer hyperedges; tensors are nodes; the
+// dataflow between them is captured by @flow hyperedges.
+//
+// Convention (matches transforms/torch_dataflow/template.py):
+//   tensor: <input> | <activation> | <output>     (tags = role)
+//   layer:  inherits from a meta_layer base       (collection)
+//   flow:   @name <dataflow> { (+in, ~layer, -out); }
+// Layer kwargs (hidden, arity, grid, spline_kind) are child
+// statements inside the layer body.
+
+HSiKAN_k3 {
+    const HIDDEN = 16;
+    const GRID   = 5;
+    const ARITY  = 3;
+}
+
+context
+{
+    // ── Tensors ──────────────────────────────────────────────────
+    t_in   <input>;
+    t_emb1 <activation>;
+    t_emb2 <activation>;
+    t_out  <output>;
+
+    // ── Layers ───────────────────────────────────────────────────
+    sk1 : signedkan_layer {
+        hidden       16;
+        arity         3;
+        grid          5;
+        spline_kind  "catmull_rom";
+    }
+    sk2 : signedkan_layer {
+        hidden       16;
+        arity         3;
+        grid          5;
+        spline_kind  "catmull_rom";
+    }
+    head : signed_classifier {
+        d_in   16;
+        d_out   1;
+    }
+
+    // ── Dataflow ─────────────────────────────────────────────────
+    @flow_l1   <dataflow> { (+t_in,   ~sk1,  -t_emb1); }
+    @flow_l2   <dataflow> { (+t_emb1, ~sk2,  -t_emb2); }
+    @flow_head <dataflow> { (+t_emb2, ~head, -t_out); }
+}

@@ -1,0 +1,131 @@
+// Methanol synthesis from CO2 + green H2 — multi-objective P-graph.
+//
+// Idiomatic HyMeKo P-graph encoding with Stage P-mo multi-cost
+// annotations (CAPEX / OPEX / CO2 / H2O dimensions). Loader:
+// hymeko_pgraph::lowering. Multi-objective ABB:
+//   cargo run -p hymeko_pgraph --bin hymeko_pgraph_dump -- \
+//     data/pgraph/methanol_synthesis.hymeko --algorithm abb \
+//     --weights "1.0,0.5,10.0,1.0"   # CAPEX, OPEX, CO2, H2O
+//
+// Plan:   docs/plans/2026-05-19-pgraph-multi-objective/
+// Audience: Pimentel / PSE community.
+//
+// Cost units (illustrative; scaled to make ABB choose distinguishably):
+//   CAPEX  : k€ amortised over lifetime
+//   OPEX   : k€/year
+//   CO2    : t/year emitted
+//   H2O    : ML/year consumed
+//
+// Topology:
+//   CO2 + H2 → (Reactor route A or B) → CH3OH + H2O
+//   Steam-methane reforming gives "blue" H2 with high CO2 cost.
+//   Electrolysis gives "green" H2 with low CO2 but high water cost.
+//   Direct-air capture is the upstream CO2 source variant.
+//   Distillation + dehydration are downstream finishing steps.
+
+methanol_synthesis {}
+
+context {
+    // ─── Raws (feedstocks and energy sources) ──────────────────────
+    flue_gas_co2   <material, raw>;
+    fresh_water    <material, raw>;
+    grid_electrons <material, raw>;
+    natural_gas    <material, raw>;
+    air            <material, raw>;
+
+    // ─── Intermediates ─────────────────────────────────────────────
+    co2_pure       <material>;
+    h2_blue        <material>;
+    h2_green       <material>;
+    syngas         <material>;
+    crude_methanol <material>;
+    waste_water    <material>;
+    steam          <material>;
+
+    // ─── Required product ──────────────────────────────────────────
+    methanol_grade <material, product>;
+
+    // ─── Upstream feedstock units (3 alternative CO2 sources) ──────
+    // CO2 capture from flue gas: cheap to install, expensive to run,
+    // emits some CO2 in the process (parasitic load on power plant).
+    @CaptureFlue <unit> 800 {
+        cost <capex>  800;
+        cost <opex>   220;
+        cost <co2>     45;
+        cost <h2o>      8;
+        (-flue_gas_co2, +co2_pure);
+    }
+    // Direct air capture: expensive to install, low marginal CO2,
+    // higher water use (sorbent regeneration).
+    @CaptureDAC <unit> 1900 {
+        cost <capex> 1900;
+        cost <opex>   180;
+        cost <co2>     12;
+        cost <h2o>     35;
+        (-air, +co2_pure);
+    }
+
+    // ─── Hydrogen production (2 routes) ────────────────────────────
+    // Steam-methane reforming → "blue" H2 (CCS-ready but still CO2-heavy).
+    @SMR <unit> 600 {
+        cost <capex>  600;
+        cost <opex>   210;
+        cost <co2>    310;
+        cost <h2o>     12;
+        (-natural_gas, -fresh_water, +h2_blue, +steam);
+    }
+    // PEM electrolysis → "green" H2 (CO2-clean, water-hungry).
+    @Electrolyzer <unit> 1400 {
+        cost <capex> 1400;
+        cost <opex>   320;
+        cost <co2>     18;
+        cost <h2o>    160;
+        (-grid_electrons, -fresh_water, +h2_green);
+    }
+
+    // ─── Syngas conditioning (consumes either H2 stream) ───────────
+    @MixerBlue <unit> 90 {
+        cost <capex>   90;
+        cost <opex>    25;
+        cost <co2>      3;
+        cost <h2o>      1;
+        (-co2_pure, -h2_blue, +syngas);
+    }
+    @MixerGreen <unit> 90 {
+        cost <capex>   90;
+        cost <opex>    25;
+        cost <co2>      3;
+        cost <h2o>      1;
+        (-co2_pure, -h2_green, +syngas);
+    }
+
+    // ─── Catalytic reactor + downstream finishing ──────────────────
+    @MeOHReactor <unit> 1100 {
+        cost <capex> 1100;
+        cost <opex>   260;
+        cost <co2>     22;
+        cost <h2o>     14;
+        (-syngas, +crude_methanol, +waste_water);
+    }
+    @Distillation <unit> 350 {
+        cost <capex>  350;
+        cost <opex>   140;
+        cost <co2>      9;
+        cost <h2o>     22;
+        (-crude_methanol, +methanol_grade);
+    }
+    @WaterTreatment <unit> 180 {
+        cost <capex>  180;
+        cost <opex>    70;
+        cost <co2>      4;
+        cost <h2o>      0;
+        (-waste_water);
+    }
+    @SteamRecycle <unit> 60 {
+        cost <capex>   60;
+        cost <opex>    30;
+        cost <co2>      1;
+        cost <h2o>      0;
+        (-steam);
+    }
+}

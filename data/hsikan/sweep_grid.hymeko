@@ -1,0 +1,49 @@
+// Grid-search tuning expression for HSiKAN.
+//
+// Each <param_range> hyperedge declares a parameter and its
+// candidate values. The driver computes the Cartesian product,
+// runs one cell per point, and emits a (config, AUC) JSONL.
+// `target` child node identifies which knob in the arch+training
+// config the values map onto (dotted: "section.field").
+
+HSiKAN_Sweep_Grid {}
+
+context
+{
+    // Reference the architecture & training to vary
+    @use_arch     <ref> { (+arch_mixed_k34, ~include); }
+    @use_training <ref> { (+training,       ~include); }
+
+    // Search space
+    @sweep_hidden <param_range> {
+        target  "model.hidden";
+        values  [8, 16, 32];
+    }
+    @sweep_grid_n <param_range> {
+        target  "model.grid";
+        values  [3, 5, 8];
+    }
+    @sweep_arity  <param_range> {
+        target  "model.arities";
+        values  [[3], [3, 4], [3, 4, 5]];
+    }
+    @sweep_topk_m <param_range> {
+        target  "topk.m_per_vertex";
+        values  [4, 16, 64];
+    }
+    @sweep_pruner <param_range> {
+        target  "topk.pruner";
+        values  ["none", "davis", "balance"];
+    }
+
+    // Sweep policy
+    @policy <sweep_policy> {
+        kind            "full_grid";
+        max_runs         50;
+        seeds_per_cell    1;
+        early_stop       1;       // 1 = true; HyMeKo grammar has no bool literal
+        select_metric   "auc";
+    }
+
+    sweep_results <output>;
+}

@@ -1,0 +1,32 @@
+// Focused tuning grid: the dimensions that empirically moved AUC
+// the most yesterday, restricted to a tractable cell count.
+//
+//   3 (m) × 3 (pruner) × 2 (hidden) = 18 cells × ~30s = ~9 min
+//   on bitcoin_alpha.
+
+HSiKAN_Sweep_Focused {}
+
+context
+{
+    @sweep_topk_m <param_range> {
+        target  "topk.m_per_vertex";
+        values  [16, 64, 128];
+    }
+    @sweep_pruner <param_range> {
+        target  "topk.pruner";
+        values  ["none", "davis", "balance"];
+    }
+    @sweep_hidden <param_range> {
+        target  "model.hidden";
+        values  [16, 32];
+    }
+
+    @policy <sweep_policy> {
+        kind            "full_grid";
+        max_runs         18;
+        seeds_per_cell    1;
+        select_metric   "auc";
+    }
+
+    sweep_results <output>;
+}

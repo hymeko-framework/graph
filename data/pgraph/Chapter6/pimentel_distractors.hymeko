@@ -1,0 +1,90 @@
+// example6_1 (Friedler / Orosz / Pimentel-Losada, Chapter 6) AUGMENTED
+// with three Pimentel-distractor units that the A1–A5 axiom filter
+// MUST exclude from MSG:
+//
+//   O8  (M -> H)        — depends on M produced only by O9, which violates A2.
+//   O9  (E,Q -> M,J)    — produces J, but J is a raw material → violates A2
+//                         ("raw biconditional": raws have no producer in the
+//                         structure).
+//   O10 (H -> N)        — produces N, which is neither a product nor input to
+//                         any other unit → violates A4 ("path to product":
+//                         every O-node must reach some required product).
+//
+// Plus two extra raws Q, P specifically to feed the distractors / test that
+// a declared-but-unused raw is harmless.
+//
+// Expected canonical outputs (from Jean Pimentel's hand-prepared test
+// problem 'Testing problem description.docx', feedback/ 2026-06-03):
+//   - MSG     = {O1, O2, O3, O4, O5, O6, O7}        (7 units, O8/O9/O10 filtered out)
+//   - SSG     = 19 combinatorially feasible solutions
+//   - ABB top-3 by cost:
+//        1. (O2, O5, O7)   cost  9
+//        2. (O1, O4)       cost 12
+//        3. (O1, O3)       cost 13
+//
+// If MSG returns 10 instead of 7, the axiom filter is broken — the
+// distractors slipped through. That is the load-bearing assertion of this
+// fixture.
+
+pimentel_distractors {}
+
+context
+{
+    // ── Raw material materials ──
+    E <material, raw>;
+    G <material, raw>;
+    J <material, raw>;
+    K <material, raw>;
+    L <material, raw>;
+    Q <material, raw>;
+    P <material, raw>;
+
+    // ── Product materials ──
+    A <material, product>;
+
+    // ── Intermediate materials ──
+    B <material>;
+    C <material>;
+    D <material>;
+    F <material>;
+    H <material>;
+    M <material>;
+    N <material>;
+
+    // ── Operating units (canonical 7 + 3 distractors) ──
+    @O1 <unit> 5.0 {
+        (-C, +A, +F);
+    }
+    @O2 <unit> 4.0 {
+        (-D, +A, +B);
+    }
+    @O3 <unit> 8.0 {
+        (-E, -F, +C);
+    }
+    @O4 <unit> 7.0 {
+        (-F, -G, +C, +D);
+    }
+    @O5 <unit> 3.0 {
+        (-G, -H, +D);
+    }
+    @O6 <unit> 5.0 {
+        (-J, +F);
+    }
+    @O7 <unit> 2.0 {
+        (-K, -L, +H);
+    }
+    // Distractor 1: requires M which only O9 produces; O9 violates A2,
+    // so O8 cannot appear in any feasible structure either.
+    @O8 <unit> 9.0 {
+        (-M, +H);
+    }
+    // Distractor 2: produces J (declared raw) → A2 violation.
+    @O9 <unit> 12.0 {
+        (-E, -Q, +M, +J);
+    }
+    // Distractor 3: produces N (not product, not consumed elsewhere) → A4
+    // violation (no directed path from O10 to product A).
+    @O10 <unit> 1.0 {
+        (-H, +N);
+    }
+}

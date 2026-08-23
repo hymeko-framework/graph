@@ -1,0 +1,80 @@
+// Cortical combined fixture — Phase 14 cortical analogue
+// (2026-05-20 overnight queue continuation).
+//
+// Same 7-unit cortical schema as `sweep_msg_cortical.hymeko` but with:
+//   * 3 multi-cost dimensions per unit (gpu_cost, time_cost, quality_drop)
+//   * by-product injection on `binning_shallow` (the exhaustive sweep
+//     showed deep beats shallow at d≥8 on ResNet, and at d=16 on Gomb
+//     — shallow leaves V1/V2 retinotopic structure unused)
+//
+// Lever interaction question: does the HSIKAN-side sub-additive
+// composition (Phase 14) reproduce on the cortical pipeline? Same
+// engine, same Friedler mechanism, different workload.
+//
+// Mapping: hymeko_neuro/experiments/cortical_pgraph_mapping.py (unchanged)
+// Driver:  run_cortical_msg_sweep.py + --weights / --relaxed-msg
+
+Cortical_Sweep_Combo {}
+
+context
+{
+    gpu_memory   <material, raw>;
+    train_time   <material, raw>;
+
+    backbone_features   <material>;
+    binned_features     <material>;
+    brain_score         <material, product>;
+
+    // By-product injected on binning_shallow (Phase 14 cortical
+    // analogue — empirically dominated by binning_deep at d≥8).
+    wasted_retinotopy   <material>;
+
+    // ─── Backbone-width axis (ResNet branch by default) ──────────
+    @d_hidden_4   <unit>  4 {
+        cost <gpu_cost>      4;
+        cost <time_cost>     4;
+        cost <quality_drop> 12;
+        (-gpu_memory, -train_time, +backbone_features);
+    }
+    @d_hidden_8   <unit>  8 {
+        cost <gpu_cost>      8;
+        cost <time_cost>     8;
+        cost <quality_drop>  5;
+        (-gpu_memory, -train_time, +backbone_features);
+    }
+    @d_hidden_16  <unit> 16 {
+        cost <gpu_cost>     16;
+        cost <time_cost>    16;
+        cost <quality_drop>  0;
+        (-gpu_memory, -train_time, +backbone_features);
+    }
+
+    // ─── Binning-depth axis ──────────────────────────────────────
+    @binning_shallow <unit> 3 {
+        cost <gpu_cost>     3;
+        cost <time_cost>    3;
+        cost <quality_drop> 6;
+        (-backbone_features, +binned_features, +wasted_retinotopy);
+    }
+    @binning_deep    <unit> 9 {
+        cost <gpu_cost>     9;
+        cost <time_cost>    9;
+        cost <quality_drop> 0;
+        (-backbone_features, +binned_features);
+    }
+
+    // ─── PLS-rank axis (note: structural no-op at small fixtures;
+    //     kept for symmetry with sweep_msg_cortical.hymeko) ───────
+    @pls_25  <unit>  5 {
+        cost <gpu_cost>     5;
+        cost <time_cost>    5;
+        cost <quality_drop> 0;
+        (-binned_features, +brain_score);
+    }
+    @pls_50  <unit> 10 {
+        cost <gpu_cost>    10;
+        cost <time_cost>   10;
+        cost <quality_drop> 0;
+        (-binned_features, +brain_score);
+    }
+}

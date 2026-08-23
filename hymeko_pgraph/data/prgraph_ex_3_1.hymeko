@@ -1,0 +1,24 @@
+PNS_Example_3_1 {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+pns_3_1 {
+    A: + <isa> raw {}
+    B: + <isa> raw {}
+    G: + <isa> product {}
+    C: + <isa> inter {}
+    D: + <isa> inter {}
+    E: + <isa> inter {}
+    F: + <isa> inter {}
+
+    // Processes
+    @u1 { (-B, +D); }
+    @u2 { (-F, +D, +E);}
+    @u3 { (-E, +G);}
+    @u4 { (-D, +C, +G);}
+    @u5 { (-A, -C, +G);}
+}

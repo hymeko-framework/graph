@@ -1,0 +1,36 @@
+// Genetic-algorithm tuning expression for HSiKAN.
+// Same parameter ranges as sweep_grid.hymeko, but the policy
+// hyperedge selects a GA loop instead of full-grid enumeration.
+// Reuses the existing run_hsikan_genetic.py logic via the driver.
+
+HSiKAN_Sweep_GA {}
+
+context
+{
+    @use_arch     <ref> { (+arch_mixed_k34, ~include); }
+    @use_training <ref> { (+training,       ~include); }
+
+    // Search space
+    @sweep_hidden <param_range> { target "model.hidden";   values [8, 16, 32, 64]; }
+    @sweep_grid_n <param_range> { target "model.grid";     values [3, 5, 8, 12]; }
+    @sweep_arity  <param_range> { target "model.arities";  values [[3], [3,4], [3,4,5]]; }
+    @sweep_topk_m <param_range> { target "topk.m_per_vertex"; values [4, 16, 64, 128]; }
+    @sweep_pruner <param_range> { target "topk.pruner";    values ["none", "davis", "balance"]; }
+    @sweep_lr     <param_range> { target "optimizer.lr";   values [0.001, 0.005, 0.01, 0.05]; }
+
+    // Genetic policy
+    @policy <sweep_policy> {
+        kind             "genetic";
+        population_size   16;
+        generations       10;
+        elite_keep         4;
+        mutation_rate      0.2;
+        crossover_rate     0.6;
+        tournament_size    4;
+        seeds_per_cell     1;
+        ga_warmup_epochs   5;
+        select_metric    "auc";
+    }
+
+    sweep_results <output>;
+}

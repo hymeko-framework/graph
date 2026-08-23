@@ -1,0 +1,58 @@
+// GömbSoma cortical-benchmark architecture P-graph — Phase 12 (2026-05-20).
+//
+// Three orthogonal architecture axes for the Slice-1 cortical pipeline
+// (ResNetTinyCortical + BinningConfig + BrainScorer on Cichy-92-shaped
+// synthetic data):
+//
+//   * Backbone width:    d_hidden_{4,8,16}
+//   * Binning depth:     binning_shallow (depth 0 only)
+//                        binning_deep    (depths 0,1,2 = V4/V2/V1)
+//   * BrainScorer rank:  pls_25 / pls_50
+//
+// Total search space: 3 × 2 × 2 = 12 feasible architectures.
+//
+// Cost-min ABB pick: d_hidden_4 + binning_shallow + pls_25 (cost 12).
+//
+// Mapping: hymeko_neuro/experiments/cortical_pgraph_mapping.py
+// Driver:  hymeko_neuro/experiments/runs/run_cortical_msg_sweep.py
+
+Cortical_Sweep_MSG {}
+
+context
+{
+    // ─── Resource budgets (raws) ─────────────────────────────────
+    gpu_memory   <material, raw>;
+    train_time   <material, raw>;
+
+    // ─── Pipeline intermediates ──────────────────────────────────
+    backbone_features   <material>;    // ResNetTinyCortical output
+    binned_features     <material>;    // post-BinningConfig pooling
+    brain_score         <material, product>;   // final r² over ROIs
+
+    // ─── Backbone-width axis ─────────────────────────────────────
+    @d_hidden_4   <unit>  4 {
+        (-gpu_memory, -train_time, +backbone_features);
+    }
+    @d_hidden_8   <unit>  8 {
+        (-gpu_memory, -train_time, +backbone_features);
+    }
+    @d_hidden_16  <unit> 16 {
+        (-gpu_memory, -train_time, +backbone_features);
+    }
+
+    // ─── Binning-depth axis ──────────────────────────────────────
+    @binning_shallow <unit> 3 {
+        (-backbone_features, +binned_features);
+    }
+    @binning_deep    <unit> 9 {
+        (-backbone_features, +binned_features);
+    }
+
+    // ─── BrainScorer PLS-rank axis ───────────────────────────────
+    @pls_25  <unit>  5 {
+        (-binned_features, +brain_score);
+    }
+    @pls_50  <unit> 10 {
+        (-binned_features, +brain_score);
+    }
+}

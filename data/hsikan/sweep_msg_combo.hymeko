@@ -1,0 +1,104 @@
+// HSIKAN combined fixture — Phase 14 (2026-05-20 overnight).
+//
+// Stacks Phase 10's multi-cost (gpu_cost / quality_drop / time_cost)
+// AND Phase 11's by-product injection on the empirically dominated
+// `model_h32` and `train_short` units (Phase 8 measured them as
+// Pareto-dominated at short epochs on Bitcoin Alpha).
+//
+// Question Phase 14 answers: when both levers are in play on the
+// same fixture, do they (a) compose additively, (b) sub-additively
+// (one absorbs the other), or (c) super-additively (combined effect
+// > sum)?
+//
+// Setup:
+//   * 8 architecture units (same as sweep_msg.hymeko: 3 cycle + 3
+//     model + 2 train).
+//   * 3 cost dimensions per unit (alphabetised: gpu_cost,
+//     quality_drop, time_cost).
+//   * 2 by-product M-nodes (unused_capacity, wasted_potential)
+//     produced respectively by model_h32 and train_short.
+//
+// Under default strict-no-excess MSG: MSG drops model_h32 +
+// train_short (their unconsumed by-products force the drop). ABB
+// then picks from the 6 surviving units.
+//
+// Combined with --weights:
+//   (1,0,0) gpu-only      → ABB picks the cheapest GPU among survivors
+//   (0,1,0) quality-only  → ABB picks the lowest-quality-drop survivor
+//   (1,5,1) balanced      → Pareto pick
+//
+// Mapping: hymeko_neuro/experiments/hsikan_pgraph_mapping.py (unchanged;
+// the same unit names are mapped).
+
+HSiKAN_Sweep_Combo {}
+
+context
+{
+    gpu_memory   <material, raw>;
+    train_time   <material, raw>;
+
+    cycle_quality      <material>;
+    embedding_quality  <material>;
+    auc_score          <material, product>;
+
+    // Injected by-products on dominated choices (Phase 11 mechanism).
+    unused_capacity   <material>;
+    wasted_potential  <material>;
+
+    // Multi-cost dimensions on every architecture unit (Phase 10
+    // mechanism). quality_drop numbers derived from Phase 8
+    // 5-seed measurements.
+
+    @cycle_topk_m4   <unit>  10 {
+        cost <gpu_cost>      10;
+        cost <time_cost>     10;
+        cost <quality_drop>  15;
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+    @cycle_topk_m16  <unit>  40 {
+        cost <gpu_cost>      40;
+        cost <time_cost>     40;
+        cost <quality_drop>   3;
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+    @cycle_topk_m64  <unit> 160 {
+        cost <gpu_cost>     160;
+        cost <time_cost>    160;
+        cost <quality_drop>   0;
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+
+    @model_h8        <unit>  20 {
+        cost <gpu_cost>      20;
+        cost <time_cost>     20;
+        cost <quality_drop>  15;
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    @model_h16       <unit>  60 {
+        cost <gpu_cost>      60;
+        cost <time_cost>     60;
+        cost <quality_drop>  10;
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    // h=32 keeps its by-product injection from Phase 11.
+    @model_h32       <unit> 200 {
+        cost <gpu_cost>     200;
+        cost <time_cost>    200;
+        cost <quality_drop>  10;
+        (-gpu_memory, -cycle_quality, +embedding_quality, +unused_capacity);
+    }
+
+    // train_short keeps its by-product injection from Phase 11.
+    @train_short     <unit>  30 {
+        cost <gpu_cost>      10;
+        cost <time_cost>     30;
+        cost <quality_drop>  30;
+        (-train_time, -embedding_quality, +auc_score, +wasted_potential);
+    }
+    @train_long      <unit> 120 {
+        cost <gpu_cost>      10;
+        cost <time_cost>    120;
+        cost <quality_drop>   0;
+        (-train_time, -embedding_quality, +auc_score);
+    }
+}

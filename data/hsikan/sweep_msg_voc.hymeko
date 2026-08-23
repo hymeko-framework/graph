@@ -1,0 +1,65 @@
+// HyMeYOLO Pascal VOC 2007 architecture P-graph — Phase 15 (2026-05-20).
+//
+// Three orthogonal architecture axes of the train_voc_stagec.py
+// trainer:
+//
+//   * Backbone: backbone_resnet (Stage D, from-scratch ResNet-tiny)
+//               backbone_resnet18_imagenet (Stage D-1, pretrained)
+//               backbone_hsikan (HSiKAN-CR Catmull-Rom basis)
+//   * Query count: q4 / q8 / q12  (--n-box-queries)
+//   * No-object loss weight: lam_low (0.5, Stage D/D-1)
+//                            lam_high (2.0, Stage D-2b suppression)
+//
+// Total: 3 × 3 × 2 = 18 candidate detector architectures.
+// Cost-min ABB pick: backbone_resnet + q4 + lam_low (cost 12).
+//
+// Phase 15 ships infrastructure-only — the Stage-D synthetic→natural
+// transfer gap (prior 5011-image 30-epoch run at mAP_50=0.007) is
+// architectural and out of Phase 15's scope.
+//
+// Mapping: hymeko_neuro/experiments/voc_pgraph_mapping.py
+// Driver:  hymeko_neuro/experiments/runs/run_voc_msg_sweep.py
+
+VOC_Stage_D_Sweep_MSG {}
+
+context
+{
+    // ─── Resource budgets (raws) ─────────────────────────────────
+    gpu_memory   <material, raw>;
+    train_time   <material, raw>;
+
+    // ─── Pipeline intermediates ──────────────────────────────────
+    image_features      <material>;   // post-backbone feature map
+    query_embeddings    <material>;   // post-query-head selection
+    map50_score         <material, product>;
+
+    // ─── Backbone axis (3 choices, growing cost = growing compute) ─
+    @backbone_resnet            <unit> 10 {
+        (-gpu_memory, -train_time, +image_features);
+    }
+    @backbone_resnet18_imagenet <unit> 30 {
+        (-gpu_memory, -train_time, +image_features);
+    }
+    @backbone_hsikan            <unit> 50 {
+        (-gpu_memory, -train_time, +image_features);
+    }
+
+    // ─── Query-count axis (3 choices) ────────────────────────────
+    @q4   <unit> 1 {
+        (-image_features, +query_embeddings);
+    }
+    @q8   <unit> 2 {
+        (-image_features, +query_embeddings);
+    }
+    @q12  <unit> 3 {
+        (-image_features, +query_embeddings);
+    }
+
+    // ─── No-object loss weight axis (2 choices) ──────────────────
+    @lam_low  <unit> 1 {
+        (-query_embeddings, +map50_score);
+    }
+    @lam_high <unit> 2 {
+        (-query_embeddings, +map50_score);
+    }
+}

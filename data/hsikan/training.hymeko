@@ -1,0 +1,94 @@
+// Training & feedback dataflow for HSiKAN as a HyMeKo description.
+//
+// Three concerns are encoded:
+//   1. Dataset binding (where signed-edge data comes from)
+//   2. Cycle preprocessing (top-K with axiom pruning)
+//   3. Training loop (forward → loss → backward → step + entropy
+//      regulariser feedback)
+//
+// The driver (hymeko_neuro/hymeko/hymeko_driver.py) walks this IR,
+// routes each tagged hyperedge to its corresponding Python callable,
+// and runs the resulting cell.
+//
+// Sub-tags name kwargs (the convention is: each kwarg is a child
+// node statement `name VALUE;` inside the hyperedge body).
+
+HSiKAN_Training {
+    const N_EPOCHS = 30;
+    const LR       = 0.01;
+    const WD       = 0.0001;
+    const SEED     = 0;
+}
+
+context
+{
+    // ─── Boundary tensors (dataset / labels boundary) ────────────
+    edges          <input>;
+    edge_labels    <input>;
+    cycles         <activation>;
+    embeddings     <activation>;
+    logits         <activation>;
+    loss_value     <activation>;
+    grads          <activation>;
+    weights_updated <activation>;
+    metrics        <output>;
+
+    // ─── Dataset hyperedge ───────────────────────────────────────
+    @load_dataset <dataset> {
+        name          "bitcoin_alpha";
+        split         "transductive";
+        train_frac     0.8;
+        (~dataset, -edges);
+    }
+
+    // ─── Cycle enumeration with axiom-aware top-K ────────────────
+    // Strategy/command pattern: swap pruner / scorer / k_per_vertex
+    // without touching the rest of the description. Driver maps these
+    // to HSIKAN_TOPK_* env vars.
+    @enumerate_cycles <cycle_enum> {
+        mode          "per_vertex";
+        m_per_vertex   16;
+        scorer        "fraction_negative";
+        pruner        "davis";
+        arities       [3, 4];
+        (+edges, ~enumerator, -cycles);
+    }
+
+    // ─── Forward pass ────────────────────────────────────────────
+    @forward <forward> {
+        model_ref     "arch_mixed_k34";
+        (+edges, +cycles, ~model, -embeddings);
+    }
+    @classify <forward> {
+        (+embeddings, ~head_classifier, -logits);
+    }
+
+    // ─── Loss + entropy feedback regulariser ─────────────────────
+    @compute_loss <loss> {
+        loss_kind         "bce";
+        // Entropy feedback (per the prior memory note):
+        // spectral-entropy regulariser on the model's weights gives
+        // +0.005-0.007 macro-F1 on Alpha/OTC.
+        entropy_lambda    0.01;
+        entropy_kind     "spectral";
+        (+logits, +edge_labels, ~bce_with_entropy, -loss_value);
+    }
+
+    // ─── Backward + optimizer step ───────────────────────────────
+    @backprop <backward> {
+        (+loss_value, ~autograd, -grads);
+    }
+    @optimizer_step <optimizer> {
+        kind          "adam";
+        lr             0.01;
+        weight_decay   0.0001;
+        grad_clip      1.0;
+        (+grads, ~adam, -weights_updated);
+    }
+
+    // ─── Outer training loop ─────────────────────────────────────
+    @train_loop <epoch_loop> {
+        n_epochs   30;
+        (+cycles, +edges, +edge_labels, ~loop, -metrics);
+    }
+}

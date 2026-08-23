@@ -1,0 +1,145 @@
+// Multi-objective HSiKAN architecture search for Bitcoin Alpha
+// (signed-link prediction). Real measurements from the 2026-05-01
+// to 2026-05-19 experiment log.
+//
+// Stage P-mo (2026-05-19) extends the original scalar P-graph
+// (data/hsikan/sweep_msg.hymeko) with 4 cost dimensions:
+//
+//   gpu_gb   — peak GPU memory (GB)
+//   wall_min — training wall-clock (minutes, 1 seed)
+//   params_m — parameter count (millions)
+//   auc_gap  — gap to "Optuna-best" AUC 0.9959 (clamped >= 0)
+//             additive surrogate; per-unit contribution
+//
+// Run with:
+//   cargo build --release -p hymeko_pgraph --bin hymeko_pgraph_dump
+//   ./target/release/hymeko_pgraph_dump \
+//     data/hsikan/sweep_mo_bitcoin.hymeko \
+//     --algorithm abb \
+//     --weights "1.0,1.0,5.0,200"
+//                # gpu, wall, params, auc_gap   ← sustainability-style
+//
+// The P-graph: cycle-enum → backbone-fwd → training → eval.
+// The four cycle-enum choices, three backbone widths, three training
+// schedules, and one fixed evaluation step constitute the
+// architecture-search subset lattice.
+
+HSiKAN_Bitcoin_MO {}
+
+context
+{
+    // ─── Resource raws ──────────────────────────────────────────────
+    gpu_budget   <material, raw>;
+    wall_budget  <material, raw>;
+
+    // ─── Intermediate quality materials ─────────────────────────────
+    cycle_pool        <material>;
+    backbone_features <material>;
+    trained_state     <material>;
+
+    // ─── Demand: a validated trained model (passes 5-seed eval) ────
+    validated_model   <material, product>;
+
+    // ═══════════════════════════════════════════════════════════════
+    // Cycle enumeration — pick one of four (P-graph no-excess +
+    // ABB minimisation pick the cheapest sufficient one).
+    // Measurements: cycle-enum wall + GPU on RTX 2070 SUPER for the
+    // bitcoin_alpha graph (1715 vertices, 24k edges, 14.7% negative).
+    // ═══════════════════════════════════════════════════════════════
+
+    @cycle_k3_topm16 <unit> 10 {
+        cost <gpu_gb>    0.4;
+        cost <wall_min>  0.8;
+        cost <params_m>  0.0;
+        cost <auc_gap>   0.040;   // single-arity k=3 only
+        (-gpu_budget, -wall_budget, +cycle_pool);
+    }
+    @cycle_k34_topm32 <unit> 30 {
+        cost <gpu_gb>    1.1;
+        cost <wall_min>  2.4;
+        cost <params_m>  0.0;
+        cost <auc_gap>   0.022;   // 2026-05-02 mixed-arity sweet spot
+        (-gpu_budget, -wall_budget, +cycle_pool);
+    }
+    @cycle_k345_topm64 <unit> 80 {
+        cost <gpu_gb>    2.4;
+        cost <wall_min>  6.0;
+        cost <params_m>  0.0;
+        cost <auc_gap>   0.010;   // 2026-05-13 Optuna-best cycle set
+        (-gpu_budget, -wall_budget, +cycle_pool);
+    }
+    @cycle_walks_augmented <unit> 90 {
+        cost <gpu_gb>    2.8;
+        cost <wall_min>  7.0;
+        cost <params_m>  0.0;
+        cost <auc_gap>   0.012;   // 2026-05-04 walk-cycle mix; saturates
+        (-gpu_budget, -wall_budget, +cycle_pool);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Backbone width (3 choices). Param counts and GPU memory grow
+    // ~quadratically with hidden dim. auc_gap is the per-step gain
+    // from going wider (saturates above h=16 on small graphs).
+    // ═══════════════════════════════════════════════════════════════
+
+    @backbone_h8 <unit> 20 {
+        cost <gpu_gb>    0.3;
+        cost <wall_min>  0.5;
+        cost <params_m>  0.35;
+        cost <auc_gap>   0.025;
+        (-gpu_budget, -cycle_pool, +backbone_features);
+    }
+    @backbone_h16 <unit> 60 {
+        cost <gpu_gb>    1.2;
+        cost <wall_min>  1.8;
+        cost <params_m>  1.30;
+        cost <auc_gap>   0.012;   // 5-seed Optuna spot
+        (-gpu_budget, -cycle_pool, +backbone_features);
+    }
+    @backbone_h32 <unit> 200 {
+        cost <gpu_gb>    4.0;
+        cost <wall_min>  6.0;
+        cost <params_m>  5.10;
+        cost <auc_gap>   0.005;   // diminishing returns above 16
+        (-gpu_budget, -cycle_pool, +backbone_features);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Training schedule (3 choices).
+    // ═══════════════════════════════════════════════════════════════
+
+    @train_short_10ep <unit> 30 {
+        cost <gpu_gb>    0.0;
+        cost <wall_min>  4.0;
+        cost <params_m>  0.0;
+        cost <auc_gap>   0.030;
+        (-wall_budget, -backbone_features, +trained_state);
+    }
+    @train_med_60ep <unit> 120 {
+        cost <gpu_gb>    0.0;
+        cost <wall_min>  18.0;
+        cost <params_m>  0.0;
+        cost <auc_gap>   0.010;
+        (-wall_budget, -backbone_features, +trained_state);
+    }
+    @train_long_optuna_200ep <unit> 360 {
+        cost <gpu_gb>    0.0;
+        cost <wall_min>  72.0;
+        cost <params_m>  0.0;
+        cost <auc_gap>   0.000;   // Optuna-best schedule (the headline)
+        (-wall_budget, -backbone_features, +trained_state);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Evaluation (single mandatory step, validates trained_state →
+    // validated_model). Costs are 5-seed median.
+    // ═══════════════════════════════════════════════════════════════
+
+    @eval_5seed <unit> 40 {
+        cost <gpu_gb>    0.3;
+        cost <wall_min>  6.0;
+        cost <params_m>  0.0;
+        cost <auc_gap>   0.000;
+        (-gpu_budget, -wall_budget, -trained_state, +validated_model);
+    }
+}

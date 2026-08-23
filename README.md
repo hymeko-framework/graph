@@ -1,147 +1,92 @@
-# hymeko_graph
+# graph
 
-Generic signed-graph cycle and walk enumeration with **axiomatic
-pruning**.
+Graph theory and hypergraph extensions for analysis and modelling with HyMeKo.
 
-A pure-Rust library that lifts the cycle / walk enumeration code
-out of `hymeko_py` so it can be used outside the KAN /
-deep-learning pipeline.  The headline feature is the pluggable
-`CyclePruner` trait: cycles that violate domain axioms are
-**pruned during DFS, not after enumeration**.
+Two crates, laid out the way [`hymeko/core`](http://amaterasu.local:3000/hymeko/core)
+is:
 
-> **This repository is the canonical home.** The crate previously
-> lived in `hymeko_framework_rust/hymeko_graph`, with a
-> byte-identical vendored copy in `nagare`. Both remain until
-> their owners switch to this one; neither is authoritative any
-> more.
-
-## This crate, or `hotaru::hypergraph`?
-
-Both exist and they are not alternatives — they work on different
-things, and picking the wrong one costs a lot of translation.
-
-| | shape | for |
+| Crate | What it is | Depends on |
 |---|---|---|
-| `hymeko_graph` | pairwise signed graphs, `edges: Vec<(u32, u32)>` | cycle and walk enumeration at scale, with axiomatic pruning |
-| [`hotaru::hypergraph`](http://amaterasu.local:3000/hymeko/hotaru) | hypergraphs, signed CSR incidence | Berge paths, constructions, transversals, acyclicity, s-connectivity |
+| [`hymeko_graph`](hymeko_graph/) | Signed-graph cycle and walk enumeration with axiomatic pruning: top-k search, colour coding, community detection, SIMD spine kernels | `rayon`, `dashmap` |
+| [`hymeko_pgraph`](hymeko_pgraph/) | The P-graph framework — Material/Operating-Unit overlay on the HyMeKo IR, axiom checker, MSG/SSG generation, ABB solver, `.pgip` round-trip with P-graph Studio | `hymeko_core`, `parser`, `rusqlite` |
 
-The rule of thumb: if your question is *"which cycles satisfy this
-axiom, out of a graph too big to enumerate naively"*, it is this
-crate. If it is *"what does this relation structure look like, and
-where is it fragile"*, it is `hotaru`.
-
-They overlap in about four hundred lines — Cartwright-Harary and
-Davis balance, breadth-first distances, connected components, and
-the idea of a pruner consulted during the search rather than after
-it. That duplication is deliberate for now: this crate must not
-depend on `hotaru` (the Python and `nagare` consumers do not want
-a planner in their tree), and `hotaru` must not depend on this one
-(it is dependency-free by default, and this crate needs `rayon`
-and `dashmap`). Neither is a hypergraph library and neither is a
-planner.
-
-## What's in the box
-
-- `SignedGraph` + CSR adjacency builder (no `unsafe`, no Python deps)
-- `CyclePruner` trait — `extend_ok` (DFS-time pre-check) +
-  `emit_ok` (post-completion verification)
-- Pre-built balance pruners:
-  - `CartwrightHararyPruner` — balanced-only or unbalanced-only
-    sign-product filter (Cartwright-Harary 1956)
-  - `DavisWeakBalancePruner` — exclude all-negative triangles
-    (Davis 1967)
-  - `BipartiteOnlyPruner` — drop odd-length cycles (handy after
-    star-expansion)
-- `FriedlerAxiomPruner` — encode the five P-graph axioms
-  (Friedler-Tarján-Huang-Fan 1992) as DFS pruning rules:
-  - **A0** bipartite alternation (M ↔ O at every step) →
-    pruned during DFS, halves branch factor on bipartite graphs
-  - **A1** required products → cycle must touch a product M-node
-  - **A3** valid O-nodes → only whitelisted units allowed in cycle
-  - **A4 / A5** are degenerate at cycle-enumeration time but
-    surfaced as hooks
-
-## Why pruning matters
-
-For a P-graph with `|V_M|` material vertices and `|V_O|` operating
-units, bipartite alternation alone halves the DFS branch factor.
-On a cube graph (perfectly bipartite), the pruner skips every
-odd-length search path and gives an immediate ~2× speed-up on
-top of the existing rayon parallelism.  For more constrained
-axioms (A1 product-membership, A3 unit-validity) the speed-up
-scales with how restrictive the axiom is.
-
-The two-level API mirrors how Friedler's accelerated branch-and-
-bound works on P-graphs: cheap structural checks during the
-search (`extend_ok`), expensive verification once a candidate is
-ready (`emit_ok`).
-
-## Status
-
-The migration the old status note was waiting on has happened. The
-enumerator body is here — `cycle_enum.rs` and the 4,100 lines of
-`topk_cycles.rs` — not in `hymeko_py/src/cycles.rs`, and it takes
-the `&dyn CyclePruner` the note anticipated.
-
-**177 tests** — 113 unit, 64 integration — plus three benchmark
-suites and eight examples.
-
-## Building
+Both came out of `hymeko_framework_rust`, which is retired. **This repository
+is the canonical home for both.**
 
 ```
-cargo test          # library and tests: two dependencies, rayon and dashmap
-cargo build --examples
-cd benchmarks && cargo bench
+cargo test                       # 324 tests
+cargo test -p hymeko_graph       # 177
+cargo test -p hymeko_pgraph      # 147
+cd benchmarks && cargo bench     # needs crates.io
 ```
 
-The benchmarks are a **separate crate with its own workspace
-root**, so the library never resolves their dependencies.
-Criterion's closure is around a hundred and twenty crates
-including a wasm-bindgen toolchain, and needing all of it to run
-`cargo test` on a graph library is the wrong trade. Nothing is
-lost — the bench sources are unchanged in `benchmarks/benches/` —
-but running them needs crates.io, which the vendored-registry
-build machines deliberately do not carry.
+## They do not depend on each other
 
-`proptest` was dropped from the dev-dependencies on extraction: it
-was declared but no test, bench or example ever used it.
+Worth knowing before reaching for either, because both mention Friedler's
+axioms and they mean different things by it.
 
-## Worked example
+`hymeko_graph::FriedlerAxiomPruner` encodes A0/A1/A3 as **cycle enumeration
+pruning rules** — cheap structural checks consulted during a DFS, so the
+search costs what the feasible set costs rather than what the full set does.
+It knows nothing about HyMeKo; you hand it a `Vec<NodeKind>`.
 
-```rust
-use hymeko_graph::{
-    FriedlerAxiomPruner, NodeKind, CyclePruner, PrunerDecision,
-};
+`hymeko_pgraph::axioms` checks **A1–A5 against a real P-graph** lowered from a
+description, and can say which axiom failed and why. It is a verdict on a
+model, not a filter inside a search.
 
-// 4-vertex bipartite graph: vertices 0, 2 are Material;
-// vertices 1, 3 are OperatingUnit.
-let kind = vec![
-    NodeKind::Material, NodeKind::OperatingUnit,
-    NodeKind::Material, NodeKind::OperatingUnit,
-];
-let p = FriedlerAxiomPruner::new(kind)
-    .with_required_products([2]);  // require product M-node 2
+One is a predicate in a hot loop. The other is an analysis you read.
 
-// Try to extend [0] -> 2: same kind (M -> M) violates A0.
-assert_eq!(p.extend_ok(&[0], 2), PrunerDecision::Reject);
+## And `hotaru::hypergraph`?
 
-// Try to extend [0] -> 1: M -> O, OK.
-assert_eq!(p.extend_ok(&[0], 1), PrunerDecision::Accept);
+A third thing, in a third repo, and the distinction matters because the names
+all sound alike:
 
-// Emit the cycle [0, 1, 2, 3] (M-O-M-O, even length, contains 2):
-// satisfies A0 + A1, accepted.
-assert_eq!(p.emit_ok(&[0, 1, 2, 3], &[1, 1, 1, 1]),
-           PrunerDecision::Accept);
+| | shape |
+|---|---|
+| `hymeko_graph` | pairwise signed graphs — `edges: Vec<(u32, u32)>` |
+| `hymeko_pgraph` | bipartite P-graphs over the HyMeKo IR |
+| [`hotaru::hypergraph`](http://amaterasu.local:3000/hymeko/hotaru) | hypergraphs as hypergraphs — Berge paths, Levi/2-section/dual/s-line, transversals, acyclicity, s-connectivity |
+
+A hypergraph reaches `hymeko_graph`'s algorithms only by being star-expanded
+first, which is what `BipartiteOnlyPruner` exists for. If your question is
+*"which cycles satisfy this axiom, in a graph too big to enumerate naively"*,
+it is `hymeko_graph`. If it is *"is this process model feasible, and why
+not"*, it is `hymeko_pgraph`. If it is *"what does this relation structure
+look like, and where is it fragile"*, it is `hotaru`.
+
+`hotaru` is dependency-free by default and these two are not, so nothing here
+depends on it and it depends on nothing here. The ~400 lines of overlap
+(balance predicates, breadth-first distances, components, the idea of a pruner
+consulted during the search) is duplicated on purpose.
+
+## Layout
+
+```
+hymeko_graph/     the signed-graph crate, its tests and examples
+hymeko_pgraph/    the P-graph crate, its tests and two binaries
+data/             fixtures both crates' tests read with include_str!
+benchmarks/       every bench, as a separate crate with its own workspace root
 ```
 
-## Citations
+`benchmarks/` is not a workspace member on purpose. Criterion's dependency
+closure is around a hundred and twenty crates including a wasm-bindgen
+toolchain, and requiring all of it to run `cargo test` on a graph library is
+the wrong trade. The bench sources are unchanged; running them needs
+crates.io.
 
-- F. Friedler, K. Tarján, Y.-W. Huang, L. T. Fan,
-  *Combinatorial algorithms for process synthesis*, Computers &
-  Chemical Engineering, 16, 1992.
-- D. Cartwright, F. Harary, *Structural balance: a generalisation
-  of Heider's theory*, Psychological Review, 63(5), 1956.
-- J. A. Davis, *Clustering and structural balance in graphs*,
-  Human Relations, 20(2), 1967.
-- F. Heider, *Attitudes and cognitive organization*, Journal of
-  Psychology, 21, 1946.
+## Notes on the extraction
+
+- Every source file is byte-identical to the monorepo except `hymeko_graph/src/lib.rs`,
+  whose doc comment was stale — it claimed the cycle enumerator still lived in
+  `hymeko_py/src/cycles.rs`.
+- `hymeko_pgraph`'s path dependencies on `../hymeko_core` and `../parser`
+  became git dependencies on the live split-out repos.
+- `data/pgraph/Chapter4/example4_3.pgip` was **not** brought across. It is a
+  32 MB SQLite blob that no test, bench or example references; everything else
+  under `data/` came, and the whole directory is 835 KB. Fetch it from the
+  monorepo if a Studio round-trip needs it.
+- `proptest` is dropped from both crates' dev-dependencies: declared, never
+  used.
+- `hymeko_pgraph_py`, the PyO3 binding, stayed behind. It is a packaging
+  concern rather than analysis, and needs a decision about where Python
+  bindings live in the split-out world.

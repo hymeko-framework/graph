@@ -1,0 +1,11 @@
+// Grid sweep for `hymeko_driver --backend gomb --sweep …`.
+
+GombGridSweep {}
+
+context
+{
+    @sweep_topk <param_range> {
+        target "gomb.topk";
+        values [12, 24];
+    }
+}

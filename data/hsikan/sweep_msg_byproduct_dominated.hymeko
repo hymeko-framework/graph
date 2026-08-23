@@ -1,0 +1,77 @@
+// HSIKAN architecture-search P-graph with by-products on the
+// EMPIRICALLY DOMINATED architecture choices — Phase 11 (2026-05-20).
+//
+// Phase 8 measured on Bitcoin Alpha (5 seeds):
+//   m4+h8+short  → AUC 0.430 ± 0.007  (scalar-cost-min)
+//   m4+h8+long   → AUC 0.491 ± 0.015  (+0.061 over short)
+//   m4+h16+short → AUC 0.473 ± 0.106  (worse than h=8 at short)
+//   m4+h32+short → AUC 0.516 ± 0.042  (also worse than h=8 at short)
+//
+// Two architecture choices are therefore *dominated* at short epochs:
+//   * train_short  — Pareto-dominated by train_long at any hidden.
+//   * model_h32    — bigger but under-trained at n_epochs=10.
+//
+// Inject a by-product on each: train_short produces
+// `wasted_potential` (capturing "quality left on the table"), and
+// model_h32 produces `unused_capacity` (capturing "params not used").
+// Neither by-product is consumed by any other unit.
+//
+// Under strict-no-excess MSG: both producers get pruned. ABB then
+// picks the cost-minimum among survivors → m4+h8+long. The Phase 8
+// measurements predict +0.061 AUC vs the scalar-cost-min pick.
+//
+// Under canonical Friedler S1..S5: all five axioms pass (every M-node
+// has ≥ 1 incident edge; every non-raw has a producer; no raw is
+// produced inside; every O-node has a path to auc_score via at least
+// one of its outputs). The divergence is between canonical and the
+// orthogonal "strict-no-excess" Friedler-1992-§3 refinement.
+
+HSiKAN_Sweep_Byproduct_Dominated {}
+
+context
+{
+    // ─── Resource budgets (raw materials) ────────────────────────
+    gpu_memory   <material, raw>;
+    train_time   <material, raw>;
+
+    // ─── Quality dimensions (intermediates) ──────────────────────
+    cycle_quality      <material>;
+    embedding_quality  <material>;
+    auc_score          <material, product>;
+
+    // ─── Injected by-products on dominated choices ───────────────
+    unused_capacity   <material>;  // produced by model_h32, consumed by nothing
+    wasted_potential  <material>;  // produced by train_short, consumed by nothing
+
+    // ─── Architecture choices (same scalar costs as sweep_msg.hymeko) ─
+    @cycle_topk_m4   <unit>  10 {
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+    @cycle_topk_m16  <unit>  40 {
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+    @cycle_topk_m64  <unit> 160 {
+        (-gpu_memory, -train_time, +cycle_quality);
+    }
+
+    @model_h8        <unit>  20 {
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    @model_h16       <unit>  60 {
+        (-gpu_memory, -cycle_quality, +embedding_quality);
+    }
+    // h=32 is the empirically dominated wider model — produces an
+    // unused_capacity by-product nothing consumes.
+    @model_h32       <unit> 200 {
+        (-gpu_memory, -cycle_quality, +embedding_quality, +unused_capacity);
+    }
+
+    // train_short is the empirically dominated training-length choice
+    // — produces a wasted_potential by-product nothing consumes.
+    @train_short     <unit>  30 {
+        (-train_time, -embedding_quality, +auc_score, +wasted_potential);
+    }
+    @train_long      <unit> 120 {
+        (-train_time, -embedding_quality, +auc_score);
+    }
+}
