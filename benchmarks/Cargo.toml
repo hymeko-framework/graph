@@ -1,0 +1,39 @@
+# The benchmarks, as their own crate.
+#
+# `[workspace]` with nothing in it makes this an independent workspace root,
+# so the library above never resolves criterion or rand. That matters more
+# than it sounds: criterion's dependency closure is a hundred and twenty-odd
+# crates including a wasm-bindgen toolchain, and requiring all of it to run
+# `cargo test` on a graph library is the wrong trade. Here it is opt-in.
+#
+#     cd benchmarks && cargo bench
+#
+# Needs crates.io. The HyMeKo build machines reach it through a vendored
+# registry that deliberately does not carry the benchmarking tree.
+[workspace]
+
+[package]
+name = "hymeko_graph_benchmarks"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+hymeko_graph = { path = ".." }
+
+[dev-dependencies]
+criterion = "0.8.2"
+rand = "0.9"
+
+[[bench]]
+name = "graph_bench"
+harness = false
+
+[[bench]]
+name = "spine_bench"
+harness = false
+
+[[bench]]
+name = "incidence_bench"
+harness = false

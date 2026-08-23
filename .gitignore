@@ -1,0 +1,7 @@
+# Rust build output
+target/
+benchmarks/target/
+
+# Cargo.lock is committed: the dependency set is two crates plus their
+# transitive tree, and the lock is the only record of which revisions a
+# build actually used.
