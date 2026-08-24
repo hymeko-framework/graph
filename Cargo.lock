@@ -431,6 +431,7 @@ name = "hymeko_pgraph"
 version = "0.1.0"
 dependencies = [
  "hymeko_core",
+ "hymeko_graph",
  "parser",
  "rusqlite",
  "serde",

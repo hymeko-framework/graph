@@ -16,11 +16,15 @@
 //! DFS / cycle-enumeration core is *agnostic* to whether a
 //! Friedler check is in play.  The pruner is a strategy plug-in.
 
+// The generic side — graphs, traversal, the stock pruners — from
+// `hymeko_graph`; the P-graph axioms from this crate. That split is what
+// these scenarios are here to keep honest.
 use hymeko_graph::{
-    BfsScratch, BipartiteOnlyPruner, CartwrightHararyPruner, Csr, DfsScratch, FriedlerAxiomPruner,
-    NoOpPruner, SignedGraph, balance::BalanceMode, bfs_distances, dfs_visit, dfs_visit_pruned,
-    enumerate_simple_cycles, enumerate_simple_cycles_noprune, friedler::NodeKind,
+    BfsScratch, BipartiteOnlyPruner, CartwrightHararyPruner, Csr, DfsScratch, NoOpPruner,
+    SignedGraph, balance::BalanceMode, bfs_distances, dfs_visit, dfs_visit_pruned,
+    enumerate_simple_cycles, enumerate_simple_cycles_noprune,
 };
+use hymeko_pgraph::{FriedlerAxiomPruner, PNodeKind};
 
 // ─── Scenario 1: Simple two-route synthesis ──────────────────────
 //
@@ -43,13 +47,13 @@ use hymeko_graph::{
 // Edges form the bipartite alternation M-O-M-O-M, with one extra
 // "shortcut" M0—M2 (illegal, M-M) added to test pruner rejection.
 
-fn build_simple_synthesis() -> (SignedGraph, Vec<NodeKind>) {
+fn build_simple_synthesis() -> (SignedGraph, Vec<PNodeKind>) {
     let kinds = vec![
-        NodeKind::Material,      // 0  M0 (raw)
-        NodeKind::OperatingUnit, // 1  U0
-        NodeKind::Material,      // 2  M1
-        NodeKind::OperatingUnit, // 3  U1
-        NodeKind::Material,      // 4  M2 (product)
+        PNodeKind::Material,      // 0  M0 (raw)
+        PNodeKind::OperatingUnit, // 1  U0
+        PNodeKind::Material,      // 2  M1
+        PNodeKind::OperatingUnit, // 3  U1
+        PNodeKind::Material,      // 4  M2 (product)
     ];
     // Legal P-graph edges (M-O alternation):
     //   M0 — U0, U0 — M1, M1 — U1, U1 — M2
@@ -94,17 +98,17 @@ fn build_simple_synthesis() -> (SignedGraph, Vec<NodeKind>) {
 //
 // Required products: {Benzene} (id 6).
 
-fn build_hda_like() -> (SignedGraph, Vec<NodeKind>) {
+fn build_hda_like() -> (SignedGraph, Vec<PNodeKind>) {
     let kinds = vec![
-        NodeKind::Material,      // 0 Toluene
-        NodeKind::OperatingUnit, // 1 Mixer
-        NodeKind::Material,      // 2 H2
-        NodeKind::OperatingUnit, // 3 Reactor
-        NodeKind::Material,      // 4 Mix
-        NodeKind::OperatingUnit, // 5 Separator
-        NodeKind::Material,      // 6 Benzene (product)
-        NodeKind::OperatingUnit, // 7 Catalyst (auxiliary)
-        NodeKind::Material,      // 8 Methane (byproduct)
+        PNodeKind::Material,      // 0 Toluene
+        PNodeKind::OperatingUnit, // 1 Mixer
+        PNodeKind::Material,      // 2 H2
+        PNodeKind::OperatingUnit, // 3 Reactor
+        PNodeKind::Material,      // 4 Mix
+        PNodeKind::OperatingUnit, // 5 Separator
+        PNodeKind::Material,      // 6 Benzene (product)
+        PNodeKind::OperatingUnit, // 7 Catalyst (auxiliary)
+        PNodeKind::Material,      // 8 Methane (byproduct)
     ];
     let g = SignedGraph::from_parts(
         9,
@@ -310,10 +314,10 @@ fn strategy_pattern_progressive_pruning() {
     // (unbalanced).
     let g = SignedGraph::from_parts(4, &[0, 1, 2, 3], &[1, 2, 3, 0], &[-1, 1, 1, 1]);
     let kinds = vec![
-        NodeKind::Material,
-        NodeKind::OperatingUnit,
-        NodeKind::Material,
-        NodeKind::OperatingUnit,
+        PNodeKind::Material,
+        PNodeKind::OperatingUnit,
+        PNodeKind::Material,
+        PNodeKind::OperatingUnit,
     ];
 
     // Strategy 1: no pruning — finds all 1 cycle.
@@ -382,7 +386,7 @@ fn friedler_a3_whitelist_rejects_unwhitelisted_units() {
     // Every cycle's O-nodes must be in the whitelist.
     for c in &friedler_4 {
         for &v in c {
-            if matches!(kinds[v as usize], NodeKind::OperatingUnit) {
+            if matches!(kinds[v as usize], PNodeKind::OperatingUnit) {
                 assert!(
                     [1u32, 3u32].contains(&v),
                     "A3 violation: O-node {} not in whitelist",

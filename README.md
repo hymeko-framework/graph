@@ -7,8 +7,8 @@ is:
 
 | Crate | What it is | Depends on |
 |---|---|---|
-| [`hymeko_graph`](hymeko_graph/) | Signed-graph cycle and walk enumeration with axiomatic pruning: top-k search, colour coding, community detection, SIMD spine kernels | `rayon`, `dashmap` |
-| [`hymeko_pgraph`](hymeko_pgraph/) | The P-graph framework — Material/Operating-Unit overlay on the HyMeKo IR, axiom checker, MSG/SSG generation, ABB solver, `.pgip` round-trip with P-graph Studio | `hymeko_core`, `parser`, `rusqlite` |
+| [`hymeko_graph`](hymeko_graph/) | The generic layer. Signed graphs, CSR, DFS and BFS, cycle and walk enumeration, top-k search, colour coding, community detection, SIMD spine kernels, and the `CyclePruner` seam | `rayon`, `dashmap` |
+| [`hymeko_pgraph`](hymeko_pgraph/) | The P-graph layer. Material/Operating-Unit overlay on the HyMeKo IR, the A1–A5 axiom checker, Friedler's axioms as a `CyclePruner`, MSG/SSG generation, ABB solver, `.pgip` round-trip with P-graph Studio | `hymeko_graph`, `hymeko_core`, `parser`, `rusqlite` |
 
 Both came out of `hymeko_framework_rust`, which is retired. **This repository
 is the canonical home for both.**
@@ -17,24 +17,33 @@ is the canonical home for both.**
 cargo test                       # 324 tests
 cargo test -p hymeko_graph       # 177
 cargo test -p hymeko_pgraph      # 147
-cd benchmarks && cargo bench     # needs crates.io
 ```
 
-## They do not depend on each other
+## Where the line is
 
-Worth knowing before reaching for either, because both mention Friedler's
-axioms and they mean different things by it.
+`hymeko_pgraph` → `hymeko_graph`, one way. Nothing in `hymeko_graph` knows
+what a Material or an Operating Unit is.
 
-`hymeko_graph::FriedlerAxiomPruner` encodes A0/A1/A3 as **cycle enumeration
-pruning rules** — cheap structural checks consulted during a DFS, so the
-search costs what the feasible set costs rather than what the full set does.
-It knows nothing about HyMeKo; you hand it a `Vec<NodeKind>`.
+**Traversal is the graph library's.** DFS, BFS, bidirectional BFS, connected
+components, CSR adjacency, the bitset helpers — all in
+`hymeko_graph::traversal`. `hymeko_pgraph` has no traversal of its own and
+should not grow any. What looks like traversal in `msg.rs` is not: producible
+and consumable closures are AND-fixpoints, where a unit fires only when
+*every* input is already reachable. That is hypergraph B-connectivity, and no
+graph BFS computes it.
 
-`hymeko_pgraph::axioms` checks **A1–A5 against a real P-graph** lowered from a
-description, and can say which axiom failed and why. It is a verdict on a
-model, not a filter inside a search.
+**Friedler is the P-graph library's.** `hymeko_pgraph::FriedlerAxiomPruner`
+implements `hymeko_graph::CyclePruner`, so cycle enumeration rejects
+infeasible process loops during the DFS rather than after. It shares
+`PNodeKind` with the rest of `hymeko_pgraph`. It used to live in
+`hymeko_graph` with its own copy of that enum — the doc comment there said, in
+so many words, that the duplicate existed to avoid a dependency. Reversing the
+dependency removed the need for both.
 
-One is a predicate in a hot loop. The other is an analysis you read.
+Within `hymeko_pgraph`, note that the pruner and `axioms` are not two spellings
+of one thing. `axioms` validates A1–A5 against a lowered model and reports
+which failed and why — a verdict you read. The pruner is a predicate in a hot
+loop, and only A0/A1/A3 have a cycle-enumeration reading at all.
 
 ## And `hotaru::hypergraph`?
 
@@ -54,10 +63,13 @@ it is `hymeko_graph`. If it is *"is this process model feasible, and why
 not"*, it is `hymeko_pgraph`. If it is *"what does this relation structure
 look like, and where is it fragile"*, it is `hotaru`.
 
-`hotaru` is dependency-free by default and these two are not, so nothing here
-depends on it and it depends on nothing here. The ~400 lines of overlap
-(balance predicates, breadth-first distances, components, the idea of a pruner
-consulted during the search) is duplicated on purpose.
+There is **one remaining duplication** across the three, and it is not
+resolved: `hotaru::hypergraph` carries its own balance predicates, BFS,
+components and pruner trait — roughly 400 lines that restate what
+`hymeko_graph` already has, for hypergraphs instead of graphs. It stays that
+way only because `hotaru` is dependency-free by default and this crate needs
+`rayon` and `dashmap`. Collapsing it means deciding which of those two
+properties matters more.
 
 ## Layout
 
@@ -68,11 +80,9 @@ data/             fixtures both crates' tests read with include_str!
 benchmarks/       every bench, as a separate crate with its own workspace root
 ```
 
-`benchmarks/` is not a workspace member on purpose. Criterion's dependency
-closure is around a hundred and twenty crates including a wasm-bindgen
-toolchain, and requiring all of it to run `cargo test` on a graph library is
-the wrong trade. The bench sources are unchanged; running them needs
-crates.io.
+`benchmarks/` is parked: the sources are all there, unchanged, in a crate
+with its own workspace root so neither library resolves criterion. Wiring it
+up properly is a later job.
 
 ## Notes on the extraction
 

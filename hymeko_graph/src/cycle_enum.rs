@@ -157,7 +157,33 @@ pub fn enumerate_simple_cycles_noprune(graph: &SignedGraph, k: usize) -> Vec<Vec
 mod tests {
     use super::*;
     use crate::balance::{BalanceMode, BipartiteOnlyPruner, CartwrightHararyPruner};
-    use crate::friedler::{FriedlerAxiomPruner, NodeKind};
+
+    /// A pruner that rejects a step between two vertices of the same colour.
+    ///
+    /// Stands in for what used to be `friedler::FriedlerAxiomPruner` here.
+    /// That moved to `hymeko_pgraph`, where the Material / Operating-Unit
+    /// vocabulary belongs. What this test actually exercises is the generic
+    /// thing underneath — a pruner consulted mid-DFS cuts a branch before it
+    /// materialises — and two-colouring is enough to show it.
+    #[derive(Debug)]
+    struct TwoColourPruner {
+        colour: Vec<bool>,
+    }
+
+    impl CyclePruner for TwoColourPruner {
+        fn extend_ok(&self, path: &[u32], next: u32) -> PrunerDecision {
+            match path.last() {
+                Some(&tail) if self.colour[tail as usize] == self.colour[next as usize] => {
+                    PrunerDecision::Reject
+                }
+                _ => PrunerDecision::Accept,
+            }
+        }
+
+        fn emit_ok(&self, cycle: &[u32], _edge_signs: &[i8]) -> PrunerDecision {
+            PrunerDecision::from_bool(cycle.len().is_multiple_of(2))
+        }
+    }
 
     /// 4-cycle 0-1-2-3 + chord 0-2.  Has triangles 0-1-2 and
     /// 0-2-3, plus the 4-cycle 0-1-2-3.
@@ -187,25 +213,19 @@ mod tests {
         assert_eq!(cycles[0], vec![0, 1, 2, 3]);
     }
 
-    /// Demonstrates the headline Friedler-pruning result: on a
-    /// bipartite graph, A0 alternation rejects every odd-length
-    /// candidate during DFS, *before* materialisation.  The
-    /// 3-cycle that exists in the unsigned chord graph (0-1-2)
-    /// is structurally infeasible if vertices 0 and 2 are both
-    /// Material — which would put two same-kind vertices adjacently.
+    /// The headline pruning result: on a two-coloured graph, rejecting
+    /// same-colour steps kills every odd-length candidate during the DFS,
+    /// *before* materialisation. The 3-cycle 0-1-2 in the chord graph goes
+    /// through the 0—2 edge, which joins two same-coloured vertices.
+    ///
+    /// `hymeko_pgraph`'s Friedler A0 is this rule with Material and
+    /// Operating-Unit as the two colours.
     #[test]
-    fn friedler_pruner_skips_odd_lengths() {
-        // Make 0, 2 Material; 1, 3 Operating.  Edge (0, 2) is
-        // M-M which is structurally infeasible in P-graph terms,
-        // so Friedler A0 will refuse to extend through it.
+    fn a_mid_dfs_pruner_skips_odd_lengths() {
         let g = build_chord_graph();
-        let kinds = vec![
-            NodeKind::Material,
-            NodeKind::OperatingUnit,
-            NodeKind::Material,
-            NodeKind::OperatingUnit,
-        ];
-        let p = FriedlerAxiomPruner::new(kinds);
+        let p = TwoColourPruner {
+            colour: vec![false, true, false, true],
+        };
         let cycles3 = enumerate_simple_cycles(&g, 3, &p);
         // No triangle survives bipartite alternation.
         assert_eq!(cycles3.len(), 0);

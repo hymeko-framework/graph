@@ -10,6 +10,9 @@ name = "hymeko_pgraph"
 
 [dependencies]
 hymeko_core  = { workspace = true }
+# The generic side: CSR, DFS/BFS, the CyclePruner seam that friedler.rs
+# implements. Traversal primitives live there, not here.
+hymeko_graph = { path = "../hymeko_graph" }
 parser       = { workspace = true }
 
 thiserror    = "1"

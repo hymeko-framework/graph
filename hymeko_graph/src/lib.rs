@@ -15,22 +15,24 @@
 //! There is no reason to gate that on the rest of the HyMeKo
 //! framework being installed.  The refactor also separates concerns:
 //!
-//! - `hymeko_graph` :  *generic* signed-graph algorithms
-//!   ([`SignedGraph`], CSR construction, k-cycle / k-walk DFS, the
-//!   [`pruner::CyclePruner`] trait below)
-//! - `hymeko_pgraph` :  P-graph schema + Friedler A1–A5 axiom
-//!   checker (already in the workspace)
-//! - `hymeko_py` :  PyO3 wrappers + numpy boundary crossing
+//! - `hymeko_graph` :  *generic* signed-graph algorithms —
+//!   [`SignedGraph`], CSR construction, [`traversal`]'s DFS and
+//!   BFS, k-cycle / k-walk enumeration, the
+//!   [`pruner::CyclePruner`] trait below. Nothing domain-specific.
+//! - `hymeko_pgraph` :  the P-graph reading — schema, the A1–A5
+//!   axiom checker, and `FriedlerAxiomPruner`, which implements
+//!   the trait below.
 //!
-//! Down-stream code that only needs cycle enumeration imports
-//! `hymeko_graph` directly and pays no Python / IR cost.
+//! The dependency runs one way, `hymeko_pgraph → hymeko_graph`,
+//! and nothing here knows what a Material or an Operating Unit is.
 //!
-//! ## Friedler axioms as cycle pruners
+//! ## The pruning seam
 //!
 //! The pivot point of this crate is the [`pruner::CyclePruner`] trait:
 //! during DFS, the enumerator consults a pruner at every partial
 //! path to decide whether to continue, and at every closed cycle
-//! to decide whether to emit.  Concrete pruners include:
+//! to decide whether to emit. The stock pruners are the ones that
+//! need no domain vocabulary:
 //!
 //! - [`balance::CartwrightHararyPruner`] — emit only balanced
 //!   ($\prod s = +1$) cycles, or only unbalanced.
@@ -39,13 +41,11 @@
 //! - [`balance::BipartiteOnlyPruner`] — for bipartite graphs (e.g.
 //!   star-expansion of a hypergraph), prune odd-length cycles
 //!   before they materialise.
-//! - [`friedler::FriedlerAxiomPruner`] — given a Material /
-//!   OperatingUnit kind map à la `hymeko_pgraph`, prune cycles
-//!   that violate the P-graph alternation invariant
-//!   (axiom A0 in the Friedler 1992 framework: bipartite
-//!   M-O-M-O-…) plus the deeper A1–A5 reachability and degree
-//!   constraints, so cycle enumeration only emits *feasible*
-//!   process loops.
+//!
+//! Anything that needs to know what the vertices *mean* belongs on
+//! the other side of the trait. `hymeko_pgraph::FriedlerAxiomPruner`
+//! is the worked example: it rejects M-M and O-O steps during the
+//! DFS (A0), and requires a product node at emit time (A1).
 //!
 //! In every case the pruner kicks in *during* the DFS, not after
 //! materialisation, so the enumeration cost is proportional to
@@ -86,7 +86,6 @@ pub mod color_coding;
 pub mod community;
 pub mod cycle_enum;
 pub mod cycle_sampler;
-pub mod friedler;
 pub mod incidence;
 pub mod path_closure;
 pub mod pruner;
@@ -104,7 +103,6 @@ pub mod walks_unsigned;
 
 pub use balance::{BipartiteOnlyPruner, CartwrightHararyPruner, DavisWeakBalancePruner};
 pub use cycle_enum::{enumerate_simple_cycles, enumerate_simple_cycles_noprune};
-pub use friedler::FriedlerAxiomPruner;
 pub use incidence::{
     build_edge_incidence, build_edge_incidence_vertex_adj, BuildOpts as IncidenceBuildOpts,
     IncidenceCoo, IncidenceOutput, IncidenceResult,

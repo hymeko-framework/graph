@@ -35,29 +35,24 @@ see [`hotaru::hypergraph`](http://amaterasu.local:3000/hymeko/hotaru).
     (Davis 1967)
   - `BipartiteOnlyPruner` — drop odd-length cycles (handy after
     star-expansion)
-- `FriedlerAxiomPruner` — encode the five P-graph axioms
-  (Friedler-Tarján-Huang-Fan 1992) as DFS pruning rules:
-  - **A0** bipartite alternation (M ↔ O at every step) →
-    pruned during DFS, halves branch factor on bipartite graphs
-  - **A1** required products → cycle must touch a product M-node
-  - **A3** valid O-nodes → only whitelisted units allowed in cycle
-  - **A4 / A5** are degenerate at cycle-enumeration time but
-    surfaced as hooks
+Domain-specific pruners belong on the other side of the trait.
+`hymeko_pgraph::FriedlerAxiomPruner` is the worked example: it
+encodes Friedler's A0/A1/A3 for P-graphs, and lived here until
+the vocabulary followed it into the crate that already had it.
 
 ## Why pruning matters
 
-For a P-graph with `|V_M|` material vertices and `|V_O|` operating
-units, bipartite alternation alone halves the DFS branch factor.
-On a cube graph (perfectly bipartite), the pruner skips every
-odd-length search path and gives an immediate ~2× speed-up on
-top of the existing rayon parallelism.  For more constrained
-axioms (A1 product-membership, A3 unit-validity) the speed-up
-scales with how restrictive the axiom is.
+A pruner consulted mid-DFS cuts a branch before it materialises,
+so the enumeration costs what the *feasible* set costs rather
+than what the full one does. On a bipartite graph, rejecting
+same-colour steps skips every odd-length search path outright —
+an immediate ~2× on top of the rayon parallelism, before any
+domain constraint narrows it further.
 
 The two-level API mirrors how Friedler's accelerated branch-and-
-bound works on P-graphs: cheap structural checks during the
-search (`extend_ok`), expensive verification once a candidate is
-ready (`emit_ok`).
+bound works: cheap structural checks during the search
+(`extend_ok`), expensive verification once a candidate is ready
+(`emit_ok`).
 
 ## Status
 
@@ -91,37 +86,45 @@ was declared but no test, bench or example ever used it.
 
 ## Worked example
 
+Writing a pruner: reject any step between two vertices of the
+same colour, and emit only even-length cycles. This is the
+generic shape of what `hymeko_pgraph`'s Friedler A0 does with
+Material and Operating-Unit as the two colours.
+
 ```rust
-use hymeko_graph::{
-    FriedlerAxiomPruner, NodeKind, CyclePruner, PrunerDecision,
-};
+use hymeko_graph::{CyclePruner, PrunerDecision, SignedGraph, enumerate_simple_cycles};
 
-// 4-vertex bipartite graph: vertices 0, 2 are Material;
-// vertices 1, 3 are OperatingUnit.
-let kind = vec![
-    NodeKind::Material, NodeKind::OperatingUnit,
-    NodeKind::Material, NodeKind::OperatingUnit,
-];
-let p = FriedlerAxiomPruner::new(kind)
-    .with_required_products([2]);  // require product M-node 2
+struct TwoColour { colour: Vec<bool> }
 
-// Try to extend [0] -> 2: same kind (M -> M) violates A0.
-assert_eq!(p.extend_ok(&[0], 2), PrunerDecision::Reject);
+impl CyclePruner for TwoColour {
+    fn extend_ok(&self, path: &[u32], next: u32) -> PrunerDecision {
+        match path.last() {
+            Some(&tail) if self.colour[tail as usize] == self.colour[next as usize] =>
+                PrunerDecision::Reject,
+            _ => PrunerDecision::Accept,
+        }
+    }
+    fn emit_ok(&self, cycle: &[u32], _signs: &[i8]) -> PrunerDecision {
+        PrunerDecision::from_bool(cycle.len().is_multiple_of(2))
+    }
+}
 
-// Try to extend [0] -> 1: M -> O, OK.
-assert_eq!(p.extend_ok(&[0], 1), PrunerDecision::Accept);
+// 4-cycle 0-1-2-3 with a chord 0—2 joining two same-coloured vertices.
+let g = SignedGraph::from_parts(4, &[0, 1, 2, 3, 0], &[1, 2, 3, 0, 2], &[1; 5]);
+let p = TwoColour { colour: vec![false, true, false, true] };
 
-// Emit the cycle [0, 1, 2, 3] (M-O-M-O, even length, contains 2):
-// satisfies A0 + A1, accepted.
-assert_eq!(p.emit_ok(&[0, 1, 2, 3], &[1, 1, 1, 1]),
-           PrunerDecision::Accept);
+// The chord is refused mid-DFS, so no triangle survives.
+assert_eq!(enumerate_simple_cycles(&g, 3, &p).len(), 0);
+// The alternating 4-cycle does.
+assert_eq!(enumerate_simple_cycles(&g, 4, &p), vec![vec![0, 1, 2, 3]]);
 ```
+
+For the P-graph axioms themselves, see
+[`hymeko_pgraph`](../hymeko_pgraph/) and its `axiom_effect` and
+`strategy_pattern` examples.
 
 ## Citations
 
-- F. Friedler, K. Tarján, Y.-W. Huang, L. T. Fan,
-  *Combinatorial algorithms for process synthesis*, Computers &
-  Chemical Engineering, 16, 1992.
 - D. Cartwright, F. Harary, *Structural balance: a generalisation
   of Heider's theory*, Psychological Review, 63(5), 1956.
 - J. A. Davis, *Clustering and structural balance in graphs*,

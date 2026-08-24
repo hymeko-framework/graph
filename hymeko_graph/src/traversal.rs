@@ -531,25 +531,40 @@ mod tests {
         assert!(bs_get(&bits, 64));
     }
 
+    /// A pruner that rejects a step between two vertices of the same colour.
+    ///
+    /// The generic shape of what `hymeko_pgraph`'s Friedler A0 does with
+    /// Material and Operating-Unit. That pruner used to live in this crate
+    /// and is now on the other side of the trait, where its vocabulary
+    /// belongs; two colours are enough to exercise the DFS seam here.
+    #[derive(Debug)]
+    struct TwoColourPruner {
+        colour: Vec<bool>,
+    }
+
+    impl crate::pruner::CyclePruner for TwoColourPruner {
+        fn extend_ok(&self, path: &[u32], next: u32) -> crate::pruner::PrunerDecision {
+            match path.last() {
+                Some(&tail) if self.colour[tail as usize] == self.colour[next as usize] => {
+                    crate::pruner::PrunerDecision::Reject
+                }
+                _ => crate::pruner::PrunerDecision::Accept,
+            }
+        }
+    }
+
     #[test]
     fn dfs_pruned_skips_rejected_branches() {
-        use crate::friedler::{FriedlerAxiomPruner, NodeKind};
-        // Path 0 — 1 — 2 — 3 with bipartite alternation
-        // 0=M, 1=O, 2=M, 3=O.  Add a cheating edge 0—2 (M—M)
-        // that the Friedler pruner will reject during DFS.
+        // Path 0 — 1 — 2 — 3, two-coloured 0/2 against 1/3. The extra edge
+        // 0—2 joins two same-coloured vertices and must be pruned mid-DFS.
         let g = SignedGraph::from_parts(4, &[0, 1, 2, 0], &[1, 2, 3, 2], &[1; 4]);
         let csr = Csr::from_graph(&g);
-        let kinds = vec![
-            NodeKind::Material,
-            NodeKind::OperatingUnit,
-            NodeKind::Material,
-            NodeKind::OperatingUnit,
-        ];
-        let p = FriedlerAxiomPruner::new(kinds);
+        let p = TwoColourPruner {
+            colour: vec![false, true, false, true],
+        };
         let mut s = DfsScratch::with_capacity(g.n_nodes);
         let mut order = Vec::new();
-        // Start from 0 (Material).  The 0→2 (M→M) edge must be
-        // pruned; the path 0→1→2→3 must succeed.
+        // Start from 0. The 0→2 edge must be pruned; 0→1→2→3 must succeed.
         let n = dfs_visit_pruned(&csr, &mut s, &p, 0, |v| order.push(v));
         assert_eq!(n, 4);
         // Accepted vertices are 0 (start), 1, 2 (via 1), 3.

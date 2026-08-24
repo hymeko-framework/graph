@@ -47,6 +47,7 @@ pub mod axioms;
 pub mod builder;
 pub mod cli;
 pub mod dump;
+pub mod friedler;
 pub mod lowering;
 pub mod meta_resolve;
 pub mod msg;
@@ -76,6 +77,7 @@ pub use dump::{
     analyze_source_with_regime_full,
     analyze_source_with_regime_topk,
 };
+pub use friedler::FriedlerAxiomPruner;
 pub use lowering::{LowerError, LoweredPGraph, lower};
 pub use meta_resolve::{MetaResolveError, compile_sources, compile_to_lowered, lower_resolved};
 pub use msg::{

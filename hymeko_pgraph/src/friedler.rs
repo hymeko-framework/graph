@@ -1,5 +1,22 @@
 //! Friedler P-graph axiomatic cycle pruner.
 //!
+//! This is the P-graph *reading* of `hymeko_graph`'s pruning seam: it
+//! implements [`hymeko_graph::CyclePruner`] so cycle enumeration in the graph
+//! crate can reject infeasible process loops during the search rather than
+//! after it. The generic machinery — the DFS, the trait, the balance pruners
+//! — stays there; the axioms live here, where the P-graph vocabulary already
+//! is.
+//!
+//! It shares [`PNodeKind`](crate::schema::PNodeKind) with the rest of this
+//! crate rather than carrying its own copy. An earlier version of this module
+//! lived in `hymeko_graph` and duplicated the enum precisely to avoid
+//! depending on `hymeko_pgraph`; putting it on this side removes the need.
+//!
+//! Note what this is *not*: [`crate::axioms`] validates A1–A5 against a
+//! lowered P-graph and reports which one failed and why. That is a verdict on
+//! a model. This is a predicate in a hot loop, and only A0/A1/A3 have a
+//! meaningful cycle-enumeration reading at all.
+//!
 //! Friedler, Tarján, Huang, Fan (1992) characterised feasible
 //! process-synthesis structures as bipartite graphs over Material
 //! (M) and Operating-Unit (O) nodes satisfying five axioms
@@ -65,18 +82,9 @@
 
 use std::collections::BTreeSet;
 
-use crate::pruner::{CyclePruner, PrunerDecision};
+use hymeko_graph::{CyclePruner, PrunerDecision};
 
-/// Bipartite kind tag.  Re-exported here so this crate is
-/// independent of `hymeko_pgraph` (which has its own [`PNodeKind`]
-/// over `DeclId`).
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum NodeKind {
-    /// Material vertex (in the P-graph M-set).
-    Material,
-    /// Operating-unit vertex (in the P-graph O-set).
-    OperatingUnit,
-}
+use crate::schema::PNodeKind;
 
 /// Friedler-style P-graph cycle pruner.
 ///
@@ -87,7 +95,7 @@ pub enum NodeKind {
 pub struct FriedlerAxiomPruner {
     /// Per-vertex bipartite kind tag.  Length = `n_nodes` of the
     /// underlying graph.  Vertex `v` has kind `kind[v as usize]`.
-    pub kind: Vec<NodeKind>,
+    pub kind: Vec<PNodeKind>,
     /// Required final-product M-nodes (A1).  When non-empty,
     /// emitted cycles must pass through at least one of these.
     pub required_products: BTreeSet<u32>,
@@ -100,7 +108,7 @@ impl FriedlerAxiomPruner {
     /// Build a pruner with bipartite alternation (A0) only.
     /// Equivalent to a bipartite-only pruner that *also* prunes
     /// the DFS during partial paths, not just at emit time.
-    pub fn new(kind: Vec<NodeKind>) -> FriedlerAxiomPruner {
+    pub fn new(kind: Vec<PNodeKind>) -> FriedlerAxiomPruner {
         FriedlerAxiomPruner {
             kind,
             required_products: BTreeSet::new(),
@@ -123,7 +131,7 @@ impl FriedlerAxiomPruner {
     }
 
     #[inline]
-    fn kind_of(&self, v: u32) -> NodeKind {
+    fn kind_of(&self, v: u32) -> PNodeKind {
         self.kind[v as usize]
     }
 }
@@ -141,7 +149,7 @@ impl CyclePruner for FriedlerAxiomPruner {
         }
         // A3 — incoming O-node must be in the whitelist (if set).
         if let Some(ref valid) = self.valid_o_nodes
-            && matches!(self.kind_of(next), NodeKind::OperatingUnit)
+            && matches!(self.kind_of(next), PNodeKind::OperatingUnit)
             && !valid.contains(&next)
         {
             return PrunerDecision::Reject;
@@ -173,14 +181,14 @@ impl CyclePruner for FriedlerAxiomPruner {
 mod tests {
     use super::*;
 
-    fn make_kind(n: usize, alt: bool) -> Vec<NodeKind> {
+    fn make_kind(n: usize, alt: bool) -> Vec<PNodeKind> {
         // Alternating bipartite kinds: even = M, odd = O.
         (0..n)
             .map(|i| {
                 if i % 2 == (alt as usize) {
-                    NodeKind::Material
+                    PNodeKind::Material
                 } else {
-                    NodeKind::OperatingUnit
+                    PNodeKind::OperatingUnit
                 }
             })
             .collect()
@@ -217,8 +225,8 @@ mod tests {
     #[test]
     fn a3_rejects_unwhitelisted_o_node() {
         let mut kind = make_kind(4, false);
-        kind[1] = NodeKind::OperatingUnit;
-        kind[3] = NodeKind::OperatingUnit;
+        kind[1] = PNodeKind::OperatingUnit;
+        kind[3] = PNodeKind::OperatingUnit;
         let p = FriedlerAxiomPruner::new(kind).with_valid_o_nodes([1]); // only vertex 1 is a valid unit
         // Extending to vertex 1 (whitelisted O) is fine.
         assert_eq!(p.extend_ok(&[0], 1), PrunerDecision::Accept);

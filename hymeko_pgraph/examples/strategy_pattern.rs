@@ -7,13 +7,14 @@
 
 use hymeko_graph::{
     BfsScratch, BipartiteOnlyPruner, CartwrightHararyPruner, Csr, DavisWeakBalancePruner,
-    DfsScratch, FriedlerAxiomPruner, NoOpPruner, SignedGraph, balance::BalanceMode, bfs_distances,
+    DfsScratch, NoOpPruner, SignedGraph, balance::BalanceMode, bfs_distances,
     bidirectional_bfs, dfs_visit, dfs_visit_pruned, enumerate_simple_cycles,
-    enumerate_simple_cycles_noprune, friedler::NodeKind,
+    enumerate_simple_cycles_noprune,
 };
+use hymeko_pgraph::{FriedlerAxiomPruner, PNodeKind};
 
 fn main() {
-    println!("hymeko_graph — strategy-pattern demo\n");
+    println!("hymeko_pgraph — strategy-pattern demo\n");
 
     // ── 1. Build a small bipartite P-graph: 4 Materials, 4 Units,
     // forming a Möbius-like cycle structure.
@@ -34,9 +35,9 @@ fn main() {
     let kinds = (0..n)
         .map(|i| {
             if i % 2 == 0 {
-                NodeKind::Material
+                PNodeKind::Material
             } else {
-                NodeKind::OperatingUnit
+                PNodeKind::OperatingUnit
             }
         })
         .collect::<Vec<_>>();

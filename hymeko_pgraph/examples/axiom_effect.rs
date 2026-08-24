@@ -14,12 +14,12 @@ use hymeko_graph::{
     CompositePruner, NoOpPruner, SignedGraph,
     balance::{BalanceMode, BipartiteOnlyPruner, CartwrightHararyPruner, DavisWeakBalancePruner},
     enumerate_simple_cycles,
-    friedler::{FriedlerAxiomPruner, NodeKind},
 };
+use hymeko_pgraph::{FriedlerAxiomPruner, PNodeKind};
 
 /// Build a moderately-sized bipartite ring with chords — picks up
 /// many 6-cycles that exercise all bipartite/balance axioms.
-fn build_test_graph(n: u32, k_chord: u32) -> (SignedGraph, Vec<NodeKind>) {
+fn build_test_graph(n: u32, k_chord: u32) -> (SignedGraph, Vec<PNodeKind>) {
     let mut state: u64 = 0xC0FFEE;
     let mut next = || {
         state ^= state << 13;
@@ -49,9 +49,9 @@ fn build_test_graph(n: u32, k_chord: u32) -> (SignedGraph, Vec<NodeKind>) {
     let kinds = (0..n)
         .map(|i| {
             if i & 1 == 0 {
-                NodeKind::Material
+                PNodeKind::Material
             } else {
-                NodeKind::OperatingUnit
+                PNodeKind::OperatingUnit
             }
         })
         .collect();
