@@ -80,3 +80,32 @@ The end-state figure is deliberately below 100 %: `GRAPH-MIG-01…04` are the
 un-built migration, and the two open defects are what it will close. A rising
 end-state number without that migration would mean requirements were dropped, not
 met.
+
+---
+
+## M2b-graph source migration — 2026-08-30 (`m2b-pgraph-meta-resolve-accessors`)
+
+The `meta_resolve.rs` migration is done; the two open defects are closed.
+
+- `GRAPH-MIG-01…04` move **NOT_IMPLEMENTED → PASS**: eight raw reads → 0, typed
+  `IrReadError` (11 variants) replacing flatten/panic, checked-composite base
+  resolution, iterative `isa_reaches`.
+- `GRAPH-DEFECT-01` and `GRAPH-DEFECT-02` move **OPEN → FIXED**, each citing the
+  `meta_resolve_ir_faults` regressions.
+- New: `GRAPH-M2BS-01…03` (byte-identical valid output; source-first workload
+  suite; <3 % perf with no new heap allocation) **PASS**; `GRAPH-M2BS-04`
+  informational (order-canonical output); `GRAPH-M2BS-05` (F.17 dynamic
+  source-pair oracle) **NOT_IMPLEMENTED**, deferred per the brief.
+
+### Recomputed rates (normative only)
+
+| Measure | dependency-pin | now |
+|---|---|---|
+| Implemented normative satisfaction | 12/12 = 100 % | **20/20 = 100 %** |
+| End-state normative satisfaction | 12/16 = 75.0 % | **20/21 = 95.2 %** |
+| Open known defects | 2 | **0** |
+| Fixed defects | 0 | **2** |
+
+The single remaining non-satisfied normative row is `GRAPH-M2BS-05` (F.17),
+which the brief explicitly defers. `meta_resolve.rs` line coverage rose
+92.20 % → 99.64 % (the one uncovered line justified in the report).

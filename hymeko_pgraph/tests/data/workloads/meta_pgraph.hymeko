@@ -1,0 +1,15 @@
+Pgraph_meta {
+    author "Hajdu Csaba";
+    source "Friedler et al.";
+}
+
+pgraph {
+    meta_material {}
+    raw: + <isa> meta_material {}
+    product: + <isa> meta_material {}
+    intermediate: + <isa> meta_material{}
+
+    @process {}
+}
+
+

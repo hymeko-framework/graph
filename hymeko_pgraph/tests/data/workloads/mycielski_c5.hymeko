@@ -1,0 +1,21 @@
+mycielski_c5 {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    m0: + <isa> raw {}
+    m1: + <isa> inter {}
+    m2: + <isa> inter {}
+    m3: + <isa> inter {}
+    m4: + <isa> product {}
+
+    @u0 { (+m0, -m1); }
+    @u1 { (+m1, -m2); }
+    @u2 { (+m2, -m3); }
+    @u3 { (+m3, -m4); }
+    @u4 { (+m4, -m0); }
+}

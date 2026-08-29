@@ -1,0 +1,22 @@
+sunflower {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    m0: + <isa> raw {}
+    m1: + <isa> inter {}
+    m2: + <isa> inter {}
+    m3: + <isa> inter {}
+    m4: + <isa> inter {}
+    m5: + <isa> inter {}
+    m6: + <isa> inter {}
+    m7: + <isa> product {}
+
+    @u0 { (+m0, -m1, -m2, -m3); }
+    @u1 { (+m0, -m1, -m4, -m5); }
+    @u2 { (+m0, -m1, -m6, -m7); }
+}

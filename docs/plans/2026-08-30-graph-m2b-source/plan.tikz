@@ -1,0 +1,46 @@
+% M2b-graph: meta_resolve raw reads -> checked accessors + typed error flow.
+\begin{tikzpicture}[
+    font=\small,
+    entry/.style={draw, rounded corners, fill=blue!8, align=center, minimum height=8mm},
+    acc/.style={draw, rounded corners, fill=green!8, align=center, minimum height=7mm},
+    raw/.style={draw, rounded corners, fill=red!8, align=left, minimum height=7mm, font=\footnotesize},
+    err/.style={draw, rounded corners, fill=orange!12, align=left, minimum height=7mm, font=\footnotesize},
+    arr/.style={-{Stealth[length=2mm]}, thick},
+    note/.style={font=\footnotesize\itshape, gray}
+  ]
+  \node[entry] (lr) {\texttt{lower\_resolved}\\\texttt{-> Result<LoweredPGraph, MetaResolveError>}};
+  \node[acc, below=7mm of lr, xshift=-34mm] (cm) {\texttt{classify\_materials}?};
+  \node[acc, below=7mm of lr] (cu) {\texttt{classify\_units}?};
+  \node[acc, below=7mm of lr, xshift=34mm] (bi) {\texttt{build\_incidence}?};
+
+  \node[acc, below=8mm of cm] (isa) {\texttt{isa\_reaches}? (iterative)};
+  \node[acc, below=8mm of cu] (uar) {\texttt{unit\_arc\_refs}?};
+  \node[acc, below=8mm of bi] (ec) {\texttt{edge\_cost}? -> Option};
+  \node[acc, below=10mm of isa] (bo) {\texttt{bases\_of}? (checked)};
+
+  \node[acc, right=20mm of bo, align=left] (api)
+    {15223bc accessors:\\
+     \texttt{decls / kind\_of / decl\_node}\\
+     \texttt{as\_node / node / as\_edge / edge}\\
+     \texttt{arc} + \texttt{ArcRec::in\_edge}};
+
+  \draw[arr] (lr) -- (cm); \draw[arr] (lr) -- (cu); \draw[arr] (lr) -- (bi);
+  \draw[arr] (cm) -- (isa); \draw[arr] (cu) -- (uar); \draw[arr] (bi) -- (ec);
+  \draw[arr] (bi) -- (uar);
+  \draw[arr] (isa) -- (bo);
+  \draw[arr] (bo) -- (api) node[midway,above,note]{no raw index};
+  \draw[arr] (uar.east) to[bend right=10] (api.north);
+
+  \node[raw, above=8mm of api] (old)
+    {\textbf{removed:} decl\_nodes[d.0],\\ nodes[n.0], edges[e.0], arcs[aid.0],\\ decl\_nodes.len() dense iter};
+  \draw[arr, dashed] (old) -- (api) node[midway,right,note]{replaced};
+
+  \node[err, below=9mm of bo, align=left] (E)
+    {\texttt{IrReadError} (Copy, ids only):\\
+     Dangling\{Declaration,ArcRecord,BaseTarget,IncidenceTarget\}\\
+     Missing\{Node,Edge\}Mapping · Missing\{Node,Edge\}Record\\
+     \{Node,Edge\}BacklinkMismatch · ArcOwnershipMismatch};
+  \draw[arr] (bo) -- (E) node[midway,left,note]{typed};
+  \draw[arr] (uar.south) to[bend left=15] (E.east);
+  \node[note, below=1mm of E] {wrapped by MetaResolveError::Ir, via source()};
+\end{tikzpicture}

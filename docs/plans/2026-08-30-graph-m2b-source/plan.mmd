@@ -1,0 +1,56 @@
+%% M2b-graph source migration: stages, gates, hard stop.
+flowchart TD
+    P[Plan on disk before first meta_resolve edit<br/>Created-at 2026-08-30 00:58 CEST] --> PRE
+
+    subgraph PRE[Preflight]
+        p1[HEAD a125275, clean, local==remote]
+        p2[Cargo.toml 095e27db, Cargo.lock c2492761 held]
+        p3[rg re-inventory: 8 raw reads, no more]
+    end
+
+    PRE --> TF
+
+    subgraph TF[Tests first - characterization red/green]
+        t1[build malformed Ir via test builder]
+        t2[document CURRENT: which flatten to empty]
+        t3[document CURRENT: which panic - should_panic]
+        t4[record multi-arc / multi-ref traversal order]
+        t5[enumerate tests by name, verify they run]
+    end
+
+    TF --> MIG
+
+    subgraph MIG[Migration - meta_resolve.rs only]
+        m1[IrReadError enum, Copy, ids only]
+        m2[MetaResolveError::Ir + From + source]
+        m3[bases_of checked-composite via as_node/node/backlink]
+        m4[unit_arc_refs: edge_for_decl + arc + in_edge ownership]
+        m5[edge_cost -> Result<Option>]
+        m6[dense scans -> ir.decls]
+        m7[isa_reaches iterative, same visited-set semantics]
+        m8[thread ? through classify_*/build_incidence]
+        m9[raw-read count = 0]
+    end
+
+    MIG --> VER
+
+    subgraph VER[Verify]
+        v1[characterization tests -> assert exact IrReadError variant]
+        v2[valid + order + oracle: 6 hashes byte-identical + cardinalities]
+        v3[fault injection x4, each caught, none committed, hash-restore]
+        v4[coverage: touched lines 100%, meta_resolve up from 92.20%]
+        v5[perf A/B >=6 rounds + A/A null, <3%, no new heap alloc]
+    end
+
+    VER --> GATE
+
+    subgraph GATE[Gates]
+        g1[fmt/clippy -p pgraph -D warnings]
+        g2[check/build/test/doctests]
+        g3[workspace diagnostics == baseline, no new]
+        g4[raw-access grep = 0]
+        g5[manifest+lockfile byte-identical]
+    end
+
+    GATE --> C[commit refactor + ff push + ls-remote verify]
+    C --> STOP[HARD STOP<br/>no next-repo bump, no core migration, no MSG/SSG/ABB opt]
