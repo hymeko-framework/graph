@@ -1,0 +1,128 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=25mm]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+
+\title{graph $\rightarrow$ core pin: dependency-only bump to \texttt{15223bc}, plus a read-only pre-migration audit}
+\author{APPROVED-DEPENDENCY-UPDATE: graph-core-pin-to-15223bc}
+\date{Created-at: 2026-08-29 20:51 CEST}
+
+\begin{document}
+\maketitle
+
+\section*{Governance}
+
+The \texttt{graph} repository carries no \texttt{CLAUDE.md} / \texttt{CORE.YAML}
+/ \texttt{tools.yaml}; the \texttt{core} \texttt{CLAUDE.md} rules apply as the
+minimum. This plan is on disk \emph{before} the first \texttt{Cargo.lock} edit.
+\texttt{plan.pdf} is waived under the standing no-LaTeX-toolchain waiver; the
+\texttt{.tex}, \texttt{.tikz}, \texttt{.mmd} sources are complete.
+
+\paragraph{ETA.} $\approx$60\,min: plan 10\,m + baseline gates \& oracle 20\,m +
+lockfile bump \& audit table 20\,m + report 10\,m. No production source change,
+so no performance campaign.
+
+\section{Scope}
+
+Two things, no more:
+
+\begin{enumerate}
+\item Advance the \texttt{hymeko\_core} git revision the \texttt{graph} workspace
+resolves, from \texttt{3bdebf89} to the accessor-API production commit
+\texttt{15223bcd762806b69909ea73f7526586c2d2ded6} --- \emph{not} the later docs-only
+core HEAD. Lockfile only; \texttt{Cargo.toml} byte-identical.
+\item A \textbf{read-only} inventory of every direct IR storage access in
+\texttt{hymeko\_pgraph} production source (chiefly \texttt{meta\_resolve.rs}),
+classified, as the scope input for a \emph{later} source-migration phase.
+\end{enumerate}
+
+\textbf{Not authorised here:} any \texttt{hymeko\_pgraph} or \texttt{hymeko\_graph}
+source migration, any new core accessor, any algorithm / ID-representation /
+transaction work, any further dependency bump.
+
+\section{Entry state (verified)}
+
+\begin{longtable}{ll}
+\toprule
+HEAD & \texttt{ac341e0ae8a988b64437a29af6ccb5c93641cbc5} (== expected, clean) \\
+local == origin/main & yes \\
+workspace members & \texttt{hymeko\_graph}, \texttt{hymeko\_pgraph} \\
+depends on core & \texttt{hymeko\_pgraph} only; \texttt{hymeko\_graph} has no core dep \\
+old core pin & \texttt{3bdebf89fbb864e0e0b109f43d8e5f7e9c108726} \\
+parser pin & \texttt{e28a205147c48273980e63aa3338ca286974a6ed} \\
+\texttt{hymeko\_core} entries in lock & exactly 1 \\
+\texttt{Cargo.toml} sha256 & \texttt{095e27db\ldots} \\
+\texttt{Cargo.lock} sha256 & \texttt{ff8e934f\ldots} \\
+\bottomrule
+\end{longtable}
+
+\section{Affected files}
+
+\begin{longtable}{ll}
+\toprule
+\texttt{Cargo.lock} & one line --- the \texttt{hymeko\_core} source revision \\
+\texttt{docs/plans/2026-08-29-graph-core-pin/*} & this bundle \\
+\texttt{reports/2026-08-29-graph-core-pin.md} & report \\
+\texttt{docs/verification/graph/*} & requirements + traceability \\
+\texttt{reports/coverage/*.lcov} & coverage artifacts (repo-relative paths) \\
+\bottomrule
+\end{longtable}
+
+\texttt{Cargo.toml}, all \texttt{src/}, \texttt{tests/}, \texttt{examples/},
+\texttt{benchmarks/}, \texttt{data/} --- byte-identical.
+
+\section{Test strategy}
+
+Identical gate set before (old pin) and after (new pin): \texttt{fmt --check},
+\texttt{clippy -D warnings}, \texttt{check}, \texttt{build},
+\texttt{test --no-fail-fast}, doctests, \texttt{cargo tree -d}, package count,
+\texttt{cargo metadata}, \texttt{cargo llvm-cov} (if available). A regression
+oracle over any deterministic P-graph fixture / dump output (canonical or ordered
+output, hash, cardinalities) must be byte-identical across the bump. Where no such
+oracle exists it is stated, not invented.
+
+\section{Performance budget}
+
+None applies --- production code does not change. Any timing is diagnostic only;
+no performance improvement is claimed from a pin.
+
+\section{Rollback}
+
+The only tracked change is \texttt{Cargo.lock}. Rollback: \texttt{git checkout --
+Cargo.lock} (or revert the dependency commit). \texttt{Cargo.toml} untouched, so
+no manifest state can drift.
+
+\section{Risk anticipation}
+
+\begin{itemize}
+\item \textbf{Unrelated dependency drift.} In the sibling network pin, the targeted
+\texttt{--precise} update also moved \texttt{parser}. Mitigation: audit the
+lockfile diff line by line; pin \texttt{parser} (and anything else) back to its
+baseline revision; if the \texttt{hymeko\_core} change cannot be isolated, halt
+without committing.
+\item \textbf{Two \texttt{hymeko\_core} versions.} \texttt{cargo tree -d} before and
+after; a second copy is a rejection.
+\item \textbf{Host resolution.} \texttt{amaterasu.local} may not resolve; use a
+per-command URL rewrite to \texttt{192.168.1.228:2222} with
+\texttt{HostKeyAlias=[amaterasu.local]:2222}, never a config edit.
+\item \textbf{Worst-case input.} The committed P-graph fixtures under \texttt{data/}
+are the production-scale inputs for the oracle.
+\end{itemize}
+
+\section{The audit (read-only, deliverable of this phase)}
+
+A full \texttt{rg} sweep over \texttt{decl\_nodes}, \texttt{.nodes}/\texttt{.edges}/%
+\texttt{.arcs}, \texttt{decl\_to\_*}, \texttt{.0}, \texttt{raw()} and
+\texttt{Id::new} in \texttt{hymeko\_pgraph} \texttt{src/}. Every \texttt{.0} is
+classified individually (many are not IR ids). Each real site gets: file:line,
+current contract, strict/tolerant, needed accessor, error model, mapping-only vs
+checked-composite, iteration-order requirement, hot-path class, needed test,
+migration risk. The old ``7 site'' estimate is not treated as truth; the actual
+inventory is the next phase's scope. New core accessors, if any are needed, are
+\emph{documented, not implemented}.
+
+\end{document}

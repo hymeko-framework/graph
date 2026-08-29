@@ -1,0 +1,22 @@
+req_id,kind,statement,verification_method,evidence,status,notes
+GRAPH-PIN-01,NORMATIVE,"hymeko_core is pinned exactly to 15223bc, not the later docs-only HEAD",inspection,"Cargo.lock source line = ...#15223bcd",PASS,"single-line lockfile diff"
+GRAPH-PIN-02,NORMATIVE,"Cargo.toml is byte-identical across the bump",inspection,"sha256 095e27db unchanged",PASS,
+GRAPH-PIN-03,NORMATIVE,"The lockfile diff is exactly the hymeko_core source revision, nothing else",inspection,"diff = 1 line",PASS,"parser drift on --precise was reverted to e28a2051"
+GRAPH-PIN-04,NORMATIVE,"No unrelated dependency (parser, others) revision changed",inspection,"git-dep revs: core 15223bc, parser e28a2051",PASS,
+GRAPH-PIN-05,NORMATIVE,"Exactly one hymeko_core version in the tree",inspection,"1 lock entry; one rev in cargo tree",PASS,
+GRAPH-PIN-06,NORMATIVE,"Dependency/package count unchanged",inspection,"105 unique packages before and after",PASS,
+GRAPH-PIN-07,NORMATIVE,"cargo tree -d unchanged but for the revision string",inspection,"diff empty ignoring rev",PASS,
+GRAPH-PIN-08,NORMATIVE,"No src/tests/examples/fixture file changed",inspection,"git diff: only Cargo.lock tracked",PASS,
+GRAPH-PIN-09,NORMATIVE,"Deterministic P-graph dump output is byte-identical across the bump",test,"6 oracle hashes (methanol/hda x msg/ssg/abb) all MATCH",PASS,"regression oracle"
+GRAPH-PIN-10,NORMATIVE,"Test and doctest counts unchanged",test,"325 tests + 2 doctests pass before and after, 2+2 ignored",PASS,
+GRAPH-PIN-11,NORMATIVE,"clippy result is identical to baseline (a pre-existing hymeko_graph failure)",inspection,"clippy signature diff empty",PASS,"see GRAPH-INFO-01"
+GRAPH-PIN-12,NORMATIVE,"Coverage is unchanged (no production source edited)",test,"meta_resolve.rs 92.20%, workspace 77.18% before==after",PASS,
+GRAPH-MIG-01,NOT_IMPLEMENTED,"Migrate the 8 raw IR-storage reads in meta_resolve.rs to accessors",n/a,"audit table in report",NOT_IMPLEMENTED,"next phase; no source edit authorised here"
+GRAPH-MIG-02,NOT_IMPLEMENTED,"Malformed IR in meta_resolve produces a typed error, not silent flatten or panic",n/a,"audit finds mixed flatten/panic",NOT_IMPLEMENTED,"next phase"
+GRAPH-MIG-03,NOT_IMPLEMENTED,"declaration->node/edge base resolution uses checked-composite (backlink) coherence",n/a,"bases_of currently map-only + direct index",NOT_IMPLEMENTED,"next phase"
+GRAPH-MIG-04,NOT_IMPLEMENTED,"isa_reaches ancestry walk is iterative, not recursive",n/a,"walk() is recursive, cycle-guarded",NOT_IMPLEMENTED,"next phase; lower priority, already cycle-safe"
+GRAPH-DEFECT-01,KNOWN_DEFECT,"bases_of / unit_arc_refs flatten a missing node/edge mapping to empty, hiding malformed IR",inspection,"unwrap_or(&[]) at 335; as_edge None -> empty vec at 371",OPEN,"tolerant where the consumer is otherwise strict"
+GRAPH-DEFECT-02,KNOWN_DEFECT,"Direct record indexes panic on a dangling record/arc id instead of a typed error",inspection,"edges[eid.0] 373, arcs[aid.0] 376, decl_nodes[d.0] 321/325/405",OPEN,"panic path, not a typed fault"
+GRAPH-INFO-01,INFORMATIONAL,"cargo fmt --check and clippy -D warnings fail at baseline in hymeko_graph and pgraph",inspection,"pre-existing; source untouched this phase",PASS,"identical before and after; out of scope (hymeko_graph must not be modified)"
+GRAPH-INFO-02,INFORMATIONAL,"hymeko_graph has no hymeko_core dependency and no IR usage",inspection,"no hymeko deps in Cargo.toml; zero use hymeko",PASS,"leave unchanged; its .0/.nodes[] are its own graph types"
+GRAPH-INFO-03,INFORMATIONAL,"No new core accessor is required for the future migration",inspection,"decls/kind_of/decl_node/node_for_decl/edge_for_decl/edge/arc/as_edge cover all 8 sites",PASS,"document only; do not implement"

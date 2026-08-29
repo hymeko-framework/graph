@@ -1,0 +1,41 @@
+% graph -> core pin: what moves (lockfile) and what is only audited.
+\begin{tikzpicture}[
+    font=\small,
+    lock/.style={draw, rounded corners, fill=orange!12, align=center, minimum height=8mm},
+    frozen/.style={draw, rounded corners, fill=gray!8, align=center, minimum height=8mm},
+    audit/.style={draw, dashed, rounded corners, fill=blue!6, align=left, minimum height=8mm},
+    core/.style={draw, rounded corners, fill=green!8, align=center, minimum height=8mm},
+    arr/.style={-{Stealth[length=2mm]}, thick},
+    note/.style={font=\footnotesize\itshape, gray}
+  ]
+
+  \node[frozen] (graph) {\texttt{hymeko\_graph}\\(no core dep --- untouched)};
+  \node[frozen, right=26mm of graph] (pg) {\texttt{hymeko\_pgraph}\\(depends on core)};
+
+  \node[lock, below=12mm of pg] (lock) {\texttt{Cargo.lock}\\hymeko\_core rev};
+
+  \node[core, right=24mm of lock, yshift=7mm] (old) {core \texttt{3bdebf89}\\(old pin)};
+  \node[core, right=24mm of lock, yshift=-7mm] (new) {core \texttt{15223bc}\\(new pin, accessors)};
+
+  \draw[arr] (pg) -- (lock) node[midway,right,note]{resolves};
+  \draw[arr, dashed] (lock) -- (old) node[midway,above,sloped,note]{was};
+  \draw[arr] (lock) -- (new) node[midway,below,sloped,note]{--precise};
+
+  \node[frozen, below=14mm of new, align=left] (sib)
+    {must stay pinned:\\\texttt{parser} \texttt{e28a2051}};
+  \draw[arr, dotted] (lock.south) to[bend right=12] node[midway,below,note]{audit: no drift} (sib.west);
+
+  % the audit target (read-only)
+  \node[audit, below=12mm of graph] (mr)
+    {\textbf{read-only audit}\\
+     \texttt{hymeko\_pgraph/src/meta\_resolve.rs}\\
+     + full rg over src/:\\
+     decl\_nodes / nodes[] / edges[] /\\
+     arcs / decl\_to\_* / .0 / raw()};
+  \draw[arr, dashed] (pg) -- (mr) node[midway,left,note]{inventory only};
+
+  \begin{scope}[on background layer]
+    \node[draw, dashed, rounded corners, fit=(lock), inner sep=3mm,
+          label={[note]below:only tracked source change}] {};
+  \end{scope}
+\end{tikzpicture}

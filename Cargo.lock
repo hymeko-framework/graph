@@ -406,7 +406,7 @@ dependencies = [
 [[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#3bdebf89fbb864e0e0b109f43d8e5f7e9c108726"
+source = "git+ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#15223bcd762806b69909ea73f7526586c2d2ded6"
 dependencies = [
  "blake3",
  "nalgebra",
