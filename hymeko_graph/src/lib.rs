@@ -122,8 +122,8 @@ pub use signed_tuples::{
     SignedTupleFamily, TupleEnumeration,
 };
 pub use spine::{
-    CliffordFIR, SignedCycleFIR, clifford_fir_backward, clifford_fir_forward,
-    fir_cycle_forward, fir_cycle_scatter_mean,
+    clifford_fir_backward, clifford_fir_backward_with, clifford_fir_forward, fir_cycle_forward,
+    fir_cycle_scatter_mean, CliffordFIR, FirBackward, GradRequest, SignedCycleFIR,
 };
 pub use topk_cycles::{tiered_m_v_by_degree, WeightedSumScorer};
 pub use topk_walks::{
