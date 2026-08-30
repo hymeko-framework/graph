@@ -1,0 +1,47 @@
+# CORE.YAML — `hymeko/graph`, the canonical HyMeKo graph layer
+#
+# Created 2026-08-30, when this repository was made the canonical owner of `hymeko_graph`. Until
+# that moment it carried no CORE.YAML at all: it was about to become the framework's graph home
+# while having no read-only protection on anything.
+#
+# CONTRACT (CLAUDE.md §1): every item below is read-only by default. A task that requires modifying
+# one must STOP, produce a written justification and a migration plan, and wait for explicit
+# approval. A workaround in the consuming application is always preferred over a "small" core edit.
+# Adding, removing or upgrading a dependency is treated the same way.
+
+schema_version: 1
+
+project:
+  name: HyMeKo graph layer
+  root_language: rust
+  canonical_registry: ../core/WORKSPACE.yaml
+
+core:
+  # Generic signed-graph and hypergraph algorithms: incidence, cycle and walk enumeration,
+  # CSR primitives, spine. THE canonical owner -- `tensor/hymeko_graph` is retired in favour of
+  # this crate, and no second copy may exist under any name.
+  - hymeko_graph
+
+  # P-graph and the Friedler axioms. The SOLE owner: Friedler must never be reintroduced into the
+  # generic graph crate, where a copy previously drifted.
+  - hymeko_pgraph
+
+# Consumers. `nagare` links `hymeko_graph` by path; `tensor` MAY consume it and MUST NOT vendor it.
+# A breaking change to a public API above is a breaking change to those consumers -- build them
+# before proposing one.
+consumers:
+  - ../nagare
+  - ../tensor
+
+# Direction is one-way and acyclic: this repository depends on no sibling HyMeKo repository.
+# `graph` owns no compute IR and no backend -- those are `hymeko/core` (`hymeko_core::ir`,
+# `hymeko_wgpu`). Needing one here is a signal to consume core, never to grow a second.
+depends_on: []
+
+forbidden_in_production:
+  - "Legacy* / Recorded* type or variant names"
+  - "_under suffixes"
+  - "mode booleans selecting between an old and a new arithmetic"
+  - "any runtime selector whose only purpose is reproducing a retired result"
+  - "a second crate providing hymeko_graph's capability under any name"
+  - "Friedler outside hymeko_pgraph"
