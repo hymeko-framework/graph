@@ -86,6 +86,7 @@ pub mod color_coding;
 pub mod community;
 pub mod cycle_enum;
 pub mod cycle_sampler;
+pub mod hyper_operator;
 pub mod incidence;
 pub mod path_closure;
 pub mod pruner;
@@ -114,6 +115,7 @@ pub use pruner::{
     CompositePruner, CountingPruner, CyclePruner, NoOpPruner, PrunerDecision, PrunerStats,
     StatsSnapshot,
 };
+pub use hyper_operator::{HyperIncidenceError, SignedHyperIncidence};
 pub use signed_graph::{Sign, SignedGraph};
 pub use signed_tuples::{
     enumerate_signed_tuples, EnumerationExecution, EnumerationRequest, MultiEdgeSignResolution,
