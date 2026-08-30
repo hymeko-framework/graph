@@ -1,0 +1,61 @@
+steiner_sts15 {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    m0: + <isa> raw {}
+    m1: + <isa> inter {}
+    m2: + <isa> inter {}
+    m3: + <isa> inter {}
+    m4: + <isa> inter {}
+    m5: + <isa> inter {}
+    m6: + <isa> inter {}
+    m7: + <isa> inter {}
+    m8: + <isa> inter {}
+    m9: + <isa> inter {}
+    m10: + <isa> inter {}
+    m11: + <isa> inter {}
+    m12: + <isa> inter {}
+    m13: + <isa> inter {}
+    m14: + <isa> product {}
+
+    @u0 { (+m0, -m1, -m2); }
+    @u1 { (+m0, -m3, -m4); }
+    @u2 { (+m0, -m5, -m6); }
+    @u3 { (+m0, -m7, -m8); }
+    @u4 { (+m0, -m9, -m10); }
+    @u5 { (+m0, -m11, -m12); }
+    @u6 { (+m0, -m13, -m14); }
+    @u7 { (+m1, -m3, -m5); }
+    @u8 { (+m1, -m4, -m6); }
+    @u9 { (+m1, -m7, -m9); }
+    @u10 { (+m1, -m8, -m10); }
+    @u11 { (+m1, -m11, -m13); }
+    @u12 { (+m1, -m12, -m14); }
+    @u13 { (+m2, -m3, -m6); }
+    @u14 { (+m2, -m4, -m5); }
+    @u15 { (+m2, -m7, -m10); }
+    @u16 { (+m2, -m8, -m9); }
+    @u17 { (+m2, -m11, -m14); }
+    @u18 { (+m2, -m12, -m13); }
+    @u19 { (+m3, -m7, -m11); }
+    @u20 { (+m3, -m8, -m12); }
+    @u21 { (+m3, -m9, -m13); }
+    @u22 { (+m3, -m10, -m14); }
+    @u23 { (+m4, -m7, -m12); }
+    @u24 { (+m4, -m8, -m11); }
+    @u25 { (+m4, -m9, -m14); }
+    @u26 { (+m4, -m10, -m13); }
+    @u27 { (+m5, -m7, -m13); }
+    @u28 { (+m5, -m8, -m14); }
+    @u29 { (+m5, -m9, -m11); }
+    @u30 { (+m5, -m10, -m12); }
+    @u31 { (+m6, -m7, -m14); }
+    @u32 { (+m6, -m8, -m13); }
+    @u33 { (+m6, -m9, -m12); }
+    @u34 { (+m6, -m10, -m11); }
+}

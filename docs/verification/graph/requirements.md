@@ -109,3 +109,62 @@ The `meta_resolve.rs` migration is done; the two open defects are closed.
 The single remaining non-satisfied normative row is `GRAPH-M2BS-05` (F.17),
 which the brief explicitly defers. `meta_resolve.rs` line coverage rose
 92.20 % → 99.64 % (the one uncovered line justified in the report).
+
+---
+
+## Workload & V&V corrective — 2026-08-30 (`m2b-source-workload-vv-corrective`)
+
+A test/workload-only phase. The M2b `meta_resolve` production migration is
+unchanged (byte-identical to `a5ec3e7` except one `#[cfg(test)]` coverage module).
+
+### Retracted / corrected claims from the previous report
+
+The M2b-source report said "all families' small … lowered". That was true only of
+the six families then implemented. The corrective, additively:
+
+- **`GRAPH-M2BS-02` was over-broad** and is now backed by eleven parametric
+  families, each its own normative row (`GRAPH-WL-*`). The old row stays PASS for
+  what it covered; the family coverage is the new rows.
+- **Audit findings, all verified true, then fixed:** `scale`/`seed` were unused
+  (now `scale` is computed from incidence count and `seed` is semantic only on the
+  stochastic families, encoded in the type); the oracle was common-mode with the
+  edge list (now computed by formula and cross-checked); the size guard ran after
+  allocation and used unchecked `usize` mul (now checked arithmetic before
+  allocation, typed `ArithmeticOverflow`/`TooLarge`); the fingerprint used
+  `DefaultHasher` (now FNV-1a-64 with a frozen vector); the previous "large" cases
+  were a few thousand incidences (reclassified Small; real large cases at
+  $10^5$–$10^6$ now run).
+- **The 99.64 % file coverage was not 100 % touched-line.** It is now 100 %
+  (282/282) via one `#[cfg(test)]` unit test for `bases_of`'s defensive arm.
+
+### Taxonomy states
+
+Rows now use `NORMATIVE` (status PASS/PARTIAL), `KNOWN_DEFECT` (FIXED),
+`NOT_IMPLEMENTED`, `INFORMATIONAL` — the real state of each, never one blanket
+PASS.
+
+### Recomputed rates
+
+| Measure | m2b-source | now |
+|---|---|---|
+| Evidence coverage (rows with cited evidence ÷ all rows) | 20/21 | **44/45 = 97.8 %** |
+| Implemented normative satisfaction (normative PASS ÷ normative whose subject exists) | 20/20 = 100 % | **38/38 = 100 %** |
+| End-state normative satisfaction (normative PASS ÷ all normative incl. the unbuilt F.17) | 20/21 = 95.2 % | **38/39 = 97.4 %** |
+| Open known defects | 0 | **0** |
+| Fixed defects | 2 | **2** |
+
+Rows: 38 NORMATIVE (all PASS), 2 KNOWN_DEFECT (both FIXED), 4 INFORMATIONAL, 1
+NOT_IMPLEMENTED (F.17, `GRAPH-M2BS-05`, deferred per the brief).
+
+### Actually-run size classes (per family, this phase)
+
+Every family: tiny + small on the default `cargo test` path. Medium: Steiner(m=6),
+random-uniform(32000 inc), VLAN(8320 inc), humanoid, flock. Large (run once):
+Steiner(m=9, 130305 inc), random-uniform(200000 inc), VLAN(262656 inc). Stress:
+`#[ignore]` (Steiner m=11 ~2.1M inc, random-uniform 300000 edges) with the
+documented command.
+
+Test-support (generator) coverage is **UNMEASURED**: `cargo llvm-cov` instruments
+workspace `src`, not `tests/`, so it does not stably report test-module lines; the
+generator's correctness is instead pinned by the formula cross-check, the KAT
+vectors and the five caught mutants.

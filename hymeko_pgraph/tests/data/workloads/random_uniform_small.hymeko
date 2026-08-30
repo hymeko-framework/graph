@@ -1,0 +1,25 @@
+random_uniform_s7 {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    m0: + <isa> raw {}
+    m1: + <isa> inter {}
+    m2: + <isa> inter {}
+    m3: + <isa> inter {}
+    m4: + <isa> inter {}
+    m5: + <isa> inter {}
+    m6: + <isa> inter {}
+    m7: + <isa> product {}
+
+    @u0 { (+m7, -m4, -m2); }
+    @u1 { (+m3, -m2, -m1); }
+    @u2 { (+m6, -m1, -m3); }
+    @u3 { (+m4, -m6, -m0); }
+    @u4 { (+m6, -m0, -m7); }
+    @u5 { (+m7, -m5, -m0); }
+}

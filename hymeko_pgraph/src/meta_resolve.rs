@@ -651,3 +651,32 @@ fn find_decl(
     }
     found.ok_or(MetaResolveError::MissingArchetype(name))
 }
+
+#[cfg(test)]
+mod coverage {
+    //! One targeted unit test for a defensive branch of a private helper that no
+    //! public path reaches. It does **not** change `meta_resolve`'s production
+    //! behaviour (it is `#[cfg(test)]`); it only exercises the arm so the file
+    //! reaches full line coverage without a suppression.
+    //!
+    //! `bases_of`'s `None => DanglingDeclaration` arm fires when `kind_of(d)` is
+    //! `None`. Through `lower_resolved` this is unreachable: `isa_reaches`
+    //! pre-checks every base target with `kind_of` before pushing it, and its
+    //! root is always a declaration yielded by `ir.decls()`. Calling the private
+    //! helper directly proves the arm is correct.
+    use super::{IrReadError, bases_of};
+    use hymeko::common::ids::DeclId;
+    use hymeko::ir::ir::Ir;
+
+    #[test]
+    fn bases_of_reports_a_dangling_declaration() {
+        let ir = Ir::default(); // no declarations at all
+        let err = bases_of(&ir, DeclId::new(0)).unwrap_err();
+        assert_eq!(
+            err,
+            IrReadError::DanglingDeclaration {
+                decl: DeclId::new(0)
+            }
+        );
+    }
+}

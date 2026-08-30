@@ -1,0 +1,88 @@
+robot_hexapod {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    torso: + <isa> raw {}
+    power_bus: + <isa> inter {}
+    comm_bus: + <isa> inter {}
+    leg0_joint0: + <isa> inter {}
+    leg0_controller0: + <isa> inter {}
+    leg0_sensor0_0: + <isa> inter {}
+    leg0_actuator0_0: + <isa> inter {}
+    leg0_joint1: + <isa> inter {}
+    leg0_controller1: + <isa> inter {}
+    leg0_sensor1_0: + <isa> inter {}
+    leg0_actuator1_0: + <isa> inter {}
+    leg1_joint0: + <isa> inter {}
+    leg1_controller0: + <isa> inter {}
+    leg1_sensor0_0: + <isa> inter {}
+    leg1_actuator0_0: + <isa> inter {}
+    leg1_joint1: + <isa> inter {}
+    leg1_controller1: + <isa> inter {}
+    leg1_sensor1_0: + <isa> inter {}
+    leg1_actuator1_0: + <isa> inter {}
+    leg2_joint0: + <isa> inter {}
+    leg2_controller0: + <isa> inter {}
+    leg2_sensor0_0: + <isa> inter {}
+    leg2_actuator0_0: + <isa> inter {}
+    leg2_joint1: + <isa> inter {}
+    leg2_controller1: + <isa> inter {}
+    leg2_sensor1_0: + <isa> inter {}
+    leg2_actuator1_0: + <isa> inter {}
+    leg3_joint0: + <isa> inter {}
+    leg3_controller0: + <isa> inter {}
+    leg3_sensor0_0: + <isa> inter {}
+    leg3_actuator0_0: + <isa> inter {}
+    leg3_joint1: + <isa> inter {}
+    leg3_controller1: + <isa> inter {}
+    leg3_sensor1_0: + <isa> inter {}
+    leg3_actuator1_0: + <isa> inter {}
+    leg4_joint0: + <isa> inter {}
+    leg4_controller0: + <isa> inter {}
+    leg4_sensor0_0: + <isa> inter {}
+    leg4_actuator0_0: + <isa> inter {}
+    leg4_joint1: + <isa> inter {}
+    leg4_controller1: + <isa> inter {}
+    leg4_sensor1_0: + <isa> inter {}
+    leg4_actuator1_0: + <isa> inter {}
+    leg5_joint0: + <isa> inter {}
+    leg5_controller0: + <isa> inter {}
+    leg5_sensor0_0: + <isa> inter {}
+    leg5_actuator0_0: + <isa> inter {}
+    leg5_joint1: + <isa> inter {}
+    leg5_controller1: + <isa> inter {}
+    leg5_sensor1_0: + <isa> inter {}
+    leg5_actuator1_0: + <isa> product {}
+
+    @joint_local0 { (+leg0_controller0, -leg0_joint0, -leg0_sensor0_0, -leg0_actuator0_0); }
+    @joint_attach0 { (+torso, -leg0_joint0); }
+    @joint_local1 { (+leg0_controller1, -leg0_joint1, -leg0_sensor1_0, -leg0_actuator1_0); }
+    @joint_attach1 { (+torso, -leg0_joint1); }
+    @joint_local2 { (+leg1_controller0, -leg1_joint0, -leg1_sensor0_0, -leg1_actuator0_0); }
+    @joint_attach2 { (+torso, -leg1_joint0); }
+    @joint_local3 { (+leg1_controller1, -leg1_joint1, -leg1_sensor1_0, -leg1_actuator1_0); }
+    @joint_attach3 { (+torso, -leg1_joint1); }
+    @joint_local4 { (+leg2_controller0, -leg2_joint0, -leg2_sensor0_0, -leg2_actuator0_0); }
+    @joint_attach4 { (+torso, -leg2_joint0); }
+    @joint_local5 { (+leg2_controller1, -leg2_joint1, -leg2_sensor1_0, -leg2_actuator1_0); }
+    @joint_attach5 { (+torso, -leg2_joint1); }
+    @joint_local6 { (+leg3_controller0, -leg3_joint0, -leg3_sensor0_0, -leg3_actuator0_0); }
+    @joint_attach6 { (+torso, -leg3_joint0); }
+    @joint_local7 { (+leg3_controller1, -leg3_joint1, -leg3_sensor1_0, -leg3_actuator1_0); }
+    @joint_attach7 { (+torso, -leg3_joint1); }
+    @joint_local8 { (+leg4_controller0, -leg4_joint0, -leg4_sensor0_0, -leg4_actuator0_0); }
+    @joint_attach8 { (+torso, -leg4_joint0); }
+    @joint_local9 { (+leg4_controller1, -leg4_joint1, -leg4_sensor1_0, -leg4_actuator1_0); }
+    @joint_attach9 { (+torso, -leg4_joint1); }
+    @joint_local10 { (+leg5_controller0, -leg5_joint0, -leg5_sensor0_0, -leg5_actuator0_0); }
+    @joint_attach10 { (+torso, -leg5_joint0); }
+    @joint_local11 { (+leg5_controller1, -leg5_joint1, -leg5_sensor1_0, -leg5_actuator1_0); }
+    @joint_attach11 { (+torso, -leg5_joint1); }
+    @power_bus_edge { (+power_bus, -leg0_actuator0_0, -leg0_actuator1_0, -leg1_actuator0_0, -leg1_actuator1_0, -leg2_actuator0_0, -leg2_actuator1_0, -leg3_actuator0_0, -leg3_actuator1_0, -leg4_actuator0_0, -leg4_actuator1_0, -leg5_actuator0_0, -leg5_actuator1_0); }
+    @comm_bus_edge { (+comm_bus, -leg0_controller0, -leg0_controller1, -leg1_controller0, -leg1_controller1, -leg2_controller0, -leg2_controller1, -leg3_controller0, -leg3_controller1, -leg4_controller0, -leg4_controller1, -leg5_controller0, -leg5_controller1); }
+}

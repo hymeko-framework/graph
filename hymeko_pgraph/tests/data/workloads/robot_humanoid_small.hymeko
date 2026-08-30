@@ -1,0 +1,64 @@
+robot_humanoid {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    torso: + <isa> raw {}
+    power_bus: + <isa> inter {}
+    comm_bus: + <isa> inter {}
+    left_arm_joint0: + <isa> inter {}
+    left_arm_controller0: + <isa> inter {}
+    left_arm_sensor0_0: + <isa> inter {}
+    left_arm_actuator0_0: + <isa> inter {}
+    left_arm_joint1: + <isa> inter {}
+    left_arm_controller1: + <isa> inter {}
+    left_arm_sensor1_0: + <isa> inter {}
+    left_arm_actuator1_0: + <isa> inter {}
+    right_arm_joint0: + <isa> inter {}
+    right_arm_controller0: + <isa> inter {}
+    right_arm_sensor0_0: + <isa> inter {}
+    right_arm_actuator0_0: + <isa> inter {}
+    right_arm_joint1: + <isa> inter {}
+    right_arm_controller1: + <isa> inter {}
+    right_arm_sensor1_0: + <isa> inter {}
+    right_arm_actuator1_0: + <isa> inter {}
+    left_leg_joint0: + <isa> inter {}
+    left_leg_controller0: + <isa> inter {}
+    left_leg_sensor0_0: + <isa> inter {}
+    left_leg_actuator0_0: + <isa> inter {}
+    left_leg_joint1: + <isa> inter {}
+    left_leg_controller1: + <isa> inter {}
+    left_leg_sensor1_0: + <isa> inter {}
+    left_leg_actuator1_0: + <isa> inter {}
+    right_leg_joint0: + <isa> inter {}
+    right_leg_controller0: + <isa> inter {}
+    right_leg_sensor0_0: + <isa> inter {}
+    right_leg_actuator0_0: + <isa> inter {}
+    right_leg_joint1: + <isa> inter {}
+    right_leg_controller1: + <isa> inter {}
+    right_leg_sensor1_0: + <isa> inter {}
+    right_leg_actuator1_0: + <isa> product {}
+
+    @joint_local0 { (+left_arm_controller0, -left_arm_joint0, -left_arm_sensor0_0, -left_arm_actuator0_0); }
+    @joint_attach0 { (+torso, -left_arm_joint0); }
+    @joint_local1 { (+left_arm_controller1, -left_arm_joint1, -left_arm_sensor1_0, -left_arm_actuator1_0); }
+    @joint_attach1 { (+torso, -left_arm_joint1); }
+    @joint_local2 { (+right_arm_controller0, -right_arm_joint0, -right_arm_sensor0_0, -right_arm_actuator0_0); }
+    @joint_attach2 { (+torso, -right_arm_joint0); }
+    @joint_local3 { (+right_arm_controller1, -right_arm_joint1, -right_arm_sensor1_0, -right_arm_actuator1_0); }
+    @joint_attach3 { (+torso, -right_arm_joint1); }
+    @joint_local4 { (+left_leg_controller0, -left_leg_joint0, -left_leg_sensor0_0, -left_leg_actuator0_0); }
+    @joint_attach4 { (+torso, -left_leg_joint0); }
+    @joint_local5 { (+left_leg_controller1, -left_leg_joint1, -left_leg_sensor1_0, -left_leg_actuator1_0); }
+    @joint_attach5 { (+torso, -left_leg_joint1); }
+    @joint_local6 { (+right_leg_controller0, -right_leg_joint0, -right_leg_sensor0_0, -right_leg_actuator0_0); }
+    @joint_attach6 { (+torso, -right_leg_joint0); }
+    @joint_local7 { (+right_leg_controller1, -right_leg_joint1, -right_leg_sensor1_0, -right_leg_actuator1_0); }
+    @joint_attach7 { (+torso, -right_leg_joint1); }
+    @power_bus_edge { (+power_bus, -left_arm_actuator0_0, -left_arm_actuator1_0, -right_arm_actuator0_0, -right_arm_actuator1_0, -left_leg_actuator0_0, -left_leg_actuator1_0, -right_leg_actuator0_0, -right_leg_actuator1_0); }
+    @comm_bus_edge { (+comm_bus, -left_arm_controller0, -left_arm_controller1, -right_arm_controller0, -right_arm_controller1, -left_leg_controller0, -left_leg_controller1, -right_leg_controller0, -right_leg_controller1); }
+}

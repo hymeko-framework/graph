@@ -1,0 +1,20 @@
+% Source-first workload architecture: one generator per family, many consumers.
+\begin{tikzpicture}[font=\small,
+  box/.style={draw,rounded corners,align=center,minimum height=7mm},
+  gen/.style={box,fill=green!8}, con/.style={box,fill=blue!8},
+  saf/.style={box,fill=orange!12,align=left,font=\footnotesize},
+  arr/.style={-{Stealth[length=2mm]},thick}, note/.style={font=\footnotesize\itshape,gray}]
+  \node[gen] (fam) {family(params)\-> (Structure, formula oracle)};
+  \node[saf,left=16mm of fam] (safe) {checked arithmetic:\counts, bytes, card\before alloc\ArithmeticOverflow / TooLarge};
+  \node[gen,below=8mm of fam] (emit) {emit -> HyMeKo source\(O(output), write!)};
+  \draw[arr] (safe) -- (fam); \draw[arr] (fam) -- (emit);
+  \node[con,below=9mm of emit,xshift=-30mm] (u) {unit / integration test};
+  \node[con,below=9mm of emit] (g) {golden byte-identity};
+  \node[con,below=9mm of emit,xshift=30mm] (b) {benchmark example};
+  \node[con,below=16mm of emit] (s) {scaling / metamorphic};
+  \foreach \t in {u,g,b,s}{\draw[arr] (emit) -- (\t);}
+  \node[box,fill=gray!8,right=18mm of emit,align=center] (pipe)
+    {parser -> ModuleStore ->\Ir -> meta\_resolve ->\LoweredPGraph};
+  \draw[arr] (emit) -- (pipe) node[midway,above,note]{compile\_sources / compile\_to\_lowered};
+  \node[note,below=1mm of s] {independent oracle cross-checks edge-derived counts; direct Ir only in malformed negatives};
+\end{tikzpicture}

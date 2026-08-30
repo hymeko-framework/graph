@@ -1,0 +1,27 @@
+network_service_dependency {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    svc0_replica0: + <isa> raw {}
+    svc0_replica1: + <isa> inter {}
+    svc1_replica0: + <isa> inter {}
+    svc1_replica1: + <isa> inter {}
+    svc2_replica0: + <isa> inter {}
+    svc2_replica1: + <isa> inter {}
+    database0: + <isa> inter {}
+    cache1: + <isa> inter {}
+    bus2: + <isa> inter {}
+    database3: + <isa> product {}
+
+    @dep0 { (+svc0_replica0, -database3, -database0); }
+    @dep1 { (+svc0_replica1, -bus2, -database3); }
+    @dep2 { (+svc1_replica0, -bus2, -cache1); }
+    @dep3 { (+svc1_replica1, -bus2, -cache1); }
+    @dep4 { (+svc2_replica0, -cache1, -database3); }
+    @dep5 { (+svc2_replica1, -database0, -bus2); }
+}

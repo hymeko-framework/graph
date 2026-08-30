@@ -1,0 +1,30 @@
+biomed_chicken_system {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    beak: + <isa> raw {}
+    crop: + <isa> inter {}
+    gizzard: + <isa> inter {}
+    small_intestine: + <isa> inter {}
+    cloaca: + <isa> inter {}
+    lung: + <isa> inter {}
+    air_sac: + <isa> inter {}
+    heart: + <isa> inter {}
+    blood: + <isa> inter {}
+    liver: + <isa> inter {}
+    kidney: + <isa> inter {}
+    keel: + <isa> inter {}
+    wing_muscle: + <isa> inter {}
+    leg_muscle: + <isa> product {}
+
+    @digestion { (+small_intestine, -beak, -crop, -gizzard, -cloaca); }
+    @respiration { (+blood, -lung, -air_sac); }
+    @circulation { (+blood, -heart, -lung, -liver, -kidney); }
+    @metabolism { (+blood, -liver, -kidney, -small_intestine); }
+    @locomotion { (+keel, -wing_muscle, -leg_muscle); }
+}

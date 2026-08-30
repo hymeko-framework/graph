@@ -1,0 +1,40 @@
+biomed_chicken_flock_contact {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    bird0: + <isa> raw {}
+    bird1: + <isa> inter {}
+    bird2: + <isa> inter {}
+    bird3: + <isa> inter {}
+    bird4: + <isa> inter {}
+    bird5: + <isa> inter {}
+    bird6: + <isa> inter {}
+    bird7: + <isa> inter {}
+    bird8: + <isa> inter {}
+    bird9: + <isa> inter {}
+    bird10: + <isa> inter {}
+    bird11: + <isa> inter {}
+    coop0: + <isa> inter {}
+    coop1: + <isa> inter {}
+    coop2: + <isa> inter {}
+    feeder0: + <isa> inter {}
+    feeder1: + <isa> inter {}
+    drinker0: + <isa> inter {}
+    drinker1: + <isa> product {}
+
+    @coop_group0 { (+coop0, -bird0, -bird3, -bird6, -bird9); }
+    @coop_group1 { (+coop1, -bird1, -bird4, -bird7, -bird10); }
+    @coop_group2 { (+coop2, -bird2, -bird5, -bird8, -bird11); }
+    @feeder_group0 { (+feeder0, -bird0, -bird2, -bird4, -bird6, -bird8, -bird10); }
+    @feeder_group1 { (+feeder1, -bird1, -bird3, -bird5, -bird7, -bird9, -bird11); }
+    @drinker_group0 { (+drinker0, -bird0, -bird2, -bird4, -bird6, -bird8, -bird10); }
+    @drinker_group1 { (+drinker1, -bird1, -bird3, -bird5, -bird7, -bird9, -bird11); }
+    @contact_w0 { (+bird3, -bird0, -bird6, -bird10); }
+    @contact_w1 { (+bird9, -bird10, -bird6, -bird5); }
+    @contact_w2 { (+bird5, -bird7, -bird4, -bird6); }
+}

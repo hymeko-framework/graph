@@ -1,0 +1,37 @@
+network_vlan_failure_domain {
+    @"meta_pgraph.hymeko";
+    using pgraph.raw as raw;
+    using pgraph.product as product;
+    using pgraph.intermediate as inter;
+    using pgraph.process as process;
+}
+
+body {
+    switch0: + <isa> raw {}
+    switch1: + <isa> inter {}
+    switch2: + <isa> inter {}
+    switch3: + <isa> inter {}
+    host0: + <isa> inter {}
+    host1: + <isa> inter {}
+    host2: + <isa> inter {}
+    host3: + <isa> inter {}
+    host4: + <isa> inter {}
+    host5: + <isa> inter {}
+    host6: + <isa> inter {}
+    host7: + <isa> inter {}
+    host8: + <isa> inter {}
+    host9: + <isa> inter {}
+    host10: + <isa> inter {}
+    host11: + <isa> inter {}
+    host12: + <isa> inter {}
+    host13: + <isa> inter {}
+    host14: + <isa> inter {}
+    host15: + <isa> product {}
+
+    @vlan0 { (+host0, -host4, -host8, -host12); }
+    @vlan1 { (+host1, -host5, -host9, -host13); }
+    @vlan2 { (+host2, -host6, -host10, -host14); }
+    @vlan3 { (+host3, -host7, -host11, -host15); }
+    @power_domain0 { (+switch0, -switch2); }
+    @power_domain1 { (+switch1, -switch3); }
+}
