@@ -1116,7 +1116,7 @@ where
         .reduce(
             || vec![BinaryHeap::<HeapEntry>::new(); n],
             |mut a, b| {
-                for (idx, (av, bv)) in a.iter_mut().zip(b.into_iter()).enumerate() {
+                for (idx, (av, bv)) in a.iter_mut().zip(b).enumerate() {
                     let cap = m_v[idx] as usize;
                     if cap == 0 {
                         continue;
@@ -1259,7 +1259,7 @@ where
         .reduce(
             || vec![BinaryHeap::<HeapEntry>::new(); n],
             |mut a, b| {
-                for (idx, (av, bv)) in a.iter_mut().zip(b.into_iter()).enumerate() {
+                for (idx, (av, bv)) in a.iter_mut().zip(b).enumerate() {
                     let cap = m_v[idx] as usize;
                     if cap == 0 {
                         continue;
@@ -1541,7 +1541,7 @@ where
         .reduce(
             || vec![BinaryHeap::<HeapEntry>::new(); n],
             |mut a, b| {
-                for (idx, (av, bv)) in a.iter_mut().zip(b.into_iter()).enumerate() {
+                for (idx, (av, bv)) in a.iter_mut().zip(b).enumerate() {
                     let cap = m_v[idx] as usize;
                     if cap == 0 {
                         continue;
@@ -1943,7 +1943,7 @@ where
         .reduce(
             || vec![BinaryHeap::<HeapEntry>::new(); n],
             |mut a, b| {
-                for (idx, (av, bv)) in a.iter_mut().zip(b.into_iter()).enumerate() {
+                for (idx, (av, bv)) in a.iter_mut().zip(b).enumerate() {
                     let cap = m_v[idx] as usize;
                     if cap == 0 {
                         continue;

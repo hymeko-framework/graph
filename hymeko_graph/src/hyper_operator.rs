@@ -112,7 +112,7 @@ impl SignedHyperIncidence {
         if arity == 0 {
             return Err(HyperIncidenceError::ZeroArity);
         }
-        if members.len() % arity != 0 || signs.len() != members.len() {
+        if !members.len().is_multiple_of(arity) || signs.len() != members.len() {
             return Err(HyperIncidenceError::ShapeMismatch);
         }
         if scale.len() != n_nodes {
@@ -169,13 +169,13 @@ impl SignedHyperIncidence {
         assert_eq!(x.len(), self.n_nodes, "x must have one value per node");
         let inv_k = 1.0 / self.arity as f32;
         let mut h = vec![0.0f32; self.n_edges];
-        for c in 0..self.n_edges {
+        for (c, hc) in h.iter_mut().enumerate() {
             let mut acc = 0.0f32;
             for i in 0..self.arity {
                 let v = self.members[c * self.arity + i] as usize;
                 acc += self.signs[c * self.arity + i] * self.scale[v] * inv_k * x[v];
             }
-            h[c] = acc;
+            *hc = acc;
         }
         h
     }
@@ -194,15 +194,14 @@ impl SignedHyperIncidence {
     pub fn edge_to_node(&self, h: &[f32]) -> Vec<f32> {
         assert_eq!(h.len(), self.n_edges, "h must have one value per hyperedge");
         let mut out = vec![0.0f32; self.n_nodes];
-        for c in 0..self.n_edges {
-            let hc = h[c];
+        for (c, &hc) in h.iter().enumerate() {
             for i in 0..self.arity {
                 let v = self.members[c * self.arity + i] as usize;
                 out[v] += self.signs[c * self.arity + i] * hc;
             }
         }
-        for v in 0..self.n_nodes {
-            out[v] *= self.scale[v];
+        for (o, &sc) in out.iter_mut().zip(self.scale.iter()) {
+            *o *= sc;
         }
         out
     }

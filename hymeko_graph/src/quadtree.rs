@@ -153,6 +153,34 @@ impl QuadtreeAnchors {
     }
 }
 
+/// Shape and scoring configuration for [`build_quadtree`].
+///
+/// A config struct rather than ten positional parameters (CLAUDE.md 6.5 #6: write the struct,
+/// do not reach for `#[allow(clippy::too_many_arguments)]`). The fields are orthogonal knobs,
+/// which is exactly the case the rule is about. `build_quadtree` has no consumer outside this
+/// crate, so the change costs nothing downstream.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct QuadtreeConfig {
+    /// Image height in pixels.
+    pub image_h: i64,
+    /// Image width in pixels.
+    pub image_w: i64,
+    /// Side length of the first patch.
+    pub patch_size_initial: i64,
+    /// Subdivision stops at this side length.
+    pub patch_size_min: i64,
+    /// Maximum subdivision depth.
+    pub max_depth: i64,
+    /// Cap on emitted anchors.
+    pub max_anchors: i64,
+    /// Weight on the variance term.
+    pub variance_weight: f32,
+    /// Weight on the curvature term.
+    pub curvature_weight: f32,
+    /// Subdivide only above this score.
+    pub score_threshold: f32,
+}
+
 /// Build an adaptive quadtree by per-depth variance + curvature
 /// scoring.  Returns parallel-indexed `positions / sizes / scales /
 /// parent_indices` vectors wrapped in [`QuadtreeAnchors`].
@@ -188,21 +216,21 @@ impl QuadtreeAnchors {
 /// (The PyO3 wrapper validates these at the binding boundary; this
 /// pure-Rust entry point is a no-op-on-empty function for trivial
 /// inputs and only `debug_assert!`s the contract.)
-pub fn build_quadtree<F>(
-    image_h: i64,
-    image_w: i64,
-    patch_size_initial: i64,
-    patch_size_min: i64,
-    max_depth: i64,
-    max_anchors: i64,
-    variance_weight: f32,
-    curvature_weight: f32,
-    score_threshold: f32,
-    mut score_fn: F,
-) -> QuadtreeAnchors
+pub fn build_quadtree<F>(cfg: QuadtreeConfig, mut score_fn: F) -> QuadtreeAnchors
 where
     F: FnMut(&[(i64, i64)], &[i64]) -> Vec<f32>,
 {
+    let QuadtreeConfig {
+        image_h,
+        image_w,
+        patch_size_initial,
+        patch_size_min,
+        max_depth,
+        max_anchors,
+        variance_weight,
+        curvature_weight,
+        score_threshold,
+    } = cfg;
     let max_anchors_usize = max_anchors.max(0) as usize;
     let mut positions: Vec<(i64, i64)> = Vec::with_capacity(max_anchors_usize);
     let mut sizes: Vec<i64> = Vec::with_capacity(max_anchors_usize);
@@ -377,7 +405,20 @@ mod tests {
 
     #[test]
     fn build_quadtree_empty_image_returns_empty() {
-        let anchors = build_quadtree(0, 0, 4, 1, 4, 1024, 1.0, 0.0, 0.0, |_, _| Vec::new());
+        let anchors = build_quadtree(
+            QuadtreeConfig {
+                image_h: 0,
+                image_w: 0,
+                patch_size_initial: 4,
+                patch_size_min: 1,
+                max_depth: 4,
+                max_anchors: 1024,
+                variance_weight: 1.0,
+                curvature_weight: 0.0,
+                score_threshold: 0.0,
+            },
+            |_, _| Vec::new(),
+        );
         assert!(anchors.is_empty());
     }
 
@@ -385,9 +426,20 @@ mod tests {
     fn build_quadtree_uniform_low_score_no_subdivision() {
         // 16×16 image, root cells 8×8 → 4 cells at depth 0.
         // score_fn returns 0 everywhere; threshold 0.5 → no subdivision.
-        let anchors = build_quadtree(16, 16, 8, 1, 4, 64, 1.0, 0.0, 0.5, |pos, _| {
-            vec![0.0; pos.len()]
-        });
+        let anchors = build_quadtree(
+            QuadtreeConfig {
+                image_h: 16,
+                image_w: 16,
+                patch_size_initial: 8,
+                patch_size_min: 1,
+                max_depth: 4,
+                max_anchors: 64,
+                variance_weight: 1.0,
+                curvature_weight: 0.0,
+                score_threshold: 0.5,
+            },
+            |pos, _| vec![0.0; pos.len()],
+        );
         assert_eq!(anchors.len(), 4, "expected 4 root cells, no children");
         assert!(anchors.scales.iter().all(|&s| s == 0));
         assert!(anchors.parent_indices.iter().all(|&p| p == -1));
@@ -398,9 +450,20 @@ mod tests {
         // 16×16, root 8×8 → 4 root cells.  score_fn returns 1.0 always.
         // Children would be 4×4; patch_size_min=2 lets them be created.
         // After 1 depth: 4 root + 4×4 = 20 anchors.
-        let anchors = build_quadtree(16, 16, 8, 2, 1, 64, 1.0, 0.0, 0.5, |pos, _| {
-            vec![1.0; pos.len()]
-        });
+        let anchors = build_quadtree(
+            QuadtreeConfig {
+                image_h: 16,
+                image_w: 16,
+                patch_size_initial: 8,
+                patch_size_min: 2,
+                max_depth: 1,
+                max_anchors: 64,
+                variance_weight: 1.0,
+                curvature_weight: 0.0,
+                score_threshold: 0.5,
+            },
+            |pos, _| vec![1.0; pos.len()],
+        );
         assert_eq!(anchors.len(), 4 + 16);
         let n_root = anchors.scales.iter().filter(|&&s| s == 0).count();
         let n_depth_1 = anchors.scales.iter().filter(|&&s| s == 1).count();
@@ -411,15 +474,17 @@ mod tests {
     #[test]
     fn build_quadtree_respects_budget_cap() {
         let anchors = build_quadtree(
-            16,
-            16,
-            8,
-            1,
-            4,
-            6, // max_anchors = 6
-            1.0,
-            0.0,
-            0.5,
+            QuadtreeConfig {
+                image_h: 16,
+                image_w: 16,
+                patch_size_initial: 8,
+                patch_size_min: 1,
+                max_depth: 4,
+                max_anchors: 6,
+                variance_weight: 1.0,
+                curvature_weight: 0.0,
+                score_threshold: 0.5,
+            },
             |pos, _| vec![1.0; pos.len()],
         );
         assert!(anchors.len() <= 6, "got {}", anchors.len());
@@ -436,10 +501,23 @@ mod tests {
         // score_fn is called ONCE at depth 0 (frontier = 4 root cells).
         // Note: depth-1 frontier IS evaluated but no subdivision since
         // child_size 2 < patch_size_min 4.
-        let _ = build_quadtree(16, 16, 8, 4, 4, 1024, 1.0, 0.0, 0.5, |pos, _| {
-            n_calls += 1;
-            vec![1.0; pos.len()]
-        });
+        let _ = build_quadtree(
+            QuadtreeConfig {
+                image_h: 16,
+                image_w: 16,
+                patch_size_initial: 8,
+                patch_size_min: 4,
+                max_depth: 4,
+                max_anchors: 1024,
+                variance_weight: 1.0,
+                curvature_weight: 0.0,
+                score_threshold: 0.5,
+            },
+            |pos, _| {
+                n_calls += 1;
+                vec![1.0; pos.len()]
+            },
+        );
         // Depth 0 frontier ⇒ subdivides into depth-1 frontier of 16.
         // Depth 1 frontier (16 cells of size 4) IS evaluated by score_fn,
         // but each child would be size 2 < min 4, so no new frontier.

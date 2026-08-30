@@ -191,20 +191,37 @@ pub enum IncidenceResult {
 // to avoid the per-edge `Vec<u32>` allocation that an earlier draft of
 // this module incurred via `std::mem::take(scratch)`.
 
+/// The COO triplet buffers one edge writes into.
+///
+/// Bundled so the two `process_one_edge_*` helpers take a context rather than a flat parameter
+/// list (CLAUDE.md 6.5 #6: a config struct, not an `#[allow]`). Purely internal -- no public
+/// signature changes.
+struct CooSink<'a> {
+    rows: &'a mut Vec<u32>,
+    cols: &'a mut Vec<u32>,
+    vals: &'a mut Vec<f32>,
+}
+
+/// The adjacency view `process_one_edge_into` reads.
+struct CsrView<'a> {
+    n_nodes: usize,
+    row_ptr: &'a [u32],
+    col_idx: &'a [u32],
+    self_map: &'a SelfMap,
+}
+
 #[inline]
 fn process_one_edge_into(
     ei: u32,
     u: u32,
     v: u32,
-    n_nodes: usize,
-    csr_row_ptr: &[u32],
-    csr_col_idx: &[u32],
-    self_map: &SelfMap,
+    csr: &CsrView<'_>,
     scratch: &mut Vec<u32>,
-    rows: &mut Vec<u32>,
-    cols: &mut Vec<u32>,
-    vals: &mut Vec<f32>,
+    sink: &mut CooSink<'_>,
 ) {
+    let (n_nodes, csr_row_ptr, csr_col_idx, self_map) =
+        (csr.n_nodes, csr.row_ptr, csr.col_idx, csr.self_map);
+    let (rows, cols, vals) = (&mut *sink.rows, &mut *sink.cols, &mut *sink.vals);
     if (u as usize) >= n_nodes || (v as usize) >= n_nodes {
         return;
     }
@@ -257,10 +274,10 @@ fn process_one_edge_into(
     }
 
     let (k_lo, k_hi) = if u < v { (u, v) } else { (v, u) };
-    if let Some(self_t) = self_map.lookup(k_lo, k_hi) {
-        if let Ok(pos) = scratch.binary_search(&self_t) {
-            scratch.remove(pos);
-        }
+    if let Some(self_t) = self_map.lookup(k_lo, k_hi)
+        && let Ok(pos) = scratch.binary_search(&self_t)
+    {
+        scratch.remove(pos);
     }
 
     let n_adj = scratch.len();
@@ -275,19 +292,24 @@ fn process_one_edge_into(
     }
 }
 
+/// The bitset adjacency view `process_one_edge_bitset_into` reads.
+struct BitsetView<'a> {
+    n_vertices: usize,
+    adj: &'a BitsetAdj,
+    self_map: &'a SelfMap,
+}
+
 #[inline]
 fn process_one_edge_bitset_into(
     ei: u32,
     u: u32,
     v: u32,
-    n_vertices: usize,
-    adj: &BitsetAdj,
-    self_map: &SelfMap,
+    view: &BitsetView<'_>,
     word_scratch: &mut Vec<u64>,
-    rows: &mut Vec<u32>,
-    cols: &mut Vec<u32>,
-    vals: &mut Vec<f32>,
+    sink: &mut CooSink<'_>,
 ) {
+    let (n_vertices, adj, self_map) = (view.n_vertices, view.adj, view.self_map);
+    let (rows, cols, vals) = (&mut *sink.rows, &mut *sink.cols, &mut *sink.vals);
     if (u as usize) >= n_vertices || (v as usize) >= n_vertices {
         return;
     }
@@ -458,18 +480,24 @@ fn run_serial(
     let mut scratch: Vec<u32> = Vec::with_capacity(64);
 
     for ei in 0..e_query {
+        let csr = CsrView {
+            n_nodes,
+            row_ptr: csr_row_ptr,
+            col_idx: csr_col_idx,
+            self_map,
+        };
+        let mut sink = CooSink {
+            rows: &mut rows,
+            cols: &mut cols,
+            vals: &mut vals,
+        };
         process_one_edge_into(
             ei as u32,
             edges_u[ei],
             edges_v[ei],
-            n_nodes,
-            csr_row_ptr,
-            csr_col_idx,
-            self_map,
+            &csr,
             &mut scratch,
-            &mut rows,
-            &mut cols,
-            &mut vals,
+            &mut sink,
         );
     }
     IncidenceCoo { rows, cols, vals }
@@ -519,19 +547,18 @@ fn run_parallel(
 
             for (local_i, (&u, &v)) in eu.iter().zip(ev.iter()).enumerate() {
                 let ei = (base_ei + local_i) as u32;
-                process_one_edge_into(
-                    ei,
-                    u,
-                    v,
+                let csr = CsrView {
                     n_nodes,
-                    csr_row_ptr,
-                    csr_col_idx,
+                    row_ptr: csr_row_ptr,
+                    col_idx: csr_col_idx,
                     self_map,
-                    &mut scratch,
-                    &mut local_rows,
-                    &mut local_cols,
-                    &mut local_vals,
-                );
+                };
+                let mut sink = CooSink {
+                    rows: &mut local_rows,
+                    cols: &mut local_cols,
+                    vals: &mut local_vals,
+                };
+                process_one_edge_into(ei, u, v, &csr, &mut scratch, &mut sink);
             }
             IncidenceCoo {
                 rows: local_rows,
@@ -575,17 +602,23 @@ fn run_serial_bitset(
     let mut word_scratch: Vec<u64> = Vec::with_capacity(adj.n_words);
 
     for ei in 0..e_query {
+        let view = BitsetView {
+            n_vertices: n_nodes,
+            adj,
+            self_map,
+        };
+        let mut sink = CooSink {
+            rows: &mut rows,
+            cols: &mut cols,
+            vals: &mut vals,
+        };
         process_one_edge_bitset_into(
             ei as u32,
             edges_u[ei],
             edges_v[ei],
-            n_nodes,
-            adj,
-            self_map,
+            &view,
             &mut word_scratch,
-            &mut rows,
-            &mut cols,
-            &mut vals,
+            &mut sink,
         );
     }
     IncidenceCoo { rows, cols, vals }
@@ -620,18 +653,17 @@ fn run_parallel_bitset(
 
             for (local_i, (&u, &v)) in eu.iter().zip(ev.iter()).enumerate() {
                 let ei = (base_ei + local_i) as u32;
-                process_one_edge_bitset_into(
-                    ei,
-                    u,
-                    v,
-                    n_nodes,
+                let view = BitsetView {
+                    n_vertices: n_nodes,
                     adj,
                     self_map,
-                    &mut word_scratch,
-                    &mut local_rows,
-                    &mut local_cols,
-                    &mut local_vals,
-                );
+                };
+                let mut sink = CooSink {
+                    rows: &mut local_rows,
+                    cols: &mut local_cols,
+                    vals: &mut local_vals,
+                };
+                process_one_edge_bitset_into(ei, u, v, &view, &mut word_scratch, &mut sink);
             }
             IncidenceCoo {
                 rows: local_rows,

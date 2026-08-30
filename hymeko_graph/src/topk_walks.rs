@@ -258,10 +258,10 @@ fn dfs<S: BoundedScorer>(
         let n_neg_so_far = signs.iter().filter(|&&s| s < 0).count();
         let k_remaining = walk_len - signs.len();
         let ub = scorer.upper_bound(n_neg_so_far, k_remaining, walk_len);
-        if let Some(worst) = heap.peek() {
-            if ub <= worst.score {
-                return;
-            }
+        if let Some(worst) = heap.peek()
+            && ub <= worst.score
+        {
+            return;
         }
     }
 
@@ -398,18 +398,38 @@ mod tests {
         let n = g.n_nodes as usize;
         let mut all: Vec<TopKWalk> = Vec::new();
 
-        fn rec(
-            row_ptr: &[u32],
-            col_idx: &[u32],
-            signs_csr: &[i8],
+        /// The immutable inputs of the recursion, bundled so `rec` takes a context and its
+        /// mutable frontier rather than ten positional parameters (CLAUDE.md 6.5 #6).
+        struct RecCtx<'a> {
+            row_ptr: &'a [u32],
+            col_idx: &'a [u32],
+            signs_csr: &'a [i8],
             start: u32,
             walk_len: usize,
-            path: &mut Vec<u32>,
-            signs: &mut Vec<i8>,
-            visited: &mut Vec<bool>,
-            all: &mut Vec<TopKWalk>,
-            scorer: &dyn crate::topk_cycles::BoundedScorer,
-        ) {
+            scorer: &'a dyn crate::topk_cycles::BoundedScorer,
+        }
+        /// The mutable state the recursion threads through.
+        struct RecState<'a> {
+            path: &'a mut Vec<u32>,
+            signs: &'a mut Vec<i8>,
+            visited: &'a mut Vec<bool>,
+            all: &'a mut Vec<TopKWalk>,
+        }
+        fn rec(ctx: &RecCtx<'_>, st: &mut RecState<'_>) {
+            let (row_ptr, col_idx, signs_csr, start, walk_len, scorer) = (
+                ctx.row_ptr,
+                ctx.col_idx,
+                ctx.signs_csr,
+                ctx.start,
+                ctx.walk_len,
+                ctx.scorer,
+            );
+            let (path, signs, visited, all) = (
+                &mut *st.path,
+                &mut *st.signs,
+                &mut *st.visited,
+                &mut *st.all,
+            );
             if signs.len() == walk_len {
                 if start <= *path.last().unwrap() {
                     let sc = scorer.score(path, signs);
@@ -430,7 +450,13 @@ mod tests {
                 signs.push(sign);
                 visited[nxt as usize] = true;
                 rec(
-                    row_ptr, col_idx, signs_csr, start, walk_len, path, signs, visited, all, scorer,
+                    ctx,
+                    &mut RecState {
+                        path,
+                        signs,
+                        visited,
+                        all,
+                    },
                 );
                 path.pop();
                 signs.pop();
@@ -446,17 +472,22 @@ mod tests {
             signs.clear();
             path.push(start);
             visited[start as usize] = true;
-            rec(
-                &row_ptr,
-                &col_idx,
-                &signs_csr,
+            let ctx = RecCtx {
+                row_ptr: &row_ptr,
+                col_idx: &col_idx,
+                signs_csr: &signs_csr,
                 start,
                 walk_len,
-                &mut path,
-                &mut signs,
-                &mut visited,
-                &mut all,
                 scorer,
+            };
+            rec(
+                &ctx,
+                &mut RecState {
+                    path: &mut path,
+                    signs: &mut signs,
+                    visited: &mut visited,
+                    all: &mut all,
+                },
             );
             visited[start as usize] = false;
         }

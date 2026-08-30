@@ -114,7 +114,7 @@ pub use pruner::{
     CompositePruner, CountingPruner, CyclePruner, NoOpPruner, PrunerDecision, PrunerStats,
     StatsSnapshot,
 };
-pub use quadtree::{QuadtreeAnchors, build_quadtree, forman_kappa_4conn};
+pub use quadtree::{QuadtreeAnchors, QuadtreeConfig, build_quadtree, forman_kappa_4conn};
 pub use signed_graph::{Sign, SignedGraph};
 pub use signed_tuples::{
     EnumerationExecution, EnumerationRequest, MultiEdgeSignResolution, SignedTupleFamily,

@@ -306,7 +306,7 @@ fn induce_top_degree(
         *deg.entry(x).or_default() += 1;
     }
     let mut by_deg: Vec<(u32, u32)> = deg.into_iter().collect();
-    by_deg.sort_by(|a, b| b.1.cmp(&a.1));
+    by_deg.sort_by_key(|&(_, d)| std::cmp::Reverse(d));
     let kept_set: std::collections::HashSet<u32> = by_deg
         .iter()
         .take(top_n as usize)

@@ -16,12 +16,14 @@ use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 
+use hymeko_pgraph::friedler::FriedlerAxiomPruner;
+use hymeko_pgraph::schema::PNodeKind as NodeKind;
+
 use hymeko_graph::{
     NoOpPruner, SignedGraph,
     balance::{BalanceMode, BipartiteOnlyPruner, CartwrightHararyPruner},
     cycle_enum::enumerate_simple_cycles_noprune,
     enumerate_simple_cycles, enumerate_top_k_cycles_noprune,
-    friedler::{FriedlerAxiomPruner, NodeKind},
     topk_cycles::scorers,
     traversal::{
         BfsScratch, Csr, DfsScratch, bfs_distances, bidirectional_bfs, dfs_visit, dfs_visit_pruned,
