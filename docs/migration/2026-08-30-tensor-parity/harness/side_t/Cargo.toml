@@ -1,0 +1,13 @@
+[package]
+name = "parity_t"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# One implementation only. The two sides are separate crates because Cargo refuses two packages of
+# the same name in one lockfile; they emit an identical text format that is diffed offline. Nothing
+# here copies a production kernel -- the shared module builds inputs and formats outputs.
+[dependencies]
+hymeko_graph = { path = "../../hymeko/tensor/hymeko_graph" }
+
+[workspace]
