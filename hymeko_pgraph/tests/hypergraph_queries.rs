@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use hymeko_pgraph::abb::{solve_with_options, AbbOptions};
+use hymeko_pgraph::abb::{AbbOptions, solve_with_options};
 use hymeko_pgraph::builder::{MaterialKind, PgraphBuilder};
 use hymeko_pgraph::lower;
 use hymeko_pgraph::msg::maximal_structure;

@@ -276,18 +276,30 @@ pub fn to_friedler_dot(g: &LoweredPGraph, title: &str) -> String {
     let _ = writeln!(s, "  rankdir=LR;");
     let _ = writeln!(s, "  bgcolor=\"transparent\";");
     let _ = writeln!(s, "  node [fontname=\"Helvetica\"];");
-    let _ = writeln!(s, "  edge [arrowhead=normal, arrowsize=0.7, color=\"#333333\"];");
+    let _ = writeln!(
+        s,
+        "  edge [arrowhead=normal, arrowsize=0.7, color=\"#333333\"];"
+    );
     let _ = writeln!(s);
-    let _ = writeln!(s, "  // M-nodes (materials) — circles per Friedler PSE convention");
+    let _ = writeln!(
+        s,
+        "  // M-nodes (materials) — circles per Friedler PSE convention"
+    );
     for name in sorted_names(g, &g.materials) {
         let d = g.name_to_decl[&name];
         let attrs = match role(g, d) {
-            "raw" => "shape=circle, style=filled, fillcolor=\"#d0d0d0\", \
-                       width=0.45, fixedsize=true, penwidth=1.2",
-            "product" => "shape=doublecircle, style=filled, fillcolor=\"#ffffff\", \
-                           width=0.40, fixedsize=true, penwidth=1.5",
-            _ => "shape=circle, style=filled, fillcolor=\"#ffffff\", \
-                   width=0.40, fixedsize=true, penwidth=1.0",
+            "raw" => {
+                "shape=circle, style=filled, fillcolor=\"#d0d0d0\", \
+                       width=0.45, fixedsize=true, penwidth=1.2"
+            }
+            "product" => {
+                "shape=doublecircle, style=filled, fillcolor=\"#ffffff\", \
+                           width=0.40, fixedsize=true, penwidth=1.5"
+            }
+            _ => {
+                "shape=circle, style=filled, fillcolor=\"#ffffff\", \
+                   width=0.40, fixedsize=true, penwidth=1.0"
+            }
         };
         let _ = writeln!(s, "  {name:?} [{attrs}];");
     }

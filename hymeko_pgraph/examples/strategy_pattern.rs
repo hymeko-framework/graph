@@ -7,9 +7,8 @@
 
 use hymeko_graph::{
     BfsScratch, BipartiteOnlyPruner, CartwrightHararyPruner, Csr, DavisWeakBalancePruner,
-    DfsScratch, NoOpPruner, SignedGraph, balance::BalanceMode, bfs_distances,
-    bidirectional_bfs, dfs_visit, dfs_visit_pruned, enumerate_simple_cycles,
-    enumerate_simple_cycles_noprune,
+    DfsScratch, NoOpPruner, SignedGraph, balance::BalanceMode, bfs_distances, bidirectional_bfs,
+    dfs_visit, dfs_visit_pruned, enumerate_simple_cycles, enumerate_simple_cycles_noprune,
 };
 use hymeko_pgraph::{FriedlerAxiomPruner, PNodeKind};
 

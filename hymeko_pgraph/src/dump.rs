@@ -62,9 +62,7 @@ impl FromStr for SsgAlgorithm {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "brute" => Ok(SsgAlgorithm::Brute),
-            "decision-mapping" | "decision_mapping" | "dm" => {
-                Ok(SsgAlgorithm::DecisionMapping)
-            }
+            "decision-mapping" | "decision_mapping" | "dm" => Ok(SsgAlgorithm::DecisionMapping),
             other => Err(format!(
                 "unknown ssg algorithm '{other}' (use brute | decision-mapping | dm)"
             )),
@@ -550,9 +548,8 @@ pub fn analyze_source_with_regime_topk(
             };
         }
     };
-    let (json, _abb) = analyze_lowered_with_regime_topk(
-        &p, description, algorithm, regime, opts, top_k,
-    );
+    let (json, _abb) =
+        analyze_lowered_with_regime_topk(&p, description, algorithm, regime, opts, top_k);
     json
 }
 
@@ -631,7 +628,13 @@ pub fn analyze_source_with_regime_full(
         }
     };
     let (json, _abb) = analyze_lowered_with_regime_full(
-        &p, description, algorithm, regime, opts, top_k, ssg_algorithm,
+        &p,
+        description,
+        algorithm,
+        regime,
+        opts,
+        top_k,
+        ssg_algorithm,
     );
     json
 }
@@ -674,7 +677,12 @@ pub fn analyze_lowered_with_regime_topk(
     top_k: usize,
 ) -> (PgraphAnalysisJson, Option<AbbSolution>) {
     analyze_lowered_with_regime_full(
-        p, description, algorithm, regime, opts, top_k,
+        p,
+        description,
+        algorithm,
+        regime,
+        opts,
+        top_k,
         SsgAlgorithm::Brute,
     )
 }
@@ -693,9 +701,8 @@ pub fn analyze_lowered_with_regime_full(
     top_k: usize,
     ssg_algorithm: SsgAlgorithm,
 ) -> (PgraphAnalysisJson, Option<AbbSolution>) {
-    let (mut out, abb_single) = analyze_lowered_with_regime(
-        p, description, algorithm, regime, opts.clone(),
-    );
+    let (mut out, abb_single) =
+        analyze_lowered_with_regime(p, description, algorithm, regime, opts.clone());
     // Re-emit SSG via decision-mapping if requested; replaces the
     // brute output that the inner function produced.
     if matches!(algorithm, DumpAlgorithm::Ssg)
@@ -706,11 +713,8 @@ pub fn analyze_lowered_with_regime_full(
         let structures: Vec<Vec<String>> = dm_sols
             .iter()
             .map(|s| {
-                let mut v: Vec<String> = s
-                    .units
-                    .iter()
-                    .map(|d| p.decl_to_name[d].clone())
-                    .collect();
+                let mut v: Vec<String> =
+                    s.units.iter().map(|d| p.decl_to_name[d].clone()).collect();
                 v.sort();
                 v
             })
@@ -721,15 +725,8 @@ pub fn analyze_lowered_with_regime_full(
     // Only ABB requests carry a top-K extension; MSG / SSG ignore it.
     if matches!(algorithm, DumpAlgorithm::Abb) && top_k > 1 {
         let m = maximal_structure_with_regime(p, regime);
-        let solutions = crate::abb::solve_top_k_with_regime(
-            p, &m, top_k, opts, regime,
-        );
-        out.abb_top_k = Some(
-            solutions
-                .iter()
-                .map(|sol| abb_to_json(p, sol))
-                .collect(),
-        );
+        let solutions = crate::abb::solve_top_k_with_regime(p, &m, top_k, opts, regime);
+        out.abb_top_k = Some(solutions.iter().map(|sol| abb_to_json(p, sol)).collect());
     }
     (out, abb_single)
 }

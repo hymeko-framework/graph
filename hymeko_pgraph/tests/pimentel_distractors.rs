@@ -21,7 +21,7 @@
 //! decision-mapping SSG, the cost-rank, or the byproduct-cycle
 //! feasibility check (load-bearing for #2 and #3) fails CI.
 
-use hymeko_pgraph::abb::{solve_top_k_with_regime, AbbOptions};
+use hymeko_pgraph::abb::{AbbOptions, solve_top_k_with_regime};
 use hymeko_pgraph::msg::maximal_structure_with_regime;
 use hymeko_pgraph::regime::CANONICAL;
 use hymeko_pgraph::{lower, ssg_dm_enumerate};
@@ -37,11 +37,11 @@ fn load_fixture() -> hymeko_pgraph::LoweredPGraph {
     lower(&desc).unwrap_or_else(|e| panic!("lower: {e}"))
 }
 
-fn unit_names(p: &hymeko_pgraph::LoweredPGraph,
-              units: &std::collections::BTreeSet<hymeko::common::ids::DeclId>) -> Vec<String> {
-    let mut v: Vec<String> = units.iter()
-        .map(|d| p.decl_to_name[d].clone())
-        .collect();
+fn unit_names(
+    p: &hymeko_pgraph::LoweredPGraph,
+    units: &std::collections::BTreeSet<hymeko::common::ids::DeclId>,
+) -> Vec<String> {
+    let mut v: Vec<String> = units.iter().map(|d| p.decl_to_name[d].clone()).collect();
     v.sort();
     v
 }
@@ -53,8 +53,10 @@ fn pimentel_msg_filters_three_distractors() {
     let names = unit_names(&p, &m.units);
     assert_eq!(
         names,
-        vec!["O1", "O2", "O3", "O4", "O5", "O6", "O7"]
-            .iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+        ["O1", "O2", "O3", "O4", "O5", "O6", "O7"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>(),
         "axiom filter should strip O8/O9/O10; got {names:?}"
     );
 }
@@ -78,25 +80,32 @@ fn pimentel_ssg_decision_mapping_count_is_nineteen() {
 fn pimentel_abb_top_three_match_docx() {
     let p = load_fixture();
     let m = maximal_structure_with_regime(&p, &CANONICAL);
-    let top = solve_top_k_with_regime(
-        &p, &m, 3, AbbOptions::default(), &CANONICAL,
-    );
+    let top = solve_top_k_with_regime(&p, &m, 3, AbbOptions::default(), &CANONICAL);
     assert_eq!(top.len(), 3, "expected 3 top solutions; got {}", top.len());
 
     // #1: {O2, O5, O7} cost 9.0
     assert_eq!(unit_names(&p, &top[0].units), vec!["O2", "O5", "O7"]);
-    assert!((top[0].cost - 9.0).abs() < 1e-9,
-            "#1 cost: expected 9.0, got {}", top[0].cost);
+    assert!(
+        (top[0].cost - 9.0).abs() < 1e-9,
+        "#1 cost: expected 9.0, got {}",
+        top[0].cost
+    );
 
     // #2: {O1, O4} cost 12.0  (byproduct cycle: O1 makes F that O4 uses)
     assert_eq!(unit_names(&p, &top[1].units), vec!["O1", "O4"]);
-    assert!((top[1].cost - 12.0).abs() < 1e-9,
-            "#2 cost: expected 12.0, got {}", top[1].cost);
+    assert!(
+        (top[1].cost - 12.0).abs() < 1e-9,
+        "#2 cost: expected 12.0, got {}",
+        top[1].cost
+    );
 
     // #3: {O1, O3} cost 13.0  (byproduct cycle: O1 makes F that O3 uses)
     assert_eq!(unit_names(&p, &top[2].units), vec!["O1", "O3"]);
-    assert!((top[2].cost - 13.0).abs() < 1e-9,
-            "#3 cost: expected 13.0, got {}", top[2].cost);
+    assert!(
+        (top[2].cost - 13.0).abs() < 1e-9,
+        "#3 cost: expected 13.0, got {}",
+        top[2].cost
+    );
 }
 
 #[test]
@@ -111,8 +120,10 @@ fn pimentel_distractor_axioms_report_correct_offenders() {
         &CANONICAL,
         AbbOptions::default(),
     );
-    assert_eq!(json.canonical_full.status, "FAIL",
-               "canonical certificate must FAIL on the distractor-augmented fixture");
+    assert_eq!(
+        json.canonical_full.status, "FAIL",
+        "canonical certificate must FAIL on the distractor-augmented fixture"
+    );
 
     let tags: std::collections::BTreeSet<String> =
         json.canonical_full.violation_tags.iter().cloned().collect();
@@ -123,9 +134,13 @@ fn pimentel_distractor_axioms_report_correct_offenders() {
     let offenders: std::collections::BTreeMap<String, Vec<String>> =
         json.canonical_full.offenders.iter().cloned().collect();
     let s2 = offenders.get("S2").expect("S2 offenders list missing");
-    assert!(s2.iter().any(|o| o == "raw:J"),
-            "S2 offenders should include raw:J; got {s2:?}");
+    assert!(
+        s2.iter().any(|o| o == "raw:J"),
+        "S2 offenders should include raw:J; got {s2:?}"
+    );
     let s4 = offenders.get("S4").expect("S4 offenders list missing");
-    assert!(s4.iter().any(|o| o == "O10"),
-            "S4 offenders should include O10; got {s4:?}");
+    assert!(
+        s4.iter().any(|o| o == "O10"),
+        "S4 offenders should include O10; got {s4:?}"
+    );
 }

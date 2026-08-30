@@ -229,11 +229,7 @@ pub fn solve_top_k_with_regime(
         .into_iter()
         .filter(|s| regime.structure_admissible(p, &s.units))
         .map(|s| {
-            let cost: f64 = s
-                .units
-                .iter()
-                .map(|u| effective_cost(p, &opts, *u))
-                .sum();
+            let cost: f64 = s.units.iter().map(|u| effective_cost(p, &opts, *u)).sum();
             (cost, s.units)
         })
         .collect();
@@ -257,7 +253,6 @@ pub fn solve_top_k_with_regime(
         })
         .collect()
 }
-
 
 struct SearchState<'r> {
     order: Vec<DeclId>,

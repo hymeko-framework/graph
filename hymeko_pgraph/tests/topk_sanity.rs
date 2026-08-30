@@ -19,7 +19,10 @@ use parser::parse_description;
 
 /// Scalar cost of a structure = sum of per-unit costs (default 1.0).
 fn cost_of(p: &LoweredPGraph, units: &BTreeSet<DeclId>) -> f64 {
-    units.iter().map(|u| p.costs.get(u).copied().unwrap_or(1.0)).sum()
+    units
+        .iter()
+        .map(|u| p.costs.get(u).copied().unwrap_or(1.0))
+        .sum()
 }
 
 fn names(p: &LoweredPGraph, units: &BTreeSet<DeclId>) -> Vec<String> {
@@ -46,8 +49,11 @@ fn topk(
     scored.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     let micros = t0.elapsed().as_micros();
     let total = scored.len();
-    let top: Vec<(f64, Vec<String>)> =
-        scored.into_iter().take(k).map(|(c, u)| (c, names(p, &u))).collect();
+    let top: Vec<(f64, Vec<String>)> = scored
+        .into_iter()
+        .take(k)
+        .map(|(c, u)| (c, names(p, &u)))
+        .collect();
     (total, micros, top)
 }
 
@@ -106,8 +112,14 @@ fn topk_under_each_regime_synthetic() {
     let (n_can, _, _) = topk(&p, &Canonical, k);
     let (n_cd, _, _) = topk(&p, &CostDominance, k);
     let (n_comp, _, _) = topk(&p, &cd_ne, k);
-    assert!(n_cd < n_can, "cost-dominance must enumerate fewer than canonical");
-    assert!(n_comp <= n_cd, "composite must not enumerate more than cost-dominance alone");
+    assert!(
+        n_cd < n_can,
+        "cost-dominance must enumerate fewer than canonical"
+    );
+    assert!(
+        n_comp <= n_cd,
+        "composite must not enumerate more than cost-dominance alone"
+    );
     assert!(n_comp < n_can, "combined way prunes the most");
     println!("structures: canonical={n_can}  cost-dominance={n_cd}  composite={n_comp}");
 }

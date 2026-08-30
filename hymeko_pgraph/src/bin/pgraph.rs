@@ -224,9 +224,7 @@ fn run_generate(file: &Path, rest: &[String]) -> ExitCode {
         other => panic!("unknown style {other}"),
     };
     if !matches!(style.as_str(), "default" | "friedler" | "pse") {
-        return arg_error(&format!(
-            "unknown --style `{style}` (default|friedler|pse)"
-        ));
+        return arg_error(&format!("unknown --style `{style}` (default|friedler|pse)"));
     }
     match format.as_str() {
         "dot" => {
