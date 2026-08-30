@@ -69,3 +69,37 @@ cd /somewhere/outside/both/repos/harness
 for s in g t; do (cd side_$s && cargo run -q --release > ../out_$s.txt); done
 diff out_g.txt out_t.txt && echo IDENTICAL
 ```
+
+---
+
+## Appendix, 2026-08-30 07:40 — the formatting-only proof, corrected
+
+The Phase 3D.1 commit (`a2a13cd`) justified "formatting only" with a **sorted token multiset**.
+That is not sufficient, and the objection is correct: an arbitrary reordering of tokens preserves a
+multiset. The claim needed a durable proof and now has one.
+
+**Method.** For every path in `a2a13cd^..a2a13cd`, materialise the pre-format blob, run the crate's
+actual rustfmt (`1.9.0-stable`, `--edition 2024`, no config file — defaults), and require **byte
+identity** with the post-format blob.
+
+**Result: 19/19 byte-identical. Affected-path sets equal, 19/19.**
+
+| group | how it had to be run | result |
+|---|---|---|
+| `src/lib.rs` | in a reconstructed tree, so `pub mod` children resolve | exact |
+| 15 `src/` files reachable from `lib.rs` | same in-tree pass | exact |
+| 3 files under `examples/` and `tests/` | standalone — each is its own crate root and is not reachable from `lib.rs` | exact |
+
+**Two harness errors on the way, both of which produced convincing-looking wrong answers:**
+
+1. First run reported **0/19 exact**. `rustfmt` is not on `PATH` in this environment; every
+   "output" was the shell's `command not found` message. Nineteen identical failures read as a
+   catastrophic result rather than as a broken invocation. Fixed by resolving the binary through
+   `rustup which rustfmt`.
+2. Second attempt added `--skip-children` to keep `lib.rs` from recursing — and that flag does not
+   exist in rustfmt 1.9. It made all 19 fail where 18 had passed. An unrecognised option is
+   indistinguishable from a real regression if only the pass count is read.
+
+The lesson is the same one this migration keeps re-learning: a check that reports failure must be
+shown to be *running* before its failure is believed, exactly as a check that reports success must
+be shown to be non-vacuous.
