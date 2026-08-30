@@ -1,7 +1,7 @@
 //! Tests for direct .pgip read/write (Stage P-io, 2026-05-19).
 //!
-//! Gated behind the `pgip` feature (on by default) — a `--no-default-features`
-//! build has no `read_pgip`/`write_pgip`.
+//! Gated behind the opt-in `pgip` feature. The default build has no
+//! `read_pgip`/`write_pgip` and no bundled SQLite dependency.
 #![cfg(feature = "pgip")]
 //!
 //! Three properties to pin:

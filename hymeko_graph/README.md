@@ -35,6 +35,7 @@ see [`hotaru::hypergraph`](http://amaterasu.local:3000/hymeko/hotaru).
     (Davis 1967)
   - `BipartiteOnlyPruner` — drop odd-length cycles (handy after
     star-expansion)
+
 Domain-specific pruners belong on the other side of the trait.
 `hymeko_pgraph::FriedlerAxiomPruner` is the worked example: it
 encodes Friedler's A0/A1/A3 for P-graphs, and lived here until
@@ -61,8 +62,8 @@ enumerator body is here — `cycle_enum.rs` and the 4,100 lines of
 `topk_cycles.rs` — not in `hymeko_py/src/cycles.rs`, and it takes
 the `&dyn CyclePruner` the note anticipated.
 
-**177 tests** — 113 unit, 64 integration — plus three benchmark
-suites and eight examples.
+**167 tests** — 109 unit, 58 integration. The Friedler scenarios and the
+two axiom examples moved to `hymeko_pgraph` along with the pruner.
 
 ## Building
 

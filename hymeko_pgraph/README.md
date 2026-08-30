@@ -61,8 +61,9 @@ cargo run --example strategy_pattern    # composing pruners
 ```
 
 `.pgip` support pulls `rusqlite` with `bundled`, which compiles SQLite from C.
-It is behind the default `pgip` feature; `--no-default-features` drops it and
-both binaries with it, which is what the wasm32 dependency path does.
+It is behind the opt-in `pgip` feature. The default library build and the
+wasm32 dependency path contain no SQLite. Enable the interoperability tools
+explicitly with `cargo build -p hymeko_pgraph --features pgip`.
 
 Test fixtures live in [`../data/`](../data/) and are read with
 `include_str!("../../data/…")`. One file did not come across from the

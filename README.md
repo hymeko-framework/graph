@@ -8,16 +8,36 @@ is:
 | Crate | What it is | Depends on |
 |---|---|---|
 | [`hymeko_graph`](hymeko_graph/) | The generic layer. Signed graphs, CSR, DFS and BFS, cycle and walk enumeration, top-k search, colour coding, community detection, SIMD spine kernels, and the `CyclePruner` seam | `rayon`, `dashmap` |
-| [`hymeko_pgraph`](hymeko_pgraph/) | The P-graph layer. Material/Operating-Unit overlay on the HyMeKo IR, the A1–A5 axiom checker, Friedler's axioms as a `CyclePruner`, MSG/SSG generation, ABB solver, `.pgip` round-trip with P-graph Studio | `hymeko_graph`, `hymeko_core`, `parser`, `rusqlite` |
+| [`hymeko_pgraph`](hymeko_pgraph/) | The P-graph layer. Material/Operating-Unit overlay on the HyMeKo IR, the A1–A5 axiom checker, Friedler's axioms as a `CyclePruner`, MSG/SSG generation, ABB solver | `hymeko_graph`, `hymeko_core`, `parser` |
 
 Both came out of `hymeko_framework_rust`, which is retired. **This repository
 is the canonical home for both.**
 
 ```
-cargo test                       # 324 tests
-cargo test -p hymeko_graph       # 177
-cargo test -p hymeko_pgraph      # 147
+cargo test                       # 378 tests, no C toolchain needed
+cargo test -p hymeko_graph       # 167
+cargo test -p hymeko_pgraph      # 211
 ```
+
+## Nothing here needs SQLite
+
+`.pgip` is P-graph Studio's file format, and Studio stores its models in
+SQLite databases — so reading one means `rusqlite`, and `rusqlite` with
+`bundled` compiles SQLite from C. That is a fine price for *interoperating
+with one external tool*, and no price at all to pay for using a graph
+library.
+
+So `pgip` is an **opt-in feature**. The default build of `hymeko_pgraph`
+resolves 114 crates and not one of them is `rusqlite` or `libsqlite3-sys`;
+there is no C in it. The `.pgip` reader, its round-trip tests and the two
+binaries that use it are all behind the feature:
+
+```
+cargo build -p hymeko_pgraph --features pgip
+```
+
+211 tests run without it, 216 with — the five extra being the Studio
+round-trips.
 
 ## Where the line is
 
