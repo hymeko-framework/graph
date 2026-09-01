@@ -354,3 +354,67 @@ fn bench_direct_vs_star_vs_clique() {
     }
     println!();
 }
+
+// ---- direct-Ir operation survey (added: berge/components/dual/s-cc/batch were unbenched) --------
+
+#[test]
+#[ignore = "measurement bench; run with --release --ignored --nocapture"]
+fn bench_direct_ir_ops() {
+    use hymeko::common::ids::{HyperArcId, NodeId};
+    use hymeko_graph::direct_ir::{
+        HyperTraversal, TraversalWorkspace, batch_reachable_counts, connected_components,
+        dual_reachability, par_batch_reachable_counts, s_connected_components,
+    };
+    println!(
+        "\n=== direct-Ir op survey (us; median-of-9 warm; arity 5; single-host PROVISIONAL) ==="
+    );
+    println!("op\tn_nodes\tnnz\tindex_build_us\twarm_query_us");
+    for &m in &[10_000usize, 100_000] {
+        let k = 5;
+        let ir = build_window_ir(m, k);
+        let nnz: usize = ir.arcs.iter().map(|a| a.refs.len()).sum();
+        let (_, idx_us, _) = median_us(5, || {
+            let _ = build_incidence_index(&ir).expect("index");
+        });
+        let index = build_incidence_index(&ir).expect("index");
+        let trav = HyperTraversal::new(&index);
+        let mut ws = TraversalWorkspace::new();
+        let start = NodeId::new(0);
+        let goal = NodeId::new(m - 1);
+        let starts: Vec<NodeId> = (0..16).map(|i| NodeId::new(i * (m / 16))).collect();
+
+        let row = |name: &str, us: f64| println!("{name}\t{m}\t{nnz}\t{idx_us:.1}\t{us:.1}");
+
+        let (_, r, _) = median_us(9, || {
+            let _ = trav.reachable_nodes(&mut ws, start).unwrap().len();
+        });
+        row("reachable_nodes", r);
+        let (_, b, _) = median_us(9, || {
+            let _ = trav.berge_shortest_path(&mut ws, start, goal).unwrap();
+        });
+        row("berge_shortest_path", b);
+        let (_, c, _) = median_us(9, || {
+            let _ = connected_components(&index, &mut ws).unwrap().count();
+        });
+        row("connected_components", c);
+        let (_, d, _) = median_us(9, || {
+            let _ = dual_reachability(&index, &mut ws, HyperArcId::new(0))
+                .unwrap()
+                .len();
+        });
+        row("dual_reachability", d);
+        let (_, s1, _) = median_us(5, || {
+            let _ = s_connected_components(&index, 1).count();
+        });
+        row("s_connected_components_s1", s1);
+        let (_, bs, _) = median_us(9, || {
+            let _ = batch_reachable_counts(&index, &starts).unwrap();
+        });
+        row("batch16_serial", bs);
+        let (_, bp, _) = median_us(9, || {
+            let _ = par_batch_reachable_counts(&index, &starts).unwrap();
+        });
+        row("batch16_rayon", bp);
+    }
+    println!();
+}

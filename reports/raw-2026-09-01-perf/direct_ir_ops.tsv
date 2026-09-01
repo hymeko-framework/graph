@@ -1,0 +1,16 @@
+# direct-Ir op survey — graph-perfsurvey 98c6a93, release, median-of-9 warm, arity 5, single-host ambient~14% (PROVISIONAL)
+op	n_nodes	nnz	index_build_us	warm_query_us
+reachable_nodes	10000	49980	392.6	161.1
+berge_shortest_path	10000	49980	392.6	194.9
+connected_components	10000	49980	392.6	175.7
+dual_reachability	10000	49980	392.6	159.1
+s_connected_components_s1	10000	49980	392.6	130.6
+batch16_serial	10000	49980	392.6	3000.8
+batch16_rayon	10000	49980	392.6	1066.1
+reachable_nodes	100000	499980	7091.4	6700.8
+berge_shortest_path	100000	499980	7091.4	8339.0
+connected_components	100000	499980	7091.4	7215.4
+dual_reachability	100000	499980	7091.4	6672.8
+s_connected_components_s1	100000	499980	7091.4	1364.0
+batch16_serial	100000	499980	7091.4	131699.2
+batch16_rayon	100000	499980	7091.4	12225.4
