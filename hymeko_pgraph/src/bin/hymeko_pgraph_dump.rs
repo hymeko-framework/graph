@@ -29,8 +29,7 @@ use hymeko_pgraph::abb::AbbOptions;
 use hymeko_pgraph::regime::{CANONICAL, COST_DOMINANCE, Composite, NO_EXCESS, Regime};
 use hymeko_pgraph::{
     DumpAlgorithm, SsgAlgorithm, analyze_lowered_with_regime, analyze_lowered_with_regime_full,
-    analyze_lowered_with_regime_topk, analyze_source_with_regime, analyze_source_with_regime_full,
-    analyze_source_with_regime_topk, read_pgip, write_pgip,
+    analyze_source_with_regime, analyze_source_with_regime_full, read_pgip, write_pgip,
 };
 
 /// Parse a `--regime` spec: one or more regime names joined by `+`
