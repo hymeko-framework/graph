@@ -12,6 +12,20 @@
 //! The pre-migration behaviour these replace was: some faults flattened to an
 //! empty result (a material silently dropped), others panicked on a direct
 //! `Vec` index. Both are recorded in `reports/2026-08-30-graph-m2b-source.md`.
+//!
+//! Storage migration (core `70b4f36`): the three public `decl_to_{node,edge,arc}:
+//! Vec<Option<Id>>` maps this fixture used to white-box were replaced by a sealed
+//! compact `decl_to_record` slot. Construction now goes through the public API —
+//! `push_decl` (append a declaration + a NONE dispatch slot) and the checked
+//! `bind_{node,edge,arc}_decl` mutators — and reads through `as_{node,edge,arc}`.
+//! Because `bind_*_decl` refuses re-binding a declaration to a *different* record
+//! (a `debug_assert!` panic in test builds), a storage fault can no longer be a
+//! post-hoc mutation of a valid IR: it must be baked in as the declaration's
+//! first-and-only binding. Each such fault therefore builds a fresh IR via
+//! [`Pg::build`] carrying exactly one [`Perturb`]; every other fault (a corrupt
+//! *record*, not a corrupt *binding*) stays a mutation of the valid baseline.
+
+use std::collections::BTreeMap;
 
 use hymeko::common::ids::{DeclId, EdgeId, HyperArcId, NodeId, SymId};
 use hymeko::ir::ir::{
@@ -19,6 +33,67 @@ use hymeko::ir::ir::{
 };
 use hymeko::resolution::interner::Interner;
 use hymeko_pgraph::{IrReadError, MetaResolveError, lower_resolved};
+
+/// A bare `DeclNode` with the given name and kind: no parent, no children, no
+/// annotation. The one construction seam every builder in this file shares, so
+/// the seven-field literal is written once.
+fn decl_node(name: SymId, kind: DeclKind) -> DeclNode {
+    DeclNode {
+        kind,
+        name,
+        parent: DeclId::NONE,
+        first_child: DeclId::NONE,
+        last_child: DeclId::NONE,
+        next_sibling: DeclId::NONE,
+        anno: AnnoR::default(),
+    }
+}
+
+/// A single storage perturbation, applied to exactly one declaration *at build
+/// time*.
+///
+/// The compact dispatch binder (`bind_*_decl`) refuses re-binding a declaration
+/// to a different record, so a mapping fault cannot be a mutation of a valid IR —
+/// it must be the declaration's first binding. Each mapping-fault test builds a
+/// fresh baseline through [`Pg::build`] with one of these; [`Perturb::None`]
+/// reproduces the well-formed baseline through the identical builder.
+#[derive(Clone, Copy)]
+enum Perturb {
+    /// Well-formed: bind every declaration to its real record.
+    None,
+    /// Leave `decl`'s node-dispatch slot NONE — the old `decl_to_node[decl] = None`.
+    UnmappedNode(DeclId),
+    /// Bind `decl` to a node id with no record — the old `decl_to_node[decl] = Some(<absent>)`.
+    NodeRecord(DeclId, NodeId),
+    /// Leave `decl`'s edge-dispatch slot NONE — the old `decl_to_edge[decl] = None`.
+    UnmappedEdge(DeclId),
+    /// Bind `decl` to an edge id with no record — the old `decl_to_edge[decl] = Some(<absent>)`.
+    EdgeRecord(DeclId, EdgeId),
+}
+
+/// Bind a Node declaration's dispatch slot, honoring a perturbation aimed at it.
+fn bind_node(ir: &mut Ir, d: DeclId, nid: NodeId, perturb: Perturb) {
+    match perturb {
+        Perturb::UnmappedNode(x) if x == d => {} // leave the slot NONE
+        Perturb::NodeRecord(x, forced) if x == d => {
+            ir.bind_node_decl(d, forced)
+                .expect("bind perturbed node slot");
+        }
+        _ => ir.bind_node_decl(d, nid).expect("bind node slot"),
+    }
+}
+
+/// Bind an Edge declaration's dispatch slot, honoring a perturbation aimed at it.
+fn bind_edge(ir: &mut Ir, d: DeclId, eid: EdgeId, perturb: Perturb) {
+    match perturb {
+        Perturb::UnmappedEdge(x) if x == d => {} // leave the slot NONE
+        Perturb::EdgeRecord(x, forced) if x == d => {
+            ir.bind_edge_decl(d, forced)
+                .expect("bind perturbed edge slot");
+        }
+        _ => ir.bind_edge_decl(d, eid).expect("bind edge slot"),
+    }
+}
 
 /// Minimal well-formed P-graph IR builder.
 ///
@@ -33,10 +108,18 @@ use hymeko_pgraph::{IrReadError, MetaResolveError, lower_resolved};
 /// | 4      | A             | Node | material, `<isa> raw`        |
 /// | 5      | P             | Node | material, `<isa> product`    |
 /// | 6      | u             | Edge | unit: arc `-A +P`            |
+///
+/// The record store (nodes/edges/arcs) is always built in full, and the id each
+/// declaration's record got is remembered in `node_of` / `edge_of`. That lets the
+/// builder wire `<isa>` bases and arcs by record id **independently of the
+/// dispatch bindings**, so a perturbed (unmapped or dangling) binding can coexist
+/// with an otherwise well-formed structure.
 struct Pg {
     ir: Ir,
     it: Interner,
     isa: SymId,
+    node_of: BTreeMap<DeclId, NodeId>,
+    edge_of: BTreeMap<DeclId, EdgeId>,
 }
 
 const RAW: DeclId = DeclId::new(0);
@@ -52,27 +135,16 @@ const UNIT_U: DeclId = DeclId::new(6);
 impl Pg {
     /// A structurally valid P-graph IR: two materials and one unit.
     fn valid() -> Self {
+        Self::build(Perturb::None)
+    }
+
+    /// Build the fixed 7-declaration baseline, applying `perturb` to one
+    /// declaration's record binding (see [`Perturb`]). `Perturb::None` is the
+    /// well-formed baseline.
+    fn build(perturb: Perturb) -> Self {
         let mut it = Interner::new();
         let isa = it.intern("isa");
         let mut ir = Ir::default();
-
-        // Helper closures are avoided (borrow juggling); build inline.
-        let push_decl = |ir: &mut Ir, it: &mut Interner, name: &str, kind: DeclKind| {
-            let sym = it.intern(name);
-            ir.decl_nodes.push(DeclNode {
-                kind,
-                name: sym,
-                parent: DeclId::NONE,
-                first_child: DeclId::NONE,
-                last_child: DeclId::NONE,
-                next_sibling: DeclId::NONE,
-                anno: AnnoR::default(),
-            });
-            ir.decl_hash.push(None);
-            ir.decl_to_node.push(None);
-            ir.decl_to_edge.push(None);
-            ir.decl_to_arc.push(None);
-        };
 
         for (name, kind) in [
             ("raw", DeclKind::Node),
@@ -83,23 +155,34 @@ impl Pg {
             ("P", DeclKind::Node),
             ("u", DeclKind::Edge),
         ] {
-            push_decl(&mut ir, &mut it, name, kind);
+            let sym = it.intern(name);
+            ir.push_decl(decl_node(sym, kind));
         }
 
-        // Node records for every Node decl, back-linked, mapped.
+        // Node records for every Node decl, back-linked; bound per `perturb`.
+        let mut node_of = BTreeMap::new();
         for d in [RAW, PRODUCT, INTER, MAT_A, MAT_P] {
             let nid = NodeId::new(ir.nodes.len());
             ir.nodes.push(NodeRec::new(d, Vec::new()));
-            ir.decl_to_node[d.raw()] = Some(nid);
+            node_of.insert(d, nid);
+            bind_node(&mut ir, d, nid, perturb);
         }
-        // Edge records for every Edge decl.
+        // Edge records for every Edge decl; bound per `perturb`.
+        let mut edge_of = BTreeMap::new();
         for d in [PROCESS, UNIT_U] {
             let eid = EdgeId::new(ir.edges.len());
             ir.edges.push(EdgeRec::new(d, Vec::new()));
-            ir.decl_to_edge[d.raw()] = Some(eid);
+            edge_of.insert(d, eid);
+            bind_edge(&mut ir, d, eid, perturb);
         }
 
-        let mut pg = Self { ir, it, isa };
+        let mut pg = Self {
+            ir,
+            it,
+            isa,
+            node_of,
+            edge_of,
+        };
         // A <isa> raw ; P <isa> product
         pg.set_isa_base(MAT_A, RAW);
         pg.set_isa_base(MAT_P, PRODUCT);
@@ -108,8 +191,28 @@ impl Pg {
         pg
     }
 
+    /// The record id a Node declaration got in this fixture. Reads the builder's
+    /// own record map, not the dispatch binding, so it is valid even for a decl
+    /// whose binding was perturbed away.
     fn nid_of(&self, d: DeclId) -> NodeId {
-        self.ir.decl_to_node[d.raw()].expect("node decl mapped in builder")
+        *self
+            .node_of
+            .get(&d)
+            .expect("node decl built in this fixture")
+    }
+
+    /// Append a Node declaration with a fresh, bound node record and an `<isa>`
+    /// base to `isa_target`. Returns the new `DeclId`. Extends the baseline with
+    /// inheritance chains (see `deep_chain`).
+    fn add_node_decl(&mut self, name: &str, isa_target: DeclId) -> DeclId {
+        let sym = self.it.intern(name);
+        let d = self.ir.push_decl(decl_node(sym, DeclKind::Node));
+        let nid = NodeId::new(self.ir.nodes.len());
+        self.ir.nodes.push(NodeRec::new(d, Vec::new()));
+        self.ir.bind_node_decl(d, nid).expect("bind node slot");
+        self.node_of.insert(d, nid);
+        self.set_isa_base(d, isa_target);
+        d
     }
 
     fn isa_base(&self, target: DeclId) -> SignedRefR {
@@ -134,7 +237,10 @@ impl Pg {
     /// not all-material.
     fn set_isa_base_edge(&mut self, d: DeclId, target: DeclId) {
         let base = self.isa_base(target);
-        let eid = self.ir.decl_to_edge[d.raw()].expect("edge decl mapped in builder");
+        let eid = *self
+            .edge_of
+            .get(&d)
+            .expect("edge decl built in this fixture");
         self.ir.edges[eid.raw()].bases.push(base);
     }
 
@@ -161,7 +267,10 @@ impl Pg {
             in_edge: owner,
             refs: built,
         });
-        let eid = self.ir.decl_to_edge[owner.raw()].expect("edge decl mapped in builder");
+        let eid = *self
+            .edge_of
+            .get(&owner)
+            .expect("edge decl built in this fixture");
         self.ir.edges[eid.raw()].arcs.push(aid);
     }
 
@@ -194,15 +303,15 @@ fn valid_pgraph_lowers_to_two_materials_and_one_unit() {
 
 #[test]
 fn missing_node_mapping_is_typed() {
-    let mut pg = Pg::valid();
-    pg.ir.decl_to_node[MAT_A.raw()] = None; // A: Node decl, no record mapping
+    // A: Node decl whose node record is never bound (dispatch slot stays NONE).
+    let pg = Pg::build(Perturb::UnmappedNode(MAT_A));
     assert_eq!(pg.ir_err(), IrReadError::MissingNodeMapping { decl: MAT_A });
 }
 
 #[test]
 fn mapped_but_missing_node_record_is_typed() {
-    let mut pg = Pg::valid();
-    pg.ir.decl_to_node[MAT_A.raw()] = Some(NodeId::new(999)); // no such record
+    // A maps to a node id for which no record exists.
+    let pg = Pg::build(Perturb::NodeRecord(MAT_A, NodeId::new(999)));
     assert_eq!(
         pg.ir_err(),
         IrReadError::MissingNodeRecord {
@@ -228,8 +337,8 @@ fn node_backlink_mismatch_is_typed() {
 
 #[test]
 fn missing_edge_mapping_is_typed() {
-    let mut pg = Pg::valid();
-    pg.ir.decl_to_edge[UNIT_U.raw()] = None; // u: Edge decl, no record mapping
+    // u: Edge decl whose edge record is never bound.
+    let pg = Pg::build(Perturb::UnmappedEdge(UNIT_U));
     assert_eq!(
         pg.ir_err(),
         IrReadError::MissingEdgeMapping { decl: UNIT_U }
@@ -238,8 +347,8 @@ fn missing_edge_mapping_is_typed() {
 
 #[test]
 fn mapped_but_missing_edge_record_is_typed() {
-    let mut pg = Pg::valid();
-    pg.ir.decl_to_edge[UNIT_U.raw()] = Some(EdgeId::new(777));
+    // u maps to an edge id for which no record exists.
+    let pg = Pg::build(Perturb::EdgeRecord(UNIT_U, EdgeId::new(777)));
     assert_eq!(
         pg.ir_err(),
         IrReadError::MissingEdgeRecord {
@@ -252,7 +361,7 @@ fn mapped_but_missing_edge_record_is_typed() {
 #[test]
 fn edge_backlink_mismatch_is_typed() {
     let mut pg = Pg::valid();
-    let eid = pg.ir.decl_to_edge[UNIT_U.raw()].unwrap();
+    let eid = pg.ir.as_edge(UNIT_U).unwrap();
     pg.ir.edges[eid.raw()].decl = DeclId::new(9);
     assert_eq!(
         pg.ir_err(),
@@ -283,7 +392,7 @@ fn dangling_base_target_is_typed() {
 #[test]
 fn dangling_arc_record_is_typed() {
     let mut pg = Pg::valid();
-    let eid = pg.ir.decl_to_edge[UNIT_U.raw()].unwrap();
+    let eid = pg.ir.as_edge(UNIT_U).unwrap();
     pg.ir.edges[eid.raw()].arcs = vec![HyperArcId::new(999)]; // no such arc
     assert_eq!(
         pg.ir_err(),
@@ -360,30 +469,9 @@ fn deep_chain(depth: usize) -> Pg {
     // A0 <isa> raw ; A1 <isa> A0 ; … ; A{depth-1} <isa> A{depth-2}
     // Every A{i} therefore reaches `raw` and is a raw material.
     let mut pg = Pg::valid();
-    // Drop the default P material to keep the assertion simple; keep A as A0's
-    // base anchor by rebuilding cleanly.
     let mut prev = RAW;
     for i in 0..depth {
-        let sym = pg.it.intern(&format!("D{i}"));
-        let d = DeclId::new(pg.ir.decl_nodes.len());
-        pg.ir.decl_nodes.push(DeclNode {
-            kind: DeclKind::Node,
-            name: sym,
-            parent: DeclId::NONE,
-            first_child: DeclId::NONE,
-            last_child: DeclId::NONE,
-            next_sibling: DeclId::NONE,
-            anno: AnnoR::default(),
-        });
-        pg.ir.decl_hash.push(None);
-        pg.ir.decl_to_node.push(None);
-        pg.ir.decl_to_edge.push(None);
-        pg.ir.decl_to_arc.push(None);
-        let nid = NodeId::new(pg.ir.nodes.len());
-        pg.ir.nodes.push(NodeRec::new(d, Vec::new()));
-        pg.ir.decl_to_node[d.raw()] = Some(nid);
-        pg.set_isa_base(d, prev);
-        prev = d;
+        prev = pg.add_node_decl(&format!("D{i}"), prev);
     }
     pg
 }
@@ -470,7 +558,7 @@ fn swapping_signs_swaps_input_and_output() {
 fn multi_arc_multi_ref_traversal_preserves_order_and_direction() {
     let mut pg = Pg::valid();
     // Replace u's single arc with two arcs: [-A] then [+P].
-    let eid = pg.ir.decl_to_edge[UNIT_U.raw()].unwrap();
+    let eid = pg.ir.as_edge(UNIT_U).unwrap();
     pg.ir.edges[eid.raw()].arcs.clear();
     pg.ir.arcs.clear();
     pg.add_unit_arc(UNIT_U, &[(MAT_A, -1)]);
@@ -604,23 +692,10 @@ fn ambiguous_archetype_when_two_declarations_share_the_name() {
     let mut pg = Pg::valid();
     // Add a second "raw" Node declaration → find_decl sees two.
     let sym = pg.it.intern("raw");
-    let d = DeclId::new(pg.ir.decl_nodes.len());
-    pg.ir.decl_nodes.push(DeclNode {
-        kind: DeclKind::Node,
-        name: sym,
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    });
-    pg.ir.decl_hash.push(None);
-    pg.ir
-        .decl_to_node
-        .push(Some(NodeId::new(pg.ir.nodes.len())));
-    pg.ir.decl_to_edge.push(None);
-    pg.ir.decl_to_arc.push(None);
+    let d = pg.ir.push_decl(decl_node(sym, DeclKind::Node));
+    let nid = NodeId::new(pg.ir.nodes.len());
     pg.ir.nodes.push(NodeRec::new(d, Vec::new()));
+    pg.ir.bind_node_decl(d, nid).expect("bind node slot");
     match pg.lower() {
         Err(MetaResolveError::AmbiguousArchetype("raw")) => {}
         other => panic!("expected AmbiguousArchetype(raw), got {other:?}"),
@@ -662,28 +737,18 @@ fn a_program_without_an_isa_symbol_yields_no_materials() {
         ("A", DeclKind::Node),
     ] {
         let sym = it.intern(name);
-        ir.decl_nodes.push(DeclNode {
-            kind,
-            name: sym,
-            parent: DeclId::NONE,
-            first_child: DeclId::NONE,
-            last_child: DeclId::NONE,
-            next_sibling: DeclId::NONE,
-            anno: AnnoR::default(),
-        });
-        ir.decl_hash.push(None);
-        ir.decl_to_node.push(None);
-        ir.decl_to_edge.push(None);
-        ir.decl_to_arc.push(None);
+        ir.push_decl(decl_node(sym, kind));
     }
     for d in [0usize, 1, 2, 4] {
         let nid = NodeId::new(ir.nodes.len());
         ir.nodes.push(NodeRec::new(DeclId::new(d), Vec::new()));
-        ir.decl_to_node[d] = Some(nid);
+        ir.bind_node_decl(DeclId::new(d), nid)
+            .expect("bind node slot");
     }
     let eid = EdgeId::new(ir.edges.len());
     ir.edges.push(EdgeRec::new(DeclId::new(3), Vec::new()));
-    ir.decl_to_edge[3] = Some(eid);
+    ir.bind_edge_decl(DeclId::new(3), eid)
+        .expect("bind edge slot");
     // "isa" is never interned, so get_id("isa") is None inside meta_resolve.
     let g = lower_resolved(&ir, &it).expect("lowers with no isa");
     assert!(g.materials.is_empty());
@@ -698,20 +763,7 @@ fn an_isa_base_pointing_at_a_hyperarc_declaration_contributes_no_bases() {
     let mut pg = Pg::valid();
     // Append a HyperArc declaration.
     let arc_sym = pg.it.intern("some_arc");
-    let arc_decl = DeclId::new(pg.ir.decl_nodes.len());
-    pg.ir.decl_nodes.push(DeclNode {
-        kind: DeclKind::HyperArc,
-        name: arc_sym,
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    });
-    pg.ir.decl_hash.push(None);
-    pg.ir.decl_to_node.push(None);
-    pg.ir.decl_to_edge.push(None);
-    pg.ir.decl_to_arc.push(None);
+    let arc_decl = pg.ir.push_decl(decl_node(arc_sym, DeclKind::HyperArc));
     // A <isa> some_arc (instead of raw).
     let na = pg.nid_of(MAT_A);
     pg.ir.nodes[na.raw()].bases.clear();
@@ -742,33 +794,24 @@ fn unit_arc_refs_reports_an_edge_backlink_mismatch_without_isa() {
         ("u", DeclKind::Edge),
     ] {
         let sym = it.intern(name);
-        ir.decl_nodes.push(DeclNode {
-            kind,
-            name: sym,
-            parent: DeclId::NONE,
-            first_child: DeclId::NONE,
-            last_child: DeclId::NONE,
-            next_sibling: DeclId::NONE,
-            anno: AnnoR::default(),
-        });
-        ir.decl_hash.push(None);
-        ir.decl_to_node.push(None);
-        ir.decl_to_edge.push(None);
-        ir.decl_to_arc.push(None);
+        ir.push_decl(decl_node(sym, kind));
     }
     for d in [0usize, 1, 2] {
         let nid = NodeId::new(ir.nodes.len());
         ir.nodes.push(NodeRec::new(DeclId::new(d), Vec::new()));
-        ir.decl_to_node[d] = Some(nid);
+        ir.bind_node_decl(DeclId::new(d), nid)
+            .expect("bind node slot");
     }
     // process (decl 3) and u (decl 4) as edge records; u's record back-links
     // to a different declaration.
     let e_proc = EdgeId::new(ir.edges.len());
     ir.edges.push(EdgeRec::new(DeclId::new(3), Vec::new()));
-    ir.decl_to_edge[3] = Some(e_proc);
+    ir.bind_edge_decl(DeclId::new(3), e_proc)
+        .expect("bind edge slot");
     let e_u = EdgeId::new(ir.edges.len());
     ir.edges.push(EdgeRec::new(DeclId::new(99), Vec::new())); // wrong back-link
-    ir.decl_to_edge[4] = Some(e_u);
+    ir.bind_edge_decl(DeclId::new(4), e_u)
+        .expect("bind edge slot");
 
     match lower_resolved(&ir, &it) {
         Err(MetaResolveError::Ir(IrReadError::EdgeBacklinkMismatch { decl, record_decl })) => {
