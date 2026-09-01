@@ -11,7 +11,9 @@ use std::time::Instant;
 
 use hymeko::common::ids::{DeclId, NodeId, SymId};
 use hymeko::ir::incidence::{IncidenceIndex, IncidenceRef};
-use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR, ValueR};
+use hymeko::ir::ir::{
+    AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR, ValueR,
+};
 
 // ---- timing helper (single typed unit: microseconds) ----------------------------------------------
 
@@ -134,7 +136,18 @@ pub fn exhaustive_min_cost(
     let mut visited: BTreeMap<usize, bool> = BTreeMap::new();
     let mut best = f64::INFINITY;
     let mut steps = 0usize;
-    dfs(ir, index, start_d, goal_d, 0.0, cost, &mut visited, &mut best, &mut steps, node_budget);
+    dfs(
+        ir,
+        index,
+        start_d,
+        goal_d,
+        0.0,
+        cost,
+        &mut visited,
+        &mut best,
+        &mut steps,
+        node_budget,
+    );
     if best.is_finite() { Some(best) } else { None }
 }
 
@@ -169,7 +182,18 @@ fn dfs(
                 continue;
             }
             let to = index.resolve(arc, slot as u32);
-            dfs(ir, index, v, goal, acc + cost.step(&to), cost, visited, best, steps, budget);
+            dfs(
+                ir,
+                index,
+                v,
+                goal,
+                acc + cost.step(&to),
+                cost,
+                visited,
+                best,
+                steps,
+                budget,
+            );
         }
     }
     visited.insert(cur.raw(), false);
@@ -229,11 +253,19 @@ pub fn window_ir(m: usize, k: usize, weighted: bool, signs: SignMode) -> Ir {
         let refs: Vec<SignedRefR> = (i..i + k)
             .enumerate()
             .map(|(mi, j)| {
-                let w = if weighted { Some(1.0 + (j % 5) as f64 * 0.5) } else { None };
+                let w = if weighted {
+                    Some(1.0 + (j % 5) as f64 * 0.5)
+                } else {
+                    None
+                };
                 signed_ref(signs, mi, j, w)
             })
             .collect();
-        ir.arcs.push(ArcRec { anno: AnnoR::default(), in_edge: DeclId::NONE, refs });
+        ir.arcs.push(ArcRec {
+            anno: AnnoR::default(),
+            in_edge: DeclId::NONE,
+            refs,
+        });
     }
     ir
 }
@@ -249,7 +281,11 @@ pub fn multi_component_ir(comps: usize, m: usize, k: usize) -> Ir {
             let refs: Vec<SignedRefR> = (i..i + k)
                 .map(|j| signed_ref(SignMode::AllPlus, 0, base + j, None))
                 .collect();
-            ir.arcs.push(ArcRec { anno: AnnoR::default(), in_edge: DeclId::NONE, refs });
+            ir.arcs.push(ArcRec {
+                anno: AnnoR::default(),
+                in_edge: DeclId::NONE,
+                refs,
+            });
         }
     }
     ir

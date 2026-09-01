@@ -28,8 +28,13 @@ fn oracle_dijkstra_unit_equals_bfs_length_window() {
             let bfs = trav
                 .berge_shortest_path(&mut ws, NodeId::new(start), NodeId::new(goal))
                 .unwrap();
-            let orc =
-                ic::oracle_dijkstra_cost(&ir, &idx, NodeId::new(start), NodeId::new(goal), OracleCost::Unit);
+            let orc = ic::oracle_dijkstra_cost(
+                &ir,
+                &idx,
+                NodeId::new(start),
+                NodeId::new(goal),
+                OracleCost::Unit,
+            );
             match (bfs, orc) {
                 (Some(p), Some(c)) => assert_eq!(
                     p.hyperedge_len() as f64,
@@ -52,10 +57,20 @@ fn exhaustive_equals_oracle_dijkstra_tiny() {
     for cost in [OracleCost::Unit, OracleCost::Weight { base: 1.0 }] {
         for goal in [1usize, 4, 7] {
             let d = ic::oracle_dijkstra_cost(&ir, &idx, NodeId::new(0), NodeId::new(goal), cost);
-            let e = ic::exhaustive_min_cost(&ir, &idx, NodeId::new(0), NodeId::new(goal), cost, 500_000);
+            let e = ic::exhaustive_min_cost(
+                &ir,
+                &idx,
+                NodeId::new(0),
+                NodeId::new(goal),
+                cost,
+                500_000,
+            );
             match (d, e) {
                 (Some(a), Some(b)) => {
-                    assert!((a - b).abs() < 1e-9, "dijkstra {a} != exhaustive {b} to {goal}")
+                    assert!(
+                        (a - b).abs() < 1e-9,
+                        "dijkstra {a} != exhaustive {b} to {goal}"
+                    )
                 }
                 (None, None) => {}
                 other => panic!("reachability disagree to {goal}: {other:?}"),
