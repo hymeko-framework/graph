@@ -364,8 +364,7 @@ pub fn write_pgip(
 
     // ── materials. Stable 1-based ids, ordered by DeclId. ──
     let mut mat_decl_to_sqlid: BTreeMap<DeclId, i64> = BTreeMap::new();
-    let mut next_id: i64 = 1;
-    for d in &graph.materials {
+    for (next_id, d) in (1i64..).zip(&graph.materials) {
         let name = &graph.decl_to_name[d];
         let type_id: i64 = if graph.raws.contains(d) {
             1
@@ -380,13 +379,11 @@ pub fn write_pgip(
             params![next_id, name, type_id],
         )?;
         mat_decl_to_sqlid.insert(*d, next_id);
-        next_id += 1;
     }
 
     // ── units. ──
     let mut unit_decl_to_sqlid: BTreeMap<DeclId, i64> = BTreeMap::new();
-    let mut next_uid: i64 = 1;
-    for u in &graph.units {
+    for (next_uid, u) in (1i64..).zip(&graph.units) {
         let name = &graph.decl_to_name[u];
         let weight = graph.costs.get(u).copied().unwrap_or(1.0);
 
@@ -417,7 +414,6 @@ pub fn write_pgip(
             params![next_uid, name, weight, fc, pc, fo, po],
         )?;
         unit_decl_to_sqlid.insert(*u, next_uid);
-        next_uid += 1;
     }
 
     // ── inputOutput rows. ──

@@ -213,3 +213,29 @@ fn write_pgip_bakes_abb_result_into_run_history() {
         "HDA canonical optimum is 2 units (Mixer, Reactor)"
     );
 }
+
+/// Regression (P1 lint fix): the stable SQL ids `write_pgip` assigns to
+/// `materials` and `units` are contiguous and 1-based — `MIN(id) == 1` and
+/// `MAX(id) == COUNT(*)`. This pins the invariant the manual-counter →
+/// `enumerate` rewrite must preserve; a 0-based or non-contiguous assignment
+/// fails here (it would round-trip semantically and slip past the name-keyed
+/// equivalence tests, so it needs its own guard).
+#[test]
+fn materials_and_units_get_contiguous_1_based_ids() {
+    let src = std::fs::read_to_string(data_path("hda.hymeko")).expect("hda.hymeko");
+    let desc = parse_description(&src).expect("parse hda");
+    let g = lower(&desc).expect("lower hda");
+    let tmp = std::env::temp_dir().join("pgip_io_hda_id_invariant.pgip");
+    write_pgip(&g, &tmp, None).expect("write hda to .pgip");
+
+    let conn = rusqlite::Connection::open(&tmp).expect("re-open");
+    for table in ["materials", "units"] {
+        let query = format!("SELECT MIN(id), MAX(id), COUNT(*) FROM {table}");
+        let (min_id, max_id, count): (i64, i64, i64) = conn
+            .query_row(&query, [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap_or_else(|e| panic!("query {table}: {e}"));
+        assert!(count > 0, "{table} must be non-empty in HDA");
+        assert_eq!(min_id, 1, "{table} ids must start at 1 (1-based)");
+        assert_eq!(max_id, count, "{table} ids must be contiguous 1..=count");
+    }
+}
