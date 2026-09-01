@@ -310,3 +310,53 @@ pub fn line_positions(m: usize) -> Vec<[f64; 1]> {
 pub fn misleading_positions(m: usize) -> Vec<[f64; 1]> {
     (0..m).map(|i| [(m - 1 - i) as f64]).collect()
 }
+
+/// A `w x h` 4-neighbour grid as a hypergraph: node `(r,c)` at index `r*w + c`; an arity-2 arc to the
+/// right neighbour and one to the down neighbour. A **branching** workload where a geometric heuristic can
+/// prune (unlike a line). Positions are the grid coordinates.
+pub fn grid_ir(w: usize, h: usize) -> Ir {
+    assert!(w >= 2 && h >= 2);
+    let mut ir = Ir::default();
+    push_nodes(&mut ir, w * h);
+    let edge = |ir: &mut Ir, a: usize, b: usize| {
+        ir.arcs.push(ArcRec {
+            anno: AnnoR::default(),
+            in_edge: DeclId::NONE,
+            refs: vec![
+                SignedRefR::Plus(RefAtomR {
+                    target: DeclId::new(a),
+                    anno: AnnoR::default(),
+                    weights: None,
+                }),
+                SignedRefR::Plus(RefAtomR {
+                    target: DeclId::new(b),
+                    anno: AnnoR::default(),
+                    weights: None,
+                }),
+            ],
+        });
+    };
+    for r in 0..h {
+        for c in 0..w {
+            let id = r * w + c;
+            if c + 1 < w {
+                edge(&mut ir, id, id + 1);
+            }
+            if r + 1 < h {
+                edge(&mut ir, id, id + w);
+            }
+        }
+    }
+    ir
+}
+
+/// Grid coordinates as positions: node `r*w + c -> [c, r]`.
+pub fn grid_positions(w: usize, h: usize) -> Vec<[f64; 2]> {
+    let mut v = Vec::with_capacity(w * h);
+    for r in 0..h {
+        for c in 0..w {
+            v.push([c as f64, r as f64]);
+        }
+    }
+    v
+}
