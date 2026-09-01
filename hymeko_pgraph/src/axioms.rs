@@ -24,7 +24,7 @@
 //! semantics rather than rename the variants), but each variant now
 //! carries the *canonical* violation payload, not the old paraphrase.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use hymeko::common::ids::DeclId;
@@ -133,9 +133,6 @@ impl AxiomBundle {
         schema: &PGraphSchema,
         required_products: &BTreeSet<DeclId>,
     ) -> Vec<AxiomTrace> {
-        let producers = build_producers(schema);
-        let adj_forward = build_forward_adj(schema);
-
         let mut out = Vec::with_capacity(5);
 
         let t0 = Instant::now();
@@ -147,7 +144,7 @@ impl AxiomBundle {
         });
 
         let t0 = Instant::now();
-        let v = check_a2(schema, &producers, &self.raws);
+        let v = check_a2(schema, &self.raws);
         out.push(AxiomTrace {
             name: "A2",
             duration: t0.elapsed(),
@@ -163,7 +160,7 @@ impl AxiomBundle {
         });
 
         let t0 = Instant::now();
-        let v = check_a4(schema, &adj_forward, required_products);
+        let v = check_a4(schema, required_products);
         out.push(AxiomTrace {
             name: "A4",
             duration: t0.elapsed(),
@@ -189,20 +186,18 @@ impl AxiomBundle {
         schema: &PGraphSchema,
         required_products: &BTreeSet<DeclId>,
     ) -> Result<(), Vec<AxiomViolation>> {
-        let producers = build_producers(schema);
-        let adj_forward = build_forward_adj(schema);
         let mut violations: Vec<AxiomViolation> = Vec::new();
 
         if let Some(v) = check_a1(schema, required_products) {
             violations.push(v);
         }
-        if let Some(v) = check_a2(schema, &producers, &self.raws) {
+        if let Some(v) = check_a2(schema, &self.raws) {
             violations.push(v);
         }
         if let Some(v) = check_a3(schema, &self.valid_units) {
             violations.push(v);
         }
-        if let Some(v) = check_a4(schema, &adj_forward, required_products) {
+        if let Some(v) = check_a4(schema, required_products) {
             violations.push(v);
         }
         if let Some(v) = check_a5(schema) {
@@ -239,15 +234,13 @@ fn check_a1(schema: &PGraphSchema, required_products: &BTreeSet<DeclId>) -> Opti
 ///
 /// `producers[m]` is the set of O-nodes with an edge `u → m` —
 /// pre-computed once per `validate()` call.
-fn check_a2(
-    schema: &PGraphSchema,
-    producers: &BTreeMap<DeclId, BTreeSet<DeclId>>,
-    raws: &BTreeSet<DeclId>,
-) -> Option<AxiomViolation> {
+fn check_a2(schema: &PGraphSchema, raws: &BTreeSet<DeclId>) -> Option<AxiomViolation> {
     let mut non_raw_without_producer = Vec::new();
     let mut raw_with_producer = Vec::new();
     for m in schema.m_nodes() {
-        let has_ancestor = producers.get(&m).is_some_and(|p| !p.is_empty());
+        // producers(m) == schema.predecessors(m) for a material (bipartite invariant: a material's
+        // predecessors are exactly the operating units producing it).
+        let has_ancestor = !schema.predecessors(m).is_empty();
         let is_raw = raws.contains(&m);
         // Forward direction (canonical): has_ancestor ⇒ is_raw is
         // FALSE — i.e. ¬has_ancestor ⇒ is_raw. Contrapositive: if
@@ -296,17 +289,13 @@ fn check_a3(schema: &PGraphSchema, valid_units: &BTreeSet<DeclId>) -> Option<Axi
 /// `adj` is the pre-computed forward adjacency `node → successors`.
 /// With no required products the axiom is vacuous (no offender
 /// possible).
-fn check_a4(
-    schema: &PGraphSchema,
-    adj: &BTreeMap<DeclId, Vec<DeclId>>,
-    required_products: &BTreeSet<DeclId>,
-) -> Option<AxiomViolation> {
+fn check_a4(schema: &PGraphSchema, required_products: &BTreeSet<DeclId>) -> Option<AxiomViolation> {
     if required_products.is_empty() {
         return None;
     }
     let mut offenders = Vec::new();
     for o in schema.o_nodes() {
-        if !reaches_any(adj, o, required_products) {
+        if !reaches_any(schema, o, required_products) {
             offenders.push(o);
         }
     }
@@ -334,50 +323,25 @@ fn check_a5(schema: &PGraphSchema) -> Option<AxiomViolation> {
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-/// For each M-node `m`, record the set of O-nodes `u` such that the
-/// edge `u → m` exists in the schema. M-nodes with no producer are
-/// omitted from the map.
-fn build_producers(schema: &PGraphSchema) -> BTreeMap<DeclId, BTreeSet<DeclId>> {
-    let mut out: BTreeMap<DeclId, BTreeSet<DeclId>> = BTreeMap::new();
-    for (_, src, dst) in schema.edges() {
-        if let (Some(PNodeKind::OperatingUnit), Some(PNodeKind::Material)) =
-            (schema.kind(src), schema.kind(dst))
-        {
-            out.entry(dst).or_default().insert(src);
-        }
-    }
-    out
-}
-
-/// Build the forward adjacency map `src → [dst, ...]` of the schema.
-fn build_forward_adj(schema: &PGraphSchema) -> BTreeMap<DeclId, Vec<DeclId>> {
-    let mut adj: BTreeMap<DeclId, Vec<DeclId>> = BTreeMap::new();
-    for (_, src, dst) in schema.edges() {
-        adj.entry(src).or_default().push(dst);
-    }
-    adj
-}
-
-/// BFS in the pre-built adjacency: does `from` reach any node in
+/// BFS over the schema's single directed adjacency (`successors`): does `from` reach any node in
 /// `targets`? `from` itself does not count.
-fn reaches_any(
-    adj: &BTreeMap<DeclId, Vec<DeclId>>,
-    from: DeclId,
-    targets: &BTreeSet<DeclId>,
-) -> bool {
+///
+/// This is the **one** reachability implementation. The former per-check `build_forward_adj` /
+/// `build_producers` rebuilds and the verbatim `axiom_extensions::reaches_any` copy are removed —
+/// `schema.successors` (the single derived adjacency) is the only source. `build_producers(m)` was exactly
+/// `schema.predecessors(m)` for a material (bipartite invariant), so it is gone too.
+pub(crate) fn reaches_any(schema: &PGraphSchema, from: DeclId, targets: &BTreeSet<DeclId>) -> bool {
     let mut visited: BTreeSet<DeclId> = BTreeSet::new();
     let mut q: VecDeque<DeclId> = VecDeque::new();
     q.push_back(from);
     visited.insert(from);
     while let Some(v) = q.pop_front() {
-        if let Some(ns) = adj.get(&v) {
-            for &n in ns {
-                if targets.contains(&n) {
-                    return true;
-                }
-                if visited.insert(n) {
-                    q.push_back(n);
-                }
+        for &n in schema.successors(v) {
+            if targets.contains(&n) {
+                return true;
+            }
+            if visited.insert(n) {
+                q.push_back(n);
             }
         }
     }

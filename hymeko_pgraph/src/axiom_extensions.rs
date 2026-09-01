@@ -53,7 +53,7 @@
 //! let violations = ext.validate(&schema, &required_products);
 //! ```
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::BTreeSet;
 
 use hymeko::common::ids::DeclId;
 
@@ -118,10 +118,9 @@ impl ExtensionAxiomBundle {
         schema: &PGraphSchema,
         required_products: &BTreeSet<DeclId>,
     ) -> Result<(), Vec<ExtensionAxiomViolation>> {
-        let adj = build_forward_adj(schema);
         let mut violations = Vec::new();
 
-        if let Some(v) = check_strict_no_excess(schema, &adj, required_products) {
+        if let Some(v) = check_strict_no_excess(schema, required_products) {
             violations.push(v);
         }
         if let Some(v) = check_unit_well_formed(schema) {
@@ -145,7 +144,6 @@ impl ExtensionAxiomBundle {
 /// path to some required product.
 fn check_strict_no_excess(
     schema: &PGraphSchema,
-    adj: &BTreeMap<DeclId, Vec<DeclId>>,
     required_products: &BTreeSet<DeclId>,
 ) -> Option<ExtensionAxiomViolation> {
     if required_products.is_empty() {
@@ -156,7 +154,9 @@ fn check_strict_no_excess(
         if required_products.contains(&m) {
             continue;
         }
-        if !reaches_any(adj, m, required_products) {
+        // Delegate to the single shared reachability over the schema's one adjacency (`axioms::reaches_any`),
+        // replacing the former verbatim `build_forward_adj`/`reaches_any` copy in this module.
+        if !crate::axioms::reaches_any(schema, m, required_products) {
             offenders.push(m);
         }
     }
@@ -215,40 +215,8 @@ fn check_consumed_has_producer(
     }
 }
 
-// ─── Helpers (mirror axioms.rs, kept private so the canonical and
-//     extension modules don't share private types). ──────────────────
-
-fn build_forward_adj(schema: &PGraphSchema) -> BTreeMap<DeclId, Vec<DeclId>> {
-    let mut adj: BTreeMap<DeclId, Vec<DeclId>> = BTreeMap::new();
-    for (_, src, dst) in schema.edges() {
-        adj.entry(src).or_default().push(dst);
-    }
-    adj
-}
-
-fn reaches_any(
-    adj: &BTreeMap<DeclId, Vec<DeclId>>,
-    from: DeclId,
-    targets: &BTreeSet<DeclId>,
-) -> bool {
-    let mut visited: BTreeSet<DeclId> = BTreeSet::new();
-    let mut q: VecDeque<DeclId> = VecDeque::new();
-    q.push_back(from);
-    visited.insert(from);
-    while let Some(v) = q.pop_front() {
-        if let Some(ns) = adj.get(&v) {
-            for &n in ns {
-                if targets.contains(&n) {
-                    return true;
-                }
-                if visited.insert(n) {
-                    q.push_back(n);
-                }
-            }
-        }
-    }
-    false
-}
+// Reachability now lives once in `axioms::reaches_any` (BFS over `schema.successors`, the single
+// adjacency). The former `build_forward_adj` + `reaches_any` verbatim copies here are removed.
 
 #[cfg(test)]
 mod tests {
