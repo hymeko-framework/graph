@@ -42,6 +42,7 @@
 )]
 
 pub mod abb;
+pub mod andor;
 pub mod axiom_extensions;
 pub mod axioms;
 pub mod builder;
@@ -58,8 +59,13 @@ pub mod regime;
 pub mod schema;
 pub mod ssg;
 pub mod ssg_dm;
+pub mod view;
 
 pub use abb::{AbbOptions, AbbSolution, solve as abb_solve};
+pub use andor::{
+    AndOrNorm, AndOrWorkspace, Availability, BooleanExact, Godel, Lukasiewicz, NormError, Product,
+    PropagationConfig, Reliability, UnitReliability, propagate,
+};
 pub use axiom_extensions::{ExtensionAxiomBundle, ExtensionAxiomViolation};
 pub use axioms::{AxiomBundle, AxiomTrace, AxiomViolation};
 pub use builder::{BuilderError, MaterialKind, PgraphBuilder};
@@ -92,3 +98,4 @@ pub use ssg_dm::{
     SsgDmOptions, SsgDmResult, enumerate as ssg_dm_enumerate,
     enumerate_with_options as ssg_dm_enumerate_with_options,
 };
+pub use view::{PGraphView, ViewError};
