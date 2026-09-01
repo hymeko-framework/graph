@@ -1,0 +1,99 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}\usepackage{hyperref}\usepackage{amsmath}\usepackage{longtable}
+\title{P1.1 --- direct-Ir informed Berge search + P-graph extension audit}\author{Aiko Seto}
+\date{Created-at: 2026-09-01 20:25 CEST}
+\begin{document}\maketitle
+
+\section*{Governance}
+\texttt{GOVERNING-STRATEGY: docs/hymeko-platform-strategy.md} \textperiodcentered{}
+\texttt{STRATEGY-ID: HYMEKO-PLATFORM-2026-09-01-v1} \textperiodcentered{} \texttt{ROADMAP-TASK: P1.1}
+\textperiodcentered{} \texttt{APPROVED-GRAPH-EDIT: direct-ir-informed-berge-search}. Strategy ID not
+bumped. \textbf{plan.pdf waiver}: no TeX engine on this host (tools.yaml \texttt{on\_absent\_tool:
+document\_waiver\_in\_report}); \texttt{plan.tex/.tikz/.mmd} authored compilable, pdf not built.
+
+\section*{ETA}
+$\approx$4--5 h: promotion gate 15\,min (done); reading + audit 45\,min (done); plan bundle 30\,min;
+baselines 30\,min; A* + heuristics + policy implementation 90\,min; oracles/fault-injection 60\,min;
+benchmark 40\,min; D*/LPA* decision + prototype 30\,min; pgraph audit doc 20\,min; V\&V + reports + push
+45\,min. Basis: the search reuses the existing incidence primitives; the risk is entirely correctness
+(oracle parity) and the warm-alloc-free contract, both machine-gated.
+
+\section*{Scope / goal}
+An \emph{informed} Berge-search layer over the canonical \texttt{Ir} + exact sparse
+\texttt{IncidenceIndex}: Dijkstra/uniform-cost baseline, A* shortest Berge path, metric and
+hypergraph-discrete heuristics, a deterministic caller-owned workspace, warm-query allocation-free, and
+\textbf{no} materialised Levi/star/clique or second graph model. Plus a \textbf{read-only} architectural +
+performance audit of making \texttt{hymeko\_pgraph} a true domain \emph{extension} of \texttt{hymeko\_graph}
+(general navigation/search owned by graph; classification/axioms/MSG/SSG/ABB/cost owned by pgraph). The
+D*\,Lite/LPA* line is \textbf{designed and benchmark-prototyped only}, not wired to production IR mutation
+(no canonical transaction/snapshot layer yet).
+
+\section*{P1 promotion gate (§0, executed)}
+Verified 4 refs by \texttt{ls-remote}; ancestry \texttt{2ebb833}$\prec$\texttt{5fe2c88},
+\texttt{cbaadd4}$\prec$\texttt{c35b9f2}; re-ran the P1 targeted gates (fmt/clippy/KAT/pgip) green;
+fast-forward-only promotion \texttt{core main $\to$ 5fe2c88}, \texttt{graph main $\to$ c35b9f2}. New branch
+\texttt{feat/direct-ir-informed-berge-search} off the promoted graph main. Core production source untouched.
+
+\section*{Semantic contract (see semantic-contract.md)}
+State space: implicit incidence \texttt{node $\to$ (arc,slot) $\to$ node}; forbidden: explicit Levi/star/
+clique, dropping sign/weight/slot/duplicate, dense-id reinterpretation. Cost: typed, finite, non-negative
+(\texttt{NaN}/$\pm\infty$/negative $=$ typed error), exit-independent-separable primary model
+($c=w_{arc}+w_{entry}$) enabling arc-activate-once ($O(\text{incidences})$); metric/general path relaxes per
+member. Policy: undirected / sign-compatible / directed producer$\to$consumer / consumer$\to$producer /
+domain --- filter only, chosen once (no runtime mode boolean, no \texttt{Box<dyn>} in the hot loop). Order:
+\texttt{f64::total\_cmp} then \texttt{(discrete\_tiebreak, DeclId, HyperArcId, slot)}. Reopen: consistent-
+heuristic fast path; an inconsistent heuristic in optimal mode is a typed rejection (fail-closed), not a
+silent sub-optimal path.
+
+\section*{Affected files (new; additive)}
+\begin{longtable}{l l}
+\texttt{hymeko\_graph/src/direct\_ir/informed.rs} & NEW: workspace, cost/heuristic/policy traits, A*/Dijkstra \\
+\texttt{hymeko\_graph/src/direct\_ir/mod.rs} & +\texttt{pub mod informed;} + re-exports \\
+\texttt{hymeko\_graph/tests/informed\_search\_vv.rs} & NEW: oracles, equivalences, boundary, fault-injection \\
+\texttt{hymeko\_graph/tests/informed\_search\_bench.rs} & NEW: latency / expanded-state / heuristic-quality \\
+\texttt{hymeko\_graph/tests/informed\_search\_alloc.rs} & NEW: warm-query zero-alloc (isolated single-test bin) \\
+\texttt{docs/pgraph-as-graph-extension.md} & NEW: read-only audit narrative \\
+\texttt{reports/2026-09-01-direct-ir-informed-berge-search.md} & NEW: P1.1 verification report \\
+\end{longtable}
+CORE.YAML items touched: \textbf{none} (\texttt{hymeko\_graph} is core-listed in graph CORE.YAML; this is an
+\textbf{additive} new module under the \texttt{direct-ir-informed-berge-search} token --- no existing public
+API changed, no dependency added). \texttt{hymeko\_pgraph} not modified (read-only audit). Core repo
+untouched.
+
+\section*{Test / coverage / benchmark matrix}
+Oracles: unit-cost $=$ BFS \texttt{berge\_shortest\_path}; weighted $=$ a test-only Dijkstra on the same
+implicit state space; tiny graph $=$ exhaustive simple-Berge-path enumeration; metric $=$ closed-form.
+Equivalences: \texttt{astar(Zero)}$=$Dijkstra, unit$=$BFS length, admissible$=$same cost. Boundary:
+0/1/self/singleton/empty/disconnected, signs, f32/f64 edges, \texttt{NaN}/$\infty$/negative rejection,
+arity 0/1/63/64/65 + large, declaration-order permutation, disjoint-union metamorphic. Fault-injection
+(no mutant committed, git-clean restore): heuristic overestimate, wrong predecessor slot, skipped reopen,
+broken tie-break, sign-policy inversion, duplicate-incidence dedup, stale workspace generation, dropped
+queue key-update --- each caught by a named test. Benchmark: workload-matrix.md; per-cell expanded-state,
+queue ops, allocations, retained bytes, peak RSS, heuristic precompute (separate), time-to-first, total,
+path cost/hash. Coverage: new production lines by the V\&V tests; touched-line target 100\% or a
+line-justified fail-closed exception; before/after test population reconciled by name.
+
+\section*{Performance budget / gates (§12)}
+Correctness first (optimal cost identical on every oracle cell). A* production-retention requires: warm
+query allocation-free; no materialised adjacency; on a metric-friendly or discrete-friendly workload
+$\ge 2\times$ fewer expanded states \emph{or} $\ge 20\%$ wall improvement vs Dijkstra; on an uninformative
+heuristic $\le 10\%$ overhead vs the Dijkstra engine (or a separate zero-heuristic fast path); memory
+$O(\text{nodes}+\text{arcs})$; \textbf{no} $>3\%$ regression in any untouched direct\_ir op. The goal is that
+the \emph{benchmark selects} where a heuristic pays --- not that every heuristic always wins.
+
+\section*{D*\,Lite / LPA* decision (§8)}
+Decision matrix: static+single-query $\to$ A*; same goals, changing cost/topology $\to$ LPA* candidate;
+moving start $\to$ D*\,Lite candidate; AND/OR producibility $\to$ separate domain model (not simple Berge
+D*). No production incremental state (no snapshot/transaction layer): a \textbf{benchmark-only} prototype may
+use two immutable before/after \texttt{Ir} snapshots + an explicit \texttt{ChangedIncidence} list (not called
+a canonical delta), query-workspace state only (\texttt{g, rhs, queue, version}), no second adjacency.
+Measure fresh-A* vs replan for $1/10/100/1000$ updates + start movement; repaired $=$ fresh Dijkstra/A*;
+report break-even query count. Honest \textbf{DEFERRED} if no clear win.
+
+\section*{Rollback / HARD STOP}
+Additive on one feature branch; not promoted. Drop on: oracle disagreement, warm-query allocation, a
+forbidden artefact (Levi/star/clique on the standard path, second engine, \texttt{Box<dyn>} hot dispatch,
+\texttt{partial\_cmp} on cost, an \texttt{IRDelta}/snapshot framework, production D*), a $>3\%$ untouched-op
+regression, or any pgraph/core/Nagare/Hotaru production modification. \textbf{HARD STOP} at P1.1 end: no
+production PGRAPH migration, no P2 operator-precompute.
+\end{document}

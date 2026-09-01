@@ -1,0 +1,35 @@
+%% P1.1 informed Berge search --- A* relaxation flow over the implicit incidence state space
+flowchart TD
+    subgraph gate["§0 promotion gate (done)"]
+      G1["ls-remote 4 refs + ancestry"] --> G2["re-run P1 gates (fmt/clippy/KAT/pgip)"] --> G3["FF: core→5fe2c88, graph→c35b9f2"] --> G4["branch feat/direct-ir-informed-berge-search"]
+    end
+
+    G4 --> START["astar_berge_path(start, goal, C, H, P, ws)"]
+    START --> INIT["ws.begin() gen-bump; g[start]=0; push (h(start),start)"]
+    INIT --> POP{"heap empty?"}
+    POP -->|yes| NONE["Ok(None) — unreachable"]
+    POP -->|no| PP["pop min (f, tiebreak, node)"]
+    PP --> STALE{"settled(node) or f stale?"}
+    STALE -->|yes| POP
+    STALE -->|no| GOAL{"node == goal?"}
+    GOAL -->|yes| RECON["reconstruct via pred(arc,slot) → WeightedBergePath{steps,total_cost}"]
+    GOAL -->|no| SETTLE["mark settled(node); expanded_nodes++"]
+    SETTLE --> ARCS["for arc in index.incident_arcs(node)"]
+    ARCS --> EXITIND{"C::EXIT_INDEPENDENT and arc already activated?"}
+    EXITIND -->|yes| ARCS
+    EXITIND -->|no| MEM["for (slot,v) in ir.arcs[arc].refs; resolved_incidences++"]
+    MEM --> POL{"policy.allows(u→(arc,slot)→v)?"}
+    POL -->|no| MEM
+    POL -->|yes| COST["c = C.cost(iref); reject NaN/Inf/neg → BadCost"]
+    COST --> RELAX{"g[node]+c < g[v]?"}
+    RELAX -->|no| MEM
+    RELAX -->|yes| UPD["g[v]=g[node]+c; pred[v]=(node,arc,slot); push (g[v]+H.h(v), tiebreak, v)"]
+    UPD --> MEM
+    MEM --> ARCS
+    ARCS --> POP
+
+    RECON --> OUT["Ok(Some(path)); SearchStats{expanded_nodes,arcs,incidences,push,pop,stale}"]
+
+    NONE -.oracle.-> ORA["tests: unit==BFS, weighted==test-Dijkstra, Zero==Dijkstra, admissible==same cost"]
+    OUT -.oracle.-> ORA
+    ORA --> HARD["HARD STOP: no promotion, no pgraph migration, no P2"]

@@ -1,0 +1,38 @@
+% P1.1 informed Berge search --- state space + ownership (standalone-compilable)
+\documentclass[tikz,border=6pt]{standalone}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.geometric}
+\begin{document}
+\begin{tikzpicture}[font=\small,
+  node/.style={draw,circle,minimum size=7mm},
+  arc/.style={draw,diamond,aspect=1.6,fill=yellow!15,minimum size=6mm},
+  box/.style={draw,rounded corners,align=center,minimum height=8mm},
+  e/.style={-{Latex[length=2mm]}}]
+
+  % --- implicit incidence state space (no Levi graph materialised) ---
+  \node[node] (u) {u};
+  \node[arc,right=10mm of u] (e1) {e};
+  \node[node,right=10mm of e1] (v) {v};
+  \node[arc,above right=6mm and 10mm of v] (e2) {e'};
+  \node[node,right=10mm of e2] (w) {w};
+  \draw[e] (u) -- node[above,font=\scriptsize]{(e,slot$_u$)} (e1);
+  \draw[e] (e1) -- node[above,font=\scriptsize]{(e,slot$_v$)} (v);
+  \draw[e] (v) -- node[above,sloped,font=\scriptsize]{(e',slot$_v$)} (e2);
+  \draw[e] (e2) -- node[above,sloped,font=\scriptsize]{(e',slot$_w$)} (w);
+  \node[below=1mm of e1,font=\scriptsize,gray] {arc-activate-once (exit-indep. cost)};
+  \node[draw,dashed,fit=(u)(e1)(v)(e2)(w),inner sep=4mm,label=above:{implicit Berge state space over \texttt{Ir} --- NO explicit Levi/star/clique}] {};
+
+  % --- engine ---
+  \node[box,fill=green!12,below=16mm of u] (ws) {InformedSearchWorkspace\\g[] / pred[] / settled\\binary heap (lazy del)\\gen-stamped, warm-alloc-free};
+  \node[box,fill=blue!8,right=8mm of ws] (astar) {astar\_berge\_path$\langle$C,H,P$\rangle$\\f=g+h, total\_cmp\\+ (tiebreak,DeclId,arc,slot)};
+  \node[box,right=8mm of astar] (traits) {C: cost (unit/weight/metric)\\H: heuristic (Zero/metric)\\P: policy (undir/signed/directed)};
+  \draw[e] (ws) -- (astar); \draw[e] (traits) -- (astar);
+  \draw[e] (astar.north) to[out=120,in=250] (u.south);
+
+  % --- ownership stack (audit) ---
+  \node[box,fill=gray!8,below=10mm of ws] (core) {hymeko\_core::Ir + IncidenceIndex\\(canonical; borrow, never copy)};
+  \node[box,fill=green!12,right=10mm of core] (graph) {hymeko\_graph::direct\_ir\\reach/components/dual/s-conn\\+ A*/Dijkstra (this phase)};
+  \node[box,fill=orange!12,right=10mm of graph] (pg) {hymeko\_pgraph (domain ext.)\\classify + AND-closure feasibility\\+ MSG/SSG/ABB + cost/regime};
+  \draw[e] (core) -- (graph); \draw[e] (graph) -- node[above,font=\scriptsize]{PGraphView borrows}(pg);
+  \node[below=1mm of pg,font=\scriptsize,red] {AND-producibility STAYS (not Berge connectivity)};
+\end{tikzpicture}
+\end{document}
