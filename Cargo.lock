@@ -406,7 +406,7 @@ dependencies = [
 [[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#15223bcd762806b69909ea73f7526586c2d2ded6"
+source = "git+ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#70b4f364d9559602d2d229cde5bfe0d8b8cc5113"
 dependencies = [
  "blake3",
  "nalgebra",
@@ -423,6 +423,7 @@ name = "hymeko_graph"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "hymeko_core",
  "rayon",
 ]
 

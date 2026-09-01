@@ -33,10 +33,18 @@ consumers:
   - ../nagare
   - ../tensor
 
-# Direction is one-way and acyclic: this repository depends on no sibling HyMeKo repository.
-# `graph` owns no compute IR and no backend -- those are `hymeko/core` (`hymeko_core::ir`,
-# `hymeko_wgpu`). Needing one here is a signal to consume core, never to grow a second.
-depends_on: []
+# Direction is one-way and acyclic. This repository DOES depend on `hymeko/core`: `hymeko_pgraph`
+# has always pulled `hymeko_core` for the compiler, and as of 2026-09-01 `hymeko_graph` pulls it too --
+# its `direct_ir` path traverses the canonical `hymeko_core::ir::Ir` in place (the standard HyMeKo
+# graph path, not an optional integration). The earlier `depends_on: []` was untrue and is corrected
+# here. `graph` still owns no compute IR and no backend -- those are `hymeko/core` (`hymeko_core::ir`,
+# `hymeko_wgpu`); needing one here is a signal to consume core, never to grow a second. The edges:
+#
+#   hymeko_graph  --> hymeko_core             (direct_ir traverses ir::Ir / IncidenceIndex)
+#   hymeko_pgraph --> hymeko_graph + hymeko_core
+#   hymeko_core   -x-> hymeko_graph           (never; the dependency is acyclic)
+depends_on:
+  - ../core                                   # hymeko_core: ir::Ir, ir::incidence::IncidenceIndex
 
 forbidden_in_production:
   - "Legacy* / Recorded* type or variant names"

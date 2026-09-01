@@ -2,10 +2,10 @@
 name = "hymeko_graph"
 version = "0.1.0"
 edition = "2024"
-description = "Generic signed-graph cycle and walk enumeration with axiomatic pruning. Cycle enumeration can structurally reject candidates that violate domain axioms (Friedler P-graph A1-A5, Cartwright-Harary balance, Davis weak balance, bipartite alternation) BEFORE materialising them."
+description = "Generic signed-graph cycle and walk enumeration with axiomatic pruning, and direct zero-copy traversal of the canonical HyMeKo IR (hymeko_core::ir). Cycle enumeration can structurally reject candidates that violate domain axioms (Friedler P-graph A1-A5, Cartwright-Harary balance, Davis weak balance, bipartite alternation) BEFORE materialising them; the direct_ir path walks the canonical signed-incidence hypergraph in place, with no star/clique/CSR/SignedGraph materialisation."
 license = "MIT OR Apache-2.0"
 repository = "http://amaterasu.local:3000/hymeko/graph"
-keywords = ["graph", "cycle", "signed-graph", "p-graph", "enumeration"]
+keywords = ["graph", "cycle", "signed-graph", "p-graph", "hypergraph"]
 categories = ["algorithms", "data-structures"]
 
 [lib]
@@ -15,9 +15,16 @@ name = "hymeko_graph"
 rayon = "1.10"
 dashmap = "6"
 
-# No dev-dependencies. The tests here need nothing but the library, and the
-# examples need nothing at all — so a checkout builds and tests with two
-# crates behind it rather than a hundred and thirty.
+# The canonical HyMeKo IR. `direct_ir` traverses `hymeko_core::ir::Ir` in place
+# through the borrowed `IncidenceIndex<'ir>`, so this is the standard HyMeKo
+# graph path, NOT an optional platform integration — hence a non-optional
+# workspace dependency, resolved from `hymeko/core` `main`. The generic
+# `SignedGraph` / cycle / walk / spine algorithms remain usable with nothing
+# but rayon + dashmap behind them.
+hymeko_core = { workspace = true }
+
+# No dev-dependencies. The tests here need nothing but the library + the IR it
+# already pulls, and the examples need nothing at all.
 #
 # The benchmarks do need criterion and rand, so they live in `benchmarks/`
 # as a separate crate with its own workspace root. Nothing is lost: run them
