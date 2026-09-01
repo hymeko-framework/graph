@@ -53,20 +53,29 @@
 //! P-graph-shaped instances this can be orders of magnitude
 //! faster than enumerate-then-filter.
 //!
-//! ## Not a hypergraph library
+//! ## The pairwise algorithms vs. the canonical-hypergraph path
 //!
-//! Everything here is a *pairwise* signed graph — [`SignedGraph`]
-//! is `edges: Vec<(u32, u32)>`. A hypergraph reaches these
-//! algorithms only by being star-expanded first, which is why
-//! [`balance::BipartiteOnlyPruner`] exists.
+//! The [`balance`], [`cycle_enum`], [`topk_cycles`], [`traversal`], [`spine`] and
+//! [`signed_tuples`] families are *pairwise* signed graphs — [`SignedGraph`]
+//! is `edges: Vec<(u32, u32)>`. A hypergraph reaches those algorithms only by
+//! being star-expanded first, which is why [`balance::BipartiteOnlyPruner`]
+//! exists. They build on `rayon` + `dashmap` alone.
 //!
-//! For hypergraphs as hypergraphs — Berge paths and cycles, the
-//! Levi / 2-section / dual / s-line constructions, transversals,
-//! the acyclicity hierarchy, s-connectivity — see
-//! `hotaru::hypergraph`. The two overlap in the balance
-//! predicates and in basic traversal, and deliberately do not
-//! depend on each other: this crate needs `rayon` and `dashmap`,
-//! and `hotaru` is dependency-free by default.
+//! [`direct_ir`], added 2026-09-01, is the hypergraph path: it traverses the
+//! canonical `hymeko_core::ir::Ir` **in place** through the borrowed
+//! `IncidenceIndex` — reachability, Berge shortest paths, connected components,
+//! dual reachability (and bounded Berge enumeration, s-connected components and
+//! batch reachability) — with no star/clique/CSR/`SignedGraph` materialisation
+//! and canonical `NodeId`/`HyperArcId` output. This is the standard HyMeKo graph
+//! path, and the reason the crate now depends on `hymeko_core`.
+//!
+//! `hotaru::hypergraph` is a separate, dependency-free general hypergraph
+//! library over its **own** CSR model (reached from the IR by an optional copy);
+//! it carries the wider suite — Levi / 2-section / s-line, transversals,
+//! matchings, the acyclicity hierarchy, s-betweenness. `direct_ir` deliberately
+//! does not reproduce that suite: it is the zero-copy canonical-IR core, upstream
+//! of Nagare's (dormant) Berge traversal and parallel to Hotaru. The overlap and
+//! a consolidation path are recorded in the 2026-09-01 direct-Ir plan/report.
 //!
 //! ## Status
 //!
@@ -86,6 +95,7 @@ pub mod color_coding;
 pub mod community;
 pub mod cycle_enum;
 pub mod cycle_sampler;
+pub mod direct_ir;
 pub mod hyper_operator;
 pub mod incidence;
 pub mod path_closure;
@@ -105,6 +115,10 @@ pub mod walks_unsigned;
 
 pub use balance::{BipartiteOnlyPruner, CartwrightHararyPruner, DavisWeakBalancePruner};
 pub use cycle_enum::{enumerate_simple_cycles, enumerate_simple_cycles_noprune};
+pub use direct_ir::{
+    BergePath, BergeStep, ComponentLabeling, DirectIrError, DualReach, HyperTraversal, NodeSet,
+    TraversalWorkspace, connected_components, dual_reachability,
+};
 pub use hyper_operator::{HyperIncidenceError, SignedHyperIncidence};
 pub use incidence::{
     BuildOpts as IncidenceBuildOpts, IncidenceCoo, IncidenceOutput, IncidenceResult,
