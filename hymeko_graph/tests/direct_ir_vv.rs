@@ -5,102 +5,19 @@
 //! independent `O(V·E)` fixpoint oracle (which does **not** use `IncidenceIndex`) checks
 //! reachability; Berge paths and components are checked against hand-reasoned expectations.
 
-use std::collections::BTreeSet;
-use std::path::Path;
-use std::sync::Arc;
+mod direct_ir_common;
 
-use hymeko::common::ids::{DeclId, HyperArcId, NodeId};
+use std::collections::BTreeSet;
+
+use hymeko::common::ids::{HyperArcId, NodeId};
 use hymeko::ir::incidence::build_incidence_index;
-use hymeko::ir::ir::Ir;
-use hymeko::module_store::module_store::{CompiledProgram, ModuleStore};
-use hymeko::module_store::source_provider::MemProvider;
-use hymeko::util::real_parser::RealParser;
 
 use hymeko_graph::direct_ir::DirectIrError;
 use hymeko_graph::direct_ir::{
     HyperTraversal, TraversalWorkspace, connected_components, dual_reachability,
 };
 
-// ----------------------------------------------------------------------------------------------
-// source-first harness
-// ----------------------------------------------------------------------------------------------
-
-struct World {
-    store: ModuleStore<MemProvider, RealParser>,
-    prog: Arc<CompiledProgram>,
-}
-
-fn compile(src: &str) -> World {
-    let provider = MemProvider::default().with_file("/m.hymeko", src);
-    let mut store = ModuleStore::new(provider, RealParser);
-    let prog = store
-        .compile(Path::new("/m.hymeko"))
-        .unwrap_or_else(|e| panic!("fixture must compile: {e:?}"));
-    World { store, prog }
-}
-
-impl World {
-    fn ir(&self) -> &Ir {
-        &self.prog.ir
-    }
-
-    /// Resolve a node by its (globally-unique, in these fixtures) leaf name.
-    fn node(&self, name: &str) -> NodeId {
-        let sym = self
-            .store
-            .it
-            .get_id(name)
-            .unwrap_or_else(|| panic!("no interned symbol {name}"));
-        let ir = self.ir();
-        (0..ir.nodes.len())
-            .find(|&i| ir.decl_nodes[ir.nodes[i].decl.raw()].name == sym)
-            .map(NodeId::new)
-            .unwrap_or_else(|| panic!("no node named {name}"))
-    }
-
-    /// The first arc of an edge, by the edge's leaf name.
-    fn edge_arc(&self, name: &str) -> HyperArcId {
-        let sym = self
-            .store
-            .it
-            .get_id(name)
-            .unwrap_or_else(|| panic!("no interned symbol {name}"));
-        let ir = self.ir();
-        ir.edges
-            .iter()
-            .find(|e| ir.decl_nodes[e.decl.raw()].name == sym)
-            .and_then(|e| e.arcs.first().copied())
-            .unwrap_or_else(|| panic!("no edge named {name} with an arc"))
-    }
-}
-
-/// Independent reachability oracle: a fixpoint over **every arc** (`O(V·E)`), touching only
-/// `ir.arcs[*].refs`, never the `IncidenceIndex`. A hyperarc connects all its members: once any
-/// member is seen, every member is seen.
-fn oracle_reachable(ir: &Ir, start: NodeId) -> BTreeSet<usize> {
-    let start_decl = ir.nodes[start.raw()].decl;
-    let mut seen: BTreeSet<usize> = BTreeSet::new();
-    seen.insert(start_decl.raw());
-    let mut changed = true;
-    while changed {
-        changed = false;
-        for arc in &ir.arcs {
-            let members: Vec<DeclId> = arc.refs.iter().map(|r| r.target()).collect();
-            if members.iter().any(|m| seen.contains(&m.raw())) {
-                for m in members {
-                    if seen.insert(m.raw()) {
-                        changed = true;
-                    }
-                }
-            }
-        }
-    }
-    // keep only node-kind decls, as node indices
-    seen.iter()
-        .filter_map(|&d| ir.as_node(DeclId::new(d)))
-        .map(|n| n.raw())
-        .collect()
-}
+use direct_ir_common::{World, compile, oracle_reachable};
 
 fn reachable_set(w: &World, start: NodeId) -> BTreeSet<usize> {
     let ir = w.ir();

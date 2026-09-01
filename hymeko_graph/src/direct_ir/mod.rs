@@ -37,16 +37,24 @@
 //! `u32` vertex id ever leaves this module. Internally the walk runs in `DeclId` space (the
 //! incidence key and ref-target space) and maps to `NodeId` at the boundary.
 
+pub mod batch;
+pub mod berge_enum;
 pub mod components;
 pub mod dual;
+pub mod s_connect;
 pub mod traversal;
 pub mod workspace;
 
 use hymeko::common::ids::{DeclId, HyperArcId, NodeId};
 use hymeko::ir::ir::{DeclKind, Ir};
 
+pub use batch::{batch_reachable_counts, par_batch_reachable_counts};
+pub use berge_enum::{
+    BergeCycle, EnumBudget, EnumOutcome, enumerate_berge_cycles, enumerate_berge_paths,
+};
 pub use components::{ComponentLabeling, connected_components};
 pub use dual::{DualReach, dual_reachability};
+pub use s_connect::{SComponentLabeling, s_connected_components};
 pub use traversal::{BergePath, BergeStep, HyperTraversal, NodeSet};
 pub use workspace::TraversalWorkspace;
 

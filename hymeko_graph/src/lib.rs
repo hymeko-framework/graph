@@ -116,8 +116,10 @@ pub mod walks_unsigned;
 pub use balance::{BipartiteOnlyPruner, CartwrightHararyPruner, DavisWeakBalancePruner};
 pub use cycle_enum::{enumerate_simple_cycles, enumerate_simple_cycles_noprune};
 pub use direct_ir::{
-    BergePath, BergeStep, ComponentLabeling, DirectIrError, DualReach, HyperTraversal, NodeSet,
-    TraversalWorkspace, connected_components, dual_reachability,
+    BergeCycle, BergePath, BergeStep, BudgetKind, ComponentLabeling, DirectIrError, DualReach,
+    EnumBudget, EnumOutcome, HyperTraversal, NodeSet, SComponentLabeling, TraversalWorkspace,
+    batch_reachable_counts, connected_components, dual_reachability, enumerate_berge_cycles,
+    enumerate_berge_paths, par_batch_reachable_counts, s_connected_components,
 };
 pub use hyper_operator::{HyperIncidenceError, SignedHyperIncidence};
 pub use incidence::{
