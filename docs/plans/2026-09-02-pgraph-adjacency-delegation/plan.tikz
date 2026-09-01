@@ -1,0 +1,13 @@
+\documentclass[tikz,border=6pt]{standalone}\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+\begin{document}\begin{tikzpicture}[font=\small,box/.style={draw,rounded corners,align=center,minimum height=8mm},e/.style={-{Latex[length=2mm]}}]
+\node[box,fill=green!12] (schema) {schema.incoming/outgoing\(SINGLE derived adjacency)};
+\node[box,fill=red!8,above left=8mm and 2mm of schema] (bfa) {build\_forward\_adj x2 (DELETE)};
+\node[box,fill=red!8,above=8mm of schema] (bp) {build\_producers (DELETE)};
+\node[box,fill=red!8,above right=8mm and 2mm of schema] (ra) {axiom\_extensions::reaches\_any (DELETE)};
+\node[box,fill=blue!8,below=8mm of schema] (one) {one reaches\_any(schema, from, targets)\BFS over schema.successors};
+\node[box,fill=gray!8,right=12mm of schema] (pv) {PGraphView.forward\_reachable\(borrowed, Ir-based)};
+\draw[e] (bfa) -- (schema); \draw[e] (bp) -- (schema); \draw[e] (ra) -- (schema);
+\draw[e] (schema) -- (one); \draw[e,dashed] (pv) -- node[above,font=\scriptsize]{parity ==}(schema);
+\node[box,below=8mm of one] (ax) {check\_a2 (schema.predecessors), check\_a4 / strict\_no\_excess (reaches\_any)};
+\draw[e] (one) -- (ax);
+\end{tikzpicture}\end{document}

@@ -1,0 +1,8 @@
+flowchart TD
+  INV["§1.1 inventory: schema not serialized; incoming/outgoing = single source; axiom rebuilds = duplication"]
+  INV --> PAR["§1.2 additive parity: PGraphView adjacency == schema (proven P1.2) + forward_reachable == schema reaches_any"]
+  PAR --> CON["§1.3 atomic consolidation: 1 reaches_any(schema); delete build_forward_adj x2 + build_producers + verbatim reaches_any"]
+  CON --> GATE{"§1.4 byte-identical? 6 dumps + pgip + MSG/SSG/ABB + BooleanExact closure"}
+  GATE -->|yes| FAULT["§1.5 fault injection vs PGraphView (sign/producer-consumer/dedup/slot/owner/direction)"]
+  GATE -->|no| STOP["HARD STOP: drop consolidation, keep additive"]
+  FAULT --> DEFER["schema.incoming/outgoing removal DEFERRED (needs LoweredPGraph-borrows-Ir)"]
