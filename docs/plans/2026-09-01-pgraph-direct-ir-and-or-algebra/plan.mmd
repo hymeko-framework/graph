@@ -1,0 +1,17 @@
+%% P1.2 BooleanExact AND/OR worklist fixpoint (== close_producible)
+flowchart TD
+  INIT["avail[m] = init(m): raw->1, else 0; enqueue all units"] --> POP{"worklist empty?"}
+  POP -->|yes| DONE["fixpoint: avail-set == close_producible (BooleanExact)"]
+  POP -->|no| U["dequeue unit u"]
+  U --> READY["ready(u) = T-fold over inputs(u) of avail[in]  (min for BooleanExact)"]
+  READY --> FIRE{"ready(u) > 0 (or > eps)?"}
+  FIRE -->|no| POP
+  FIRE -->|yes| OUT["for m in outputs(u):"]
+  OUT --> CONTRIB["contrib = T(ready(u), reliability(u)); new = S(avail[m], contrib)  (max for BooleanExact; NO dedup in Product)"]
+  CONTRIB --> CH{"new > avail[m] + eps?"}
+  CH -->|no| OUT
+  CH -->|yes| UPD["avail[m] = new; enqueue consumers(m)"]
+  UPD --> OUT
+  OUT --> POP
+  DONE -.oracle.-> ORA["parity test: == close_producible; fuzzy modes ordering-only, exact set unchanged"]
+  DONE -.-> CONV["BooleanExact finite; fuzzy: eps + iter-limit -> typed NonConvergent"]

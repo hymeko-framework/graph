@@ -1,0 +1,20 @@
+% P1.2 AND/OR algebra over the borrowed PGraphView (standalone-compilable)
+\documentclass[tikz,border=6pt]{standalone}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+\begin{document}
+\begin{tikzpicture}[font=\small,
+  box/.style={draw,rounded corners,align=center,minimum height=8mm},
+  e/.style={-{Latex[length=2mm]}}]
+  \node[box,fill=gray!8] (core) {hymeko\_core::Ir + IncidenceIndex\(borrowed, canonical)};
+  \node[box,fill=green!12,right=8mm of core] (view) {PGraphView<'ir,'idx>\classify + directed in/out\+ degree + reachability\(NO copied adjacency)};
+  \node[box,fill=orange!12,right=8mm of view] (andor) {AND/OR worklist fixpoint\ready(u)=T(inputs)\avail(m)=S(init, T(ready,rel))};
+  \node[box,fill=blue!8,below=8mm of andor] (norm) {AndOrNorm policy (monomorphised)\BooleanExact(min/max,\{0,1\}) EXACT\Godel / Product / Lukasiewicz};
+  \draw[e] (core) -- (view); \draw[e] (view) -- (andor); \draw[e] (norm) -- (andor);
+  \node[box,fill=red!8,below=8mm of view] (proof) {PARITY: BooleanExact avail-set\== close\_producible (msg.rs)\== MSG/SSG/ABB result sets};
+  \draw[e] (andor) -- (proof); \draw[e] (view) -- (proof);
+  \node[box,below=8mm of core] (stays) {STAYS domain (pgraph):\AND-closure, classification,\MSG/SSG/ABB, cost/regime};
+  \begin{scope}[on background layer]
+    \node[draw,dotted,rounded corners,fit=(view)(andor)(norm)(proof),label=above:{new: additive, borrowed}] {};
+  \end{scope}
+\end{tikzpicture}
+\end{document}

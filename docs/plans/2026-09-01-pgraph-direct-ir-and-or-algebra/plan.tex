@@ -1,0 +1,89 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}\usepackage{hyperref}\usepackage{amsmath}\usepackage{longtable}
+\title{P1.2 --- direct-Ir P-graph AND/OR algebra (T-norm/S-norm)}\author{Aiko Seto}
+\date{Created-at: 2026-09-01 23:55 CEST}
+\begin{document}\maketitle
+
+\section*{Governance}
+\texttt{GOVERNING-STRATEGY: docs/hymeko-platform-strategy.md} \textperiodcentered{}
+\texttt{STRATEGY-ID: HYMEKO-PLATFORM-2026-09-01-v1} \textperiodcentered{} \texttt{ROADMAP-TASK: P1.2}
+\textperiodcentered{} \texttt{APPROVED-GRAPH-EDIT: pgraph-direct-ir-and-or-algebra}. Strategy ID not
+bumped. \textbf{plan.pdf waiver}: no TeX engine on this host (tools.yaml). The P1.1 direct-Ir A* work is
+\textbf{not} rewritten --- it is the orthogonal base.
+
+\section*{Scope}
+Express the existing P-graph producibility semantics as an explicit \textbf{T-norm (AND) / S-norm (OR)}
+propagation over the canonical \texttt{Ir} + exact \texttt{IncidenceIndex}, preserving the exact result.
+Introduce a borrowed \texttt{PGraphView<'ir,'idx>} (no copied topology). Prove the Boolean-exact closure
+equals \texttt{close\_producible}; add generalized norms (G\"odel/Product/\L{}ukasiewicz) as \emph{opt-in,
+ordering-only} policies that never change the exact result set. Consolidate the duplicated adjacency /
+\texttt{reaches\_any} \emph{only} behind a byte- and result-identical parity gate.
+
+\section*{CORE.YAML}
+\texttt{hymeko\_pgraph} is core in this repo's \texttt{CORE.YAML}. This phase's additive modules + (after
+parity) the duplication removal are authorized by \texttt{APPROVED-GRAPH-EDIT:
+pgraph-direct-ir-and-or-algebra}. No core \texttt{Ir} layout, wire format, dependency, or other repository
+is changed. No new graph representation.
+
+\section*{Semantic contract}
+\textbf{Adjacency (from the canonical incidence, sign convention verified against
+\texttt{meta\_resolve::build\_incidence}):} for a unit edge-decl $u$, iterate its arc refs ---
+$\text{sign}<0$ (\texttt{-}) is a consumed \emph{input} ($m\to u$), $\text{sign}>0$ (\texttt{+}) a produced
+\emph{output} ($u\to m$), $\text{sign}=0$ (\texttt{\~{}}) is a typed \texttt{NeutralRef} error.
+$\text{producers}(m)=\{u:\text{$m$ is a }+\text{ ref of }u\}$, $\text{consumers}(m)=\{u:\text{$-$ ref}\}$,
+via \texttt{IncidenceIndex::incident\_arcs}. The \texttt{+/-/\~{}} sign is an \textbf{incidence role, not a
+fuzzy truth value}.
+
+\textbf{Algebra:} $\text{ready}(u)=\bigwedge_{m\in\text{in}(u)}\text{avail}(m)$ (T-norm fold);
+$\text{avail}(m)=\text{init}(m)\ \vee\ \bigvee_{u\in\text{prod}(m)} T(\text{ready}(u),\text{rel}(u))$
+(S-norm fold), $\text{init}(m)=1$ iff $m$ raw. \textbf{BooleanExact}: $T=\min$, $S=\max$, values in
+$\{0,1\}$, $T$-identity $1$, $S$-identity $0$. Fixpoint by monotone worklist.
+
+\textbf{Norms:} BooleanExact (exact) $\subset$ G\"odel($\min/\max$) $\mid$ Product($ab / a{+}b{-}ab$) $\mid$
+\L{}ukasiewicz($\max(0,a{+}b{-}1)/\min(1,a{+}b)$). Fuzzy modes give relaxation / priority / bound / search
+order \textbf{only}; they never silently change the exact result set. \texttt{NaN}/\texttt{Inf}/
+$\notin[0,1]$ is a typed error. Fold order deterministic (sorted). Duplicate incidence stays semantic ---
+\textbf{Product mode does not deduplicate}.
+
+\textbf{Convergence:} BooleanExact monotone in $\{0,1\}$, finite. Fuzzy: monotone bounded by $1$; stop on
+$\varepsilon$-change with an iteration limit; exceed $\Rightarrow$ typed \texttt{NonConvergent}. Cycle-safe
+(re-enqueue only on a strict increase).
+
+\section*{Affected files (new; additive first)}
+\begin{longtable}{l l}
+\texttt{hymeko\_pgraph/src/view.rs} & NEW: \texttt{PGraphView} (borrowed classification + directed incidence) \\
+\texttt{hymeko\_pgraph/src/andor.rs} & NEW: norm traits, BooleanExact/G\"odel/Product/\L{}ukasiewicz, worklist \\
+\texttt{hymeko\_pgraph/src/lib.rs} & +2 \texttt{pub mod} + re-exports \\
+\texttt{hymeko\_pgraph/tests/andor\_vv.rs} & NEW: truth table, closure parity, cycles, convergence, faults \\
+\texttt{hymeko\_pgraph/tests/andor\_bench.rs} & NEW: A--G cells + before/after incremental \\
+\end{longtable}
+\textbf{Consolidation (§10), same commit as the parity gate passes, only if byte-identical:} remove the
+duplicated \texttt{build\_forward\_adj}/\texttt{build\_producers} and the two verbatim \texttt{reaches\_any}
+where \texttt{PGraphView} fully replaces them. Domain logic (classification, AND-closure, MSG/SSG/ABB,
+cost) stays.
+
+\section*{Proof obligations}
+BooleanExact \texttt{avail} set $=$ \texttt{close\_producible}; feasibility identical; MSG/SSG/ABB result
+\emph{sets} identical; no enumeration loss; order changes only where not a public contract, proven.
+
+\section*{Test / benchmark matrix}
+Tests: AND/OR truth table; exact-closure parity; cycle/self-loop/disconnected; multi-input AND; multi-
+producer OR; duplicate incidence; \texttt{+/-/\~{}}; empty graph/edge policy; \texttt{NaN}/\texttt{Inf}/
+out-of-range rejection; convergence/non-convergence; incremental $=$ full; MSG/SSG/ABB golden parity; six
+dump hash; \texttt{.pgip} round-trip; determinism; fault mutants (T/S swap, wrong identity, dropped queue
+propagation, wrong dedup, premature convergence, fuzzy-as-exact-pruning). Workloads: parser-first + generated
+Steiner/sunflower/Mycielski/uniform/hub/network/humanoid/hexapod. Benchmark cells A--G (current PGRAPH;
+PGraphView+old closure; BooleanExact worklist; BooleanExact-prefiltered MSG/SSG; BooleanExact-ordered ABB;
+fuzzy ordering-only) + before/after incremental; per-family, not averaged.
+
+\section*{Performance gate}
+Speedup proven only if: exact result unchanged; no double topology; no per-query conversion; $\ge 1$ large
+workload improves first-result or visited states; no $>3\%$ regression on a representative cell; warm hot
+path allocation-free.
+
+\section*{Rollback / HARD STOP}
+Additive on \texttt{feat/pgraph-direct-ir-and-or-algebra}; not promoted. Drop the consolidation (keep
+PGraphView additive) if any dump-hash / \texttt{.pgip} / MSG/SSG/ABB parity fails; drop the phase on a
+result-set change, a silent exact-set change by a fuzzy mode, a second topology, a transaction/snapshot
+framework, or a core/other-repo edit. \textbf{HARD STOP} after the report.
+\end{document}
