@@ -1,0 +1,690 @@
+   Compiling windows-link v0.2.1
+   Compiling cfg-if v1.0.4
+   Compiling parking_lot_core v0.9.12
+   Compiling scopeguard v1.2.0
+   Compiling smallvec v1.15.2
+   Compiling crossbeam-utils v0.8.22
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-deque v0.8.7
+   Compiling rayon-core v1.13.0
+   Compiling either v1.18.0
+   Compiling once_cell v1.21.4
+   Compiling hashbrown v0.14.5
+   Compiling autocfg v1.5.1
+   Compiling memchr v2.8.3
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.24
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling regex-syntax v0.8.11
+   Compiling siphasher v1.0.3
+   Compiling hashbrown v0.17.1
+   Compiling lalrpop-util v0.23.1
+   Compiling equivalent v1.0.2
+   Compiling windows-sys v0.61.2
+   Compiling foldhash v0.1.5
+   Compiling lock_api v0.4.14
+   Compiling paste v1.0.15
+   Compiling bytemuck v1.25.2
+   Compiling hashbrown v0.15.5
+   Compiling phf_shared v0.13.1
+   Compiling new_debug_unreachable v1.0.6
+   Compiling bit-vec v0.9.1
+   Compiling precomputed-hash v0.1.1
+   Compiling generic-array v0.14.7
+   Compiling keccak v0.1.6
+   Compiling fixedbitset v0.5.7
+   Compiling log v0.4.33
+   Compiling safe_arch v0.7.4
+   Compiling find-msvc-tools v0.1.11
+   Compiling pico-args v0.5.0
+   Compiling aho-corasick v1.1.5
+   Compiling num-traits v0.2.19
+   Compiling bit-set v0.9.1
+   Compiling matrixmultiply v0.3.11
+   Compiling shlex v2.0.1
+   Compiling indexmap v2.14.0
+   Compiling ena v0.14.4
+   Compiling unicode-xid v0.2.6
+   Compiling serde_core v1.0.229
+   Compiling itertools v0.14.0
+   Compiling parking_lot v0.12.5
+   Compiling wide v0.7.33
+   Compiling rawpointer v0.2.1
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling thiserror v1.0.69
+   Compiling constant_time_eq v0.4.2
+   Compiling serde_json v1.0.151
+   Compiling cpufeatures v0.3.0
+   Compiling dashmap v6.1.0
+   Compiling winapi-util v0.1.11
+   Compiling term v1.2.1
+   Compiling string_cache v0.9.0
+   Compiling cc v1.4.4
+   Compiling same-file v1.0.6
+   Compiling arrayvec v0.7.8
+   Compiling petgraph v0.8.3
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling ascii-canvas v4.0.0
+   Compiling walkdir v2.5.0
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling digest v0.10.7
+   Compiling rustc-hash v2.1.3
+   Compiling itoa v1.0.18
+   Compiling sha3 v0.10.9
+   Compiling regex-automata v0.4.18
+   Compiling num-complex v0.4.6
+   Compiling approx v0.5.1
+   Compiling num-integer v0.1.47
+   Compiling rayon v1.12.0
+   Compiling num-rational v0.4.2
+   Compiling simba v0.9.1
+   Compiling blake3 v1.8.7
+   Compiling serde_derive v1.0.229
+   Compiling regex v1.13.1
+   Compiling hymeko_graph v0.1.0 (D:\hnnwork\graph-direct\hymeko_graph)
+   Compiling lalrpop v0.23.1
+   Compiling nalgebra-macros v0.3.0
+   Compiling thiserror-impl v1.0.69
+   Compiling nalgebra v0.34.2
+   Compiling parser v0.1.0 (ssh://git@amaterasu.local:2222/hymeko/parser.git?branch=master#e28a2051)
+   Compiling nalgebra-sparse v0.11.0
+   Compiling hymeko_core v0.1.0 (ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#15223bcd)
+   Compiling hymeko_pgraph v0.1.0 (D:\hnnwork\graph-direct\hymeko_pgraph)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.50s
+     Running unittests src\lib.rs (target\debug\deps\hymeko_graph-4c4e4bec806023d1.exe)
+
+running 137 tests
+test balance::tests::bipartite_only_emits_even_cycles ... ok
+test balance::tests::cartwright_harary_unbalanced_inverse ... ok
+test balance::tests::davis_weak_balance_excludes_all_negative_triangle ... ok
+test hyper_operator::tests::duplicate_members_and_ordering_behave_as_documented ... ok
+test cycle_sampler::tests::canonical_picks_min_rotation_lex_smallest_direction ... ok
+test community::tests::community_axiom_pruner_auto_picks_per_community ... ok
+test hyper_operator::tests::a_ridge_makes_the_operator_positive_definite ... ok
+test cycle_enum::tests::a_mid_dfs_pruner_skips_odd_lengths ... ok
+test cycle_enum::tests::enumerate_finds_all_triangles_in_chord_graph ... ok
+test community::tests::two_disjoint_triangles_separate_communities ... ok
+test cycle_enum::tests::enumerate_finds_the_quad ... ok
+test community::tests::label_propagation_is_deterministic_with_fixed_seed ... ok
+test hyper_operator::tests::the_historical_fixture_shape_is_supported ... ok
+test community::tests::single_triangle_single_community ... ok
+test hyper_operator::tests::mixed_signs_change_the_operator ... ok
+test hyper_operator::tests::the_scaled_adjoint_identity_holds ... ok
+test hyper_operator::tests::the_star_matvec_equals_the_assembled_clique_matrix ... ok
+test cycle_enum::tests::bipartite_only_kills_odd_emissions ... ok
+test cycle_enum::tests::cartwright_harary_filters_balanced ... ok
+test incidence::tests::empty_adjacency_skips_row ... ok
+test incidence::tests::ignores_query_with_oob_endpoint ... ok
+test hyper_operator::tests::degenerate_and_invalid_shapes_are_rejected ... ok
+test balance::tests::cartwright_harary_balanced_keeps_two_negs ... ok
+test incidence::tests::rejects_mismatched_edges_length ... ok
+test incidence::tests::rejects_mismatched_self_arrays ... ok
+test incidence::tests::csr_output_round_trips_with_coo ... ok
+test incidence::tests::parallel_matches_serial_on_triangle ... ok
+test incidence::tests::self_edge_is_excluded_and_weight_renormalised ... ok
+test pruner::tests::pruner_emit_filters_by_length ... ok
+test incidence::tests::triangle_query_produces_union_with_uniform_weights ... ok
+test pruner::tests::composite_pruner_attributes_rejects_to_first_failer ... ok
+test quadtree::tests::build_quadtree_respects_budget_cap ... ok
+test quadtree::tests::build_quadtree_high_score_subdivides_once ... ok
+test quadtree::tests::build_quadtree_score_fn_called_once_per_depth ... ok
+test quadtree::tests::build_quadtree_uniform_low_score_no_subdivision ... ok
+test quadtree::tests::forman_kappa_l_shape_three_anchors ... ok
+test quadtree::tests::forman_kappa_center_of_3x3_has_degree_4 ... ok
+test pruner::tests::counting_pruner_tracks_calls_and_rejects ... ok
+test quadtree::tests::build_quadtree_empty_image_returns_empty ... ok
+test quadtree::tests::forman_kappa_pair_horizontal_neighbours ... ok
+test quadtree::tests::forman_kappa_single_anchor_is_zero ... ok
+test quadtree::tests::forman_kappa_two_by_two_block ... ok
+test rand_lcg::tests::deterministic_from_seed ... ok
+test rand_lcg::tests::range_is_bounded ... ok
+test signed_graph::tests::csr_round_trip_small_triangle ... ok
+test signed_graph::tests::csr_with_signs_matches_build_sign_lookup ... ok
+test signed_graph::tests::csr_with_signs_no_self_lookup_for_missing_edge ... ok
+test signed_graph::tests::csr_with_signs_parallel_edge_matches_hashmap_last_write_wins ... ok
+test signed_graph::tests::csr_with_signs_postcondition_small_triangle ... ok
+test signed_graph::tests::sign_lookup_canonicalises_undirected ... ok
+test signed_tuples::tests::a_cycle_wraps_and_a_walk_of_the_same_width_does_not ... ok
+test signed_tuples::tests::a_cycles_vertex_signs_are_the_parity_of_its_negative_incidence ... ok
+test signed_tuples::tests::a_resolver_answers_only_for_visible_edges ... ok
+test signed_tuples::tests::first_occurrence_prefers_a_forward_edge_over_an_earlier_reverse_one ... ok
+test signed_tuples::tests::last_write_unordered_reproduces_the_existing_build_sign_lookup ... ok
+test signed_tuples::tests::member_edges_and_member_signs_agree_on_shape_for_every_family ... ok
+test signed_tuples::tests::an_enumeration_carries_its_contracts_and_dropped_count ... ok
+test signed_tuples::tests::the_edge_family_keeps_raw_per_edge_signs_and_resolves_nothing ... ok
+test signed_tuples::tests::the_edge_family_rule_is_not_the_wrapped_cycle_rule ... ok
+test signed_tuples::tests::the_indexed_accessor_and_the_iterator_agree_everywhere ... ok
+test signed_tuples::tests::resolution_applicability_is_derived_from_the_family ... ok
+test signed_tuples::tests::the_two_resolutions_genuinely_disagree_on_a_multigraph ... ok
+test spine::tests::clifford_forward_matches_two_branch ... ok
+test spine::tests::mean_pool_of_identity_features_returns_one_third ... ok
+test spine::tests::clifford_backward_zero_grad_out_returns_zero ... ok
+test signed_tuples::tests::hiding_edges_before_enumeration_removes_the_tuples_through_them ... ok
+test spine::tests::mixed_signs_separate_branches ... ok
+test signed_tuples::tests::walk_enumeration_records_serial_execution_even_when_rayon_is_requested ... ok
+test spine::tests::scatter_mean_two_cycles_share_vertex ... ok
+test topk_cycles::tests::per_vertex_bb_batched_empty_starting_returns_empty ... ok
+test spine::tests::handles_more_workers_than_cycles ... ok
+test signed_tuples::tests::this_module_names_no_application_concern ... ok
+test spine::tests::full_yields_feature_gradient_and_wrapper_agrees ... ok
+test topk_cycles::tests::batch_sort_by_score_desc_permutes_all_arrays_consistently ... ok
+test topk_cycles::tests::per_vertex_bb_global_gate_normalised_to_active_cap ... ok
+test spine::tests::params_only_yields_no_feature_gradient ... ok
+test spine::tests::parallel_consistency ... ok
+test topk_cycles::tests::per_vertex_bb_batched_subset_of_non_bb ... ok
+test topk_cycles::tests::batched_empty_starting_returns_empty_batch ... ok
+test spine::tests::params_only_matches_full_bit_exactly ... ok
+test topk_cycles::tests::per_vertex_bb_global_huge_caps_matches_non_bb ... ok
+test topk_cycles::tests::batch_into_vec_topkcycle_round_trip ... ok
+test topk_cycles::tests::builder_global_bb_matches_free_function ... ok
+test spine::tests::signed_mean_with_all_negative_cycle ... ok
+test spine::tests::clifford_backward_matches_numerical_grad ... ok
+test topk_cycles::tests::per_vertex_bb_global_with_full_gate_disables_abb ... ok
+test topk_cycles::tests::per_vertex_top_k_covers_every_vertex ... ok
+test topk_cycles::tests::tiered_m_v_by_degree_assigns_hub_to_top_tier ... ok
+test topk_cycles::tests::per_vertex_bb_with_huge_caps_matches_non_bb ... ok
+test topk_cycles::tests::per_vertex_bb_global_subset_of_non_bb ... ok
+test topk_cycles::tests::builder_global_matches_free_function ... ok
+test topk_cycles::tests::tiered_m_v_by_degree_empty_graph ... ok
+test topk_cycles::tests::per_vertex_top_k_dedups_shared_cycles ... ok
+test topk_cycles::tests::builder_per_vertex_matches_free_function ... ok
+test topk_cycles::tests::tiered_m_v_by_degree_single_tier_uniform_cap ... ok
+test topk_cycles::tests::tiered_m_v_by_degree_skips_when_top_tier_cap_zero ... ok
+test topk_cycles::tests::tiered_m_v_by_degree_works_with_par_adaptive_starting ... ok
+test topk_cycles::tests::top_k_descending_order ... ok
+test topk_cycles::tests::batched_variant_produces_identical_cycle_set ... ok
+test topk_cycles::tests::top_k_keeps_only_k_cycles ... ok
+test topk_cycles::tests::top_k_full_request_returns_all ... ok
+test topk_cycles::tests::top_k_min_vertex_weight_picks_cheapest ... ok
+test topk_cycles::tests::top_k_with_pruner_composes ... ok
+test topk_cycles::tests::weighted_sum_scorer_admissibility ... ok
+test topk_cycles::tests::weighted_sum_scorer_partial_path_ub ... ok
+test topk_walks::tests::enumerate_top_k_walks_batch_shape_consistent ... ok
+test topk_walks::tests::enumerate_top_k_walks_canonical_form_holds ... ok
+test topk_walks::tests::enumerate_top_k_walks_descending_by_score ... ok
+test topk_walks::tests::enumerate_top_k_walks_no_vertex_revisit ... ok
+test topk_walks::tests::enumerate_top_k_walks_matches_brute_force_scores ... ok
+test topk_walks::tests::enumerate_top_k_walks_returns_at_most_k ... ok
+test topk_walks::tests::enumerate_top_k_walks_top_k_zero_is_empty ... ok
+test topk_walks::tests::enumerate_top_k_walks_walk_len_zero_is_empty ... ok
+test traversal::tests::bfs_distances_on_path ... ok
+test traversal::tests::bfs_max_depth_caps_exploration ... ok
+test traversal::tests::bidirectional_bfs_finds_shortest_path_in_cube ... ok
+test traversal::tests::bitset_round_trip ... ok
+test traversal::tests::connected_components_disjoint_triangles ... ok
+test traversal::tests::dfs_pruned_skips_rejected_branches ... ok
+test traversal::tests::dfs_scratch_reuse_across_components ... ok
+test traversal::tests::dfs_visits_every_vertex_in_path ... ok
+test traversal_heuristic::tests::astar_returns_none_for_unreachable ... ok
+test traversal_heuristic::tests::astar_with_admissible_heuristic_finds_optimal ... ok
+test traversal_heuristic::tests::astar_zero_heuristic_matches_bfs_distance ... ok
+test signed_tuples::tests::deterministic_serial_materialisation_is_byte_identical ... ok
+test traversal_heuristic::tests::best_first_dfs_visits_every_reachable_vertex ... ok
+test traversal_heuristic::tests::ordered_cycle_enum_finds_same_set_as_unordered ... ok
+test vertex_filter::tests::and_filter_empty_is_identity ... ok
+test vertex_filter::tests::and_filter_is_intersection ... ok
+test vertex_filter::tests::degree_filter_drops_leaves_and_isolated ... ok
+test vertex_filter::tests::degree_filter_min_1_drops_only_isolated ... ok
+test vertex_filter::tests::empty_graph_returns_empty_keep_set ... ok
+test vertex_filter::tests::keep_set_is_sorted_ascending ... ok
+test vertex_filter::tests::no_filter_keeps_all ... ok
+test vertex_filter::tests::triangle_filter_handles_isolated_vertex ... ok
+test vertex_filter::tests::triangle_filter_keeps_only_triangle_vertices ... ok
+test signed_tuples::tests::rayon_execution_is_not_sample_stable_under_a_cap ... ok
+
+test result: ok. 137 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\abb_global_topk.rs (target\debug\deps\abb_global_topk-b6a02988fe3adba8.exe)
+
+running 9 tests
+test ub_monotonic_along_descent_fraction_negative ... ok
+test ub_terminal_call_equals_score_for_fraction_negative ... ok
+test parity_par_vs_par_bb_balance_scorer ... ok
+test ub_admissible_fraction_negative ... ok
+test ub_admissible_balance ... ok
+test ub_admissible_low_root ... ok
+test ub_admissible_sign_product_abs ... ok
+test parity_par_vs_par_bb_no_pruner ... ok
+test parity_par_vs_par_bb_balance_pruner ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\csr_sign_lookup.rs (target\debug\deps\csr_sign_lookup-9fa33870f4b5386b.exe)
+
+running 3 tests
+test csr_with_signs_round_trips_every_hashmap_entry_dense_fixture ... ok
+test parallel_and_sequential_no_pruner_match_in_count ... ok
+test parallel_and_sequential_balance_pruner_satisfy_same_invariants ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\entropy_topk.rs (target\debug\deps\entropy_topk-ff90210c52a60761.exe)
+
+running 9 tests
+test entropy_state_round_trip_via_update_rollback ... ok
+test entropy_state_round_trip_with_repeats ... ok
+test inverse_degree_state_round_trip ... ok
+test inverse_degree_ub_admissible_root_state ... ok
+test entropy_ub_admissible_root_state ... ok
+test entropy_ub_admissible_after_some_updates ... ok
+test entropy_enumerator_returns_k_cycles_balance_pruner ... ok
+test entropy_enumerator_returns_k_cycles_no_pruner ... ok
+test entropy_coverage_more_uniform_than_global_abb ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\hybrid_topk.rs (target\debug\deps\hybrid_topk-ec265bf419ed165c.exe)
+
+running 10 tests
+test alpha_zero_collapses_to_pure_diversity ... ok
+test alpha_one_collapses_to_pure_signal ... ok
+test ub_is_linear_in_alpha ... ok
+test ub_admissible_alpha_quarter ... ok
+test ub_admissible_alpha_zero ... ok
+test ub_admissible_alpha_half ... ok
+test ub_admissible_alpha_three_quarters ... ok
+test ub_admissible_alpha_one ... ok
+test enumerator_with_inverse_degree_diversity ... ok
+test enumerator_returns_k_cycles_at_each_alpha_balance_pruner ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\incidence_parallel.rs (target\debug\deps\incidence_parallel-1cc5d18f291f9a35.exe)
+
+running 13 tests
+test fixture_is_deterministic_across_runs ... ok
+test parity_handles_out_of_bound_query ... ok
+test parity_bitset_serial_matches_brute_force ... ok
+test parity_small_graph_against_brute_force ... ok
+test bitset_path_inactive_when_threshold_below_n_tuples ... ok
+test parity_with_no_self_edges ... ok
+test parallel_path_preserves_row_order ... ok
+test parity_bitset_parallel_matches_brute_force_mid_graph ... ok
+test parity_parallel_matches_brute_force_mid_graph ... ok
+test parity_parallel_csr_matches_brute_force_mid_graph ... ok
+test parity_mid_graph_against_brute_force ... ok
+test parity_csr_output_matches_brute_force_mid_graph ... ok
+test parity_bitset_parallel_csr_matches_brute_force_mid_graph ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests\per_vertex_adaptive.rs (target\debug\deps\per_vertex_adaptive-da8fb1fd8f6e4322.exe)
+
+running 8 tests
+test degree_adaptive_m_v_c_zero_is_uniform_m_min ... ok
+test degree_adaptive_m_v_formula ... ok
+test degree_adaptive_m_v_clamps_at_m_max ... ok
+test adaptive_total_output_at_most_sum_of_m_v ... ok
+test uniform_m_v_parity_with_scalar_m_no_pruner ... ok
+test full_heap_rate_climbs_under_degree_adaptive ... ok
+test uniform_m_v_parity_with_scalar_m_balance_pruner ... ok
+test par_adaptive_is_deterministic_across_calls_with_balance_pruner ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests\readme_example.rs (target\debug\deps\readme_example-4ee0fa516e7e3857.exe)
+
+running 1 test
+test the_readme_worked_example_holds ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\vertex_prefilter_integration.rs (target\debug\deps\vertex_prefilter_integration-4bb90618b4e96d79.exe)
+
+running 5 tests
+test empty_starting_returns_no_cycles ... ok
+test triangle_filter_keeps_only_triangle_cycles ... ok
+test single_vertex_starting_only_emits_cycles_through_that_vertex ... ok
+test starting_with_full_range_matches_unfiltered ... ok
+test filtered_starting_is_subset_of_unfiltered ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\hymeko_pgraph-bc7190c433126e56.exe)
+
+running 46 tests
+test friedler::tests::a0_rejects_same_kind_extension ... ok
+test meta_resolve::coverage::bases_of_reports_a_dangling_declaration ... ok
+test friedler::tests::emit_rejects_odd_length_cycles ... ok
+test friedler::tests::a1_requires_product_membership ... ok
+test friedler::tests::a3_rejects_unwhitelisted_o_node ... ok
+test axiom_extensions::tests::strict_no_excess_catches_canonical_feasible_byproduct ... ok
+test axioms::tests::a4_passes_when_every_o_reaches_product ... ok
+test axioms::tests::a5_catches_isolated_material ... ok
+test axioms::tests::a2_passes_on_well_formed_pgraph ... ok
+test axioms::tests::worked_example_passes_all_axioms ... ok
+test axioms::tests::a3_catches_unwhitelisted_unit ... ok
+test axioms::tests::a2_forward_catches_non_raw_with_no_producer ... ok
+test axiom_extensions::tests::consumed_has_producer_silent_on_isolated_m_node ... ok
+test axioms::tests::a5_silent_on_unit_output_only_material ... ok
+test axioms::tests::validate_timed_returns_five_traces_in_order ... ok
+test axioms::tests::a2_reverse_catches_raw_produced_inside ... ok
+test axioms::tests::a4_catches_dead_branch_o_node ... ok
+test axioms::tests::multi_axiom_failure_surfaces_each_violation ... ok
+test axioms::tests::a1_catches_missing_product ... ok
+test axiom_extensions::tests::unit_well_formed_catches_zero_in_degree ... ok
+test axiom_extensions::tests::unit_well_formed_catches_zero_out_degree ... ok
+test axiom_extensions::tests::canonical_plus_extension_compatible_on_chapter_4_style_fixture ... ok
+test axiom_extensions::tests::consumed_has_producer_overlap_with_canonical_a2 ... ok
+test reachability::tests::rule_flags_truth_table ... ok
+test reachability::tests::closure_is_monotone_in_rule ... ok
+test reachability::tests::candidate_unlocks_product ... ok
+test reachability::tests::strict_reduces_to_canonical_closure ... ok
+test regime::tests::canonical_is_identity ... ok
+test regime::tests::composite_empty_is_identity_and_admissible_is_conjunction ... ok
+test regime::tests::composite_cost_dominance_and_no_excess_mix ... ok
+test regime::tests::composite_stacks_refinements ... ok
+test regime::tests::cost_dominance_keeps_equal_alternatives ... ok
+test regime::tests::from_strict_flag_maps_bool ... ok
+test regime::tests::cost_dominance_prunes_dearer_interchangeable_unit ... ok
+test schema::tests::empty_and_absent_neighbours ... ok
+test regime::tests::no_excess_drops_byproduct_producer_and_rejects_excess ... ok
+test schema::tests::predecessors_successors_match_incidence ... ok
+test schema::tests::rejects_m_to_m ... ok
+test schema::tests::rejects_o_to_o ... ok
+test schema::tests::rejects_unknown_endpoint ... ok
+test schema::tests::smallest_valid ... ok
+test schema::tests::unit_with_two_inputs_one_output ... ok
+test ssg_dm::tests::single_producer_chain_yields_one ... ok
+test ssg_dm::tests::max_structures_caps_output ... ok
+test ssg_dm::tests::unproducible_product_yields_none ... ok
+test ssg_dm::tests::three_producers_yields_seven ... ok
+
+test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\axiom_witness.rs (target\debug\deps\axiom_witness-3245d27853aeb5e5.exe)
+
+running 28 tests
+test engine_is_minimal_on_gomb_architecture_sweep ... ok
+test gomb_sweep_full_schema_is_canonical_feasible ... ok
+test hda_full_schema_violates_canonical_s4_on_disposal_sink ... ok
+test engine_is_minimal_on_hda_strict ... ok
+test hda_engine_output_under_relaxed_no_excess_drops_disposal_and_passes_canonical ... ok
+test hda_engine_output_excludes_disposal_and_passes_canonical_s4 ... ok
+test gomb_sweep_engine_output_is_canonical_feasible ... ok
+test dump_dto_msg_algorithm_omits_abb_subschema_certs ... ok
+test byproduct_sweep_is_canonical_feasible_both_bundles ... ok
+test chapter6_full_schema_passes_canonical ... ok
+test chapter4_1_full_schema_is_intentionally_messy ... ok
+test synthetic_byproduct_canonical_passes_extension_fails ... ok
+test synthetic_source_unit_canonical_passes_extension_fails ... ok
+test hsikan_sweep_full_schema_is_canonical_feasible ... ok
+test dump_dto_relaxed_mode_byproduct_keeps_byproduct_extension_fails_on_subschema ... ok
+test dump_dto_strict_mode_byproduct_emits_canonical_pass_extension_fail ... ok
+test hsikan_sweep_engine_output_is_canonical_feasible ... ok
+test chapter6_engine_output_satisfies_canonical ... ok
+test print_hsikan_and_gomb_abb_selection ... ok
+test chapter4_1_engine_output_satisfies_canonical_after_msg_prune ... ok
+test engine_is_minimal_on_chapter4_1 ... ok
+test engine_selection_diverges_under_strict_vs_relaxed_on_byproduct ... ok
+test dump_dto_phase10_multicost_fields_echo ... ok
+test engine_is_minimal_on_chapter6 ... ok
+test engine_is_minimal_on_hsikan_architecture_sweep ... ok
+test chapter4_3_canonical_msg_keeps_29_units ... ok
+test chapter4_3_engine_output_under_relaxed_satisfies_canonical ... ok
+test diagnostic_dump_canonical_vs_extension_vs_engine ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\book_validation.rs (target\debug\deps\book_validation-1e142a96b20d9235.exe)
+
+running 5 tests
+test example4_1_maximal_structure_is_book_seven_units ... ok
+test example3_2_maximal_seven_and_nineteen_solution_structures ... ok
+test example6_1_abb_optimum_is_nine ... ok
+test example14_1_abb_optimum_is_sixteen ... ok
+test example3_3_maximal_29_and_3465_solution_structures ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests\builder.rs (target\debug\deps\builder-18bb23954415413f.exe)
+
+running 9 tests
+test empty_builder_build_fails_no_materials ... ok
+test builder_with_materials_but_no_units_fails ... ok
+test duplicate_material_name_fails ... ok
+test unit_name_collides_with_material_name_fails ... ok
+test unit_referencing_unknown_material_fails_at_build_time ... ok
+test multi_cost_dimensions_alphabetised_at_build_time ... ok
+test multi_cost_with_missing_dim_pads_to_zero ... ok
+test build_hda_reproduces_textbook_abb_optimum ... ok
+test programmatic_hda_matches_hymeko_lowered_hda ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\byproduct_filter_phase11.rs (target\debug\deps\byproduct_filter_phase11-f2e85c89428298d7.exe)
+
+running 5 tests
+test relaxed_msg_keeps_all_eight_units ... ok
+test canonical_passes_on_full_schema_extension_flags_both_byproducts ... ok
+test strict_msg_drops_both_dominated_producers ... ok
+test strict_abb_picks_m4_h8_long ... ok
+test relaxed_abb_picks_dominated_m4_h8_short ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\cli.rs (target\debug\deps\cli-24473b427e2cc1c3.exe)
+
+running 8 tests
+test load_missing_file_errors ... ok
+test render_pgraph_shows_signed_incidence ... ok
+test load_routes_meta_model_file ... ok
+test to_dot_is_valid_digraph_with_edges ... ok
+test load_falls_back_to_literal_tag_file ... ok
+test render_entities_lists_roles_and_io ... ok
+test render_graphviz_makes_png_or_errors_clearly ... ok
+test render_solution_reports_msg_and_abb ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\friedler_scenarios.rs (target\debug\deps\friedler_scenarios-d47a9b58bec2b3bb.exe)
+
+running 7 tests
+test bfs_works_identically_with_friedler_strategy_omitted ... ok
+test dfs_works_identically_with_and_without_friedler ... ok
+test friedler_a3_whitelist_rejects_unwhitelisted_units ... ok
+test scenario1_friedler_rejects_illegal_shortcut ... ok
+test scenario2_hda_finds_feasible_synthesis_loops ... ok
+test strategy_pattern_progressive_pruning ... ok
+test friedler_a1_filters_cycles_by_product_membership ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\gomb_dump_msg.rs (target\debug\deps\gomb_dump_msg-4e97995f6edf14b5.exe)
+
+running 3 tests
+test gomb_toy_msg_non_empty ... ok
+test gomb_toy_ssg_lists_structures ... ok
+test gomb_toy_abb_has_solution ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\hypergraph_queries.rs (target\debug\deps\hypergraph_queries-6acb091cb9b85d9a.exe)
+
+running 3 tests
+test disposal_sink_has_empty_outputs ... ok
+test inputs_outputs_recover_declared_signature ... ok
+test hda_lowers_and_solves_via_queries ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\meta_resolve.rs (target\debug\deps\meta_resolve-e62fb35343a012d5.exe)
+
+running 5 tests
+test meta_alone_yields_empty_pgraph ... ok
+test non_meta_file_errors_with_missing_archetype ... ok
+test compile_sources_matches_path_based_compile ... ok
+test msg_prunes_the_unproduced_f_branch ... ok
+test example_3_1_classifies_via_isa_and_hybrid_units ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\meta_resolve_ir_faults.rs (target\debug\deps\meta_resolve_ir_faults-957300c5020c3597.exe)
+
+running 26 tests
+test ambiguous_archetype_when_two_declarations_share_the_name ... ok
+test a_program_without_an_isa_symbol_yields_no_materials ... ok
+test arc_ownership_mismatch_is_typed ... ok
+test an_isa_base_pointing_at_a_hyperarc_declaration_contributes_no_bases ... ok
+test conflicting_role_when_a_material_is_both_raw_and_product ... ok
+test a_base_without_the_isa_tag_is_skipped ... ok
+test missing_node_mapping_is_typed ... ok
+test edge_backlink_mismatch_is_typed ... ok
+test swapping_signs_swaps_input_and_output ... ok
+test mapped_but_missing_node_record_is_typed ... ok
+test non_material_incidence_is_a_domain_error_not_a_storage_fault ... ok
+test neutral_reference_is_rejected ... ok
+test dangling_arc_record_is_typed ... ok
+test multi_arc_multi_ref_traversal_preserves_order_and_direction ... ok
+test mapped_but_missing_edge_record_is_typed ... ok
+test sign_direction_is_preserved_minus_input_plus_output ... ok
+test dangling_base_target_is_typed ... ok
+test ir_read_error_display_covers_every_variant ... ok
+test inheritance_cycle_terminates_and_is_not_an_error ... ok
+test unit_arc_refs_reports_an_edge_backlink_mismatch_without_isa ... ok
+test missing_edge_mapping_is_typed ... ok
+test node_backlink_mismatch_is_typed ... ok
+test scalar_cost_is_read_from_the_unit_annotation ... ok
+test valid_pgraph_lowers_to_two_materials_and_one_unit ... ok
+test dangling_incidence_target_is_typed ... ok
+test inheritance_depth_ladder_resolves_without_stack_overflow ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+     Running tests\multi_objective.rs (target\debug\deps\multi_objective-a9986633af2853b6.exe)
+
+running 9 tests
+test abb_unit_missing_a_dimension_contributes_zero ... ok
+test lowering_scalar_costs_kept_byte_identical_to_pre_p_mo ... ok
+test lowering_collects_cost_dimensions_alphabetised ... ok
+test lowering_populates_per_unit_cost_vectors ... ok
+test abb_h2o_heavy_weights_avoid_electrolyzer ... ok
+test abb_capex_only_weights_match_scalar_route ... ok
+test abb_co2_heavy_weights_switch_to_green_route ... ok
+test abb_different_weights_pick_different_optima ... ok
+test abb_scalar_path_byte_identical_when_weights_none ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\pgip_io.rs (target\debug\deps\pgip_io-1666aaf61a377ba8.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\pgraph_e2e.rs (target\debug\deps\pgraph_e2e-2a73e6a06fe3e8e6.exe)
+
+running 9 tests
+test unit_signatures_lower_correctly ... ok
+test abb_returns_none_when_infeasible ... ok
+test msg_drops_a_forward_unreachable_unit ... ok
+test msg_drops_a_backward_useless_unit ... ok
+test msg_canonical_drops_disposal_sink_for_hda ... ok
+test ssg_relaxed_includes_excess_byproduct ... ok
+test ssg_finds_known_feasible_structures ... ok
+test parses_hda_pgraph ... ok
+test abb_finds_minimum_cost_route ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\pimentel_distractors.rs (target\debug\deps\pimentel_distractors-5eeef435717967d5.exe)
+
+running 4 tests
+test pimentel_msg_filters_three_distractors ... ok
+test pimentel_ssg_decision_mapping_count_is_nineteen ... ok
+test pimentel_abb_top_three_match_docx ... ok
+test pimentel_distractor_axioms_report_correct_offenders ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\relaxed_msg.rs (target\debug\deps\relaxed_msg-725cc97258aa9caa.exe)
+
+running 4 tests
+test strict_msg_default_byte_identical ... ok
+test relaxed_keeps_more_or_equal_units ... ok
+test chapter4_3_canonical_keeps_29_units ... ok
+test chapter6_canonical_abb_optimum_is_9 ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\ssg_decision_mapping.rs (target\debug\deps\ssg_decision_mapping-449ed42aa6d664ad.exe)
+
+running 5 tests
+test decision_mapping_structures_are_brute_feasible ... ok
+test hda_decision_mapping_structures ... ok
+test brute_ssg_still_refuses_above_30_units ... ok
+test example14_1_abb_matches_book_optimum ... ok
+test example3_3_reproduces_3465_solution_structures ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests\topk_sanity.rs (target\debug\deps\topk_sanity-f6a3b7f8672b6a87.exe)
+
+running 2 tests
+test topk_real_example4_1 ... ok
+test topk_under_each_regime_synthetic ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\workloads_suite.rs (target\debug\deps\workloads_suite-21ad8ef7caa77232.exe)
+
+running 33 tests
+test regenerate_golden_fixtures ... ignored, writes goldens; run: cargo test -p hymeko_pgraph --test workloads_suite regenerate_golden_fixtures -- --ignored
+test degenerate_parameters_are_typed_errors_not_panics ... ok
+test grotzsch_is_triangle_free ... ok
+test oversized_workloads_are_rejected_before_allocation ... ok
+test stress_examples_lower ... ignored, stress; run: cargo test -p hymeko_pgraph --test workloads_suite stress -- --ignored
+test metamorphic_sunflower_petal_sweep ... ok
+test workload::fnv::tests::distinct_inputs_distinct_fingerprints ... ok
+test metamorphic_vlan_add_one_vlan ... ok
+test hexapod_leg_count_changes_the_structure ... ok
+test workload::fnv::tests::fnv1a_64_known_answers ... ok
+test random_uniform_is_deterministic_in_the_seed ... ok
+test workload::rng::tests::below_is_in_range_and_bound_zero_is_safe ... ok
+test workload::rng::tests::different_seeds_diverge ... ok
+test workload::rng::tests::splitmix64_seed_0_is_frozen ... ok
+test metamorphic_steiner_rank_grows_by_formula ... ok
+test source_fingerprint_is_stable_and_distinguishing ... ok
+test random_seed_change_changes_topology_not_counts ... ok
+test mycielski_formula_matches ... ok
+test steiner_covers_every_pair_exactly_once ... ok
+test chicken_physiology_has_named_systems_and_multiway_processes ... ok
+test service_dependency_counts_are_exact ... ok
+test steiner_formula_matches ... ok
+test vlan_membership_and_failure_domains_are_exact ... ok
+test generator_matches_golden_fixtures ... ok
+test scale_of_classifies_by_incidence_count ... ok
+test humanoid_is_left_right_symmetric_and_exact ... ok
+test chicken_flock_shared_resources_are_multiway_and_seeded ... ok
+test every_family_lowers_to_its_formula_oracle ... ok
+test random_hub_skews_incidence_toward_hubs ... ok
+test golden_fixtures_lower_through_the_filesystem_path ... ok
+test five_random_seeds_all_lower_with_the_same_cardinality ... ok
+test medium_examples_of_each_category_lower ... ok
+test large_math_random_and_network_examples_lower ... ok
+
+test result: ok. 31 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 15.92s
+
+   Doc-tests hymeko_graph
+
+running 1 test
+test hymeko_graph\src\topk_cycles.rs - topk_cycles::tiered_m_v_by_degree (line 719) ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.96s; merged doctests compilation took 0.80s
+   Doc-tests hymeko_pgraph
+
+running 3 tests
+test hymeko_pgraph\src\axiom_extensions.rs - axiom_extensions (line 50) ... ignored
+test hymeko_pgraph\src\regime.rs - regime::Composite (line 205) ... ok
+test hymeko_pgraph\src\builder.rs - builder (line 11) ... ok
+
+test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+all doctests ran in 1.14s; merged doctests compilation took 1.05s

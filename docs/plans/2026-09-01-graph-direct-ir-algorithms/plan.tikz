@@ -1,0 +1,46 @@
+% Architecture / dataflow: direct canonical-Ir traversal. Standalone-compilable.
+\documentclass[tikz,border=6pt]{standalone}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+\begin{document}
+\begin{tikzpicture}[
+  font=\small,
+  crate/.style={draw,rounded corners,thick,align=center,minimum height=9mm,minimum width=30mm},
+  core/.style={crate,fill=blue!8},
+  new/.style={crate,fill=green!12,draw=green!55!black,very thick},
+  compat/.style={crate,fill=gray!8,dashed},
+  edge/.style={-{Stealth[length=2mm]},thick},
+  frozen/.style={crate,fill=orange!10,dashed}]
+
+  % core layer
+  \node[core] (ir) {\texttt{hymeko\_core::ir::Ir}\canonical signed incidence B};
+  \node[core,below=6mm of ir] (idx) {\texttt{IncidenceIndex<'ir>}\reverse (arc,slot) = $B^{\top}$ (borrows Ir)};
+
+  % new module (this phase)
+  \node[new,right=26mm of ir] (ws) {\texttt{TraversalWorkspace}\node/arc gen-marks, frontier,\pred-node, pred-arc, result buf};
+  \node[new,below=6mm of ws] (trav) {\texttt{HyperTraversal<'ir>}\alternating node$\to$arc$\to$node\(visited\_nodes $\wedge$ visited\_arcs)};
+  \node[new,below=6mm of trav] (algo) {reachable\_nodes, berge\_shortest\_path,\connected\_components, dual\_reachability\(+ optional: berge enum, s-cc, batch)};
+
+  % compat / standalone (not the standard path)
+  \node[compat,left=24mm of ir] (sg) {\texttt{SignedGraph} / \texttt{Csr}\pairwise u32 (star-expand)};
+  \node[compat,below=6mm of sg] (shi) {\texttt{SignedHyperIncidence}\numeric f32 star/clique};
+
+  % consumers / siblings
+  \node[frozen,below=16mm of idx] (nagare) {\texttt{nagare} (downstream)\HyperGraphView numeric = live;\Berge traversal = DORMANT (R1)};
+  \node[frozen,right=20mm of algo] (hotaru) {\texttt{hotaru::hypergraph}\own CSR copy; full suite (R2)};
+  \node[core,left=24mm of algo] (pgraph) {\texttt{hymeko\_pgraph}\P-graph producibility (domain)};
+
+  \draw[edge] (ir) -- (idx);
+  \draw[edge] (idx) -- (trav) node[midway,above,font=\scriptsize]{incident\_arcs / resolve};
+  \draw[edge] (ir.east) to[bend left=12] node[midway,above,font=\scriptsize]{arc.refs} (trav.west);
+  \draw[edge] (ws) -- (trav);
+  \draw[edge] (trav) -- (algo);
+  \draw[edge,green!55!black] (algo.south) to[bend right=20] node[midway,right,font=\scriptsize]{may subsume} (nagare.east);
+  \draw[edge,dashed] (pgraph) -- (idx.west|-pgraph) ;
+  \draw[edge,dashed] (sg) -- (ir);
+  \draw[edge,dashed] (shi.east) to[bend right=10] (idx.west);
+
+  \begin{scope}[on background layer]
+    \node[draw,dashed,rounded corners,fit=(ws)(trav)(algo),inner sep=4mm,label=above:{\textbf{new: hymeko\_graph::direct\_ir (zero-copy, this phase)}}] {};
+  \end{scope}
+\end{tikzpicture}
+\end{document}

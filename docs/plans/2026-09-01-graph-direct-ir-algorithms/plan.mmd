@@ -1,0 +1,42 @@
+%% Direct canonical-Ir hypergraph traversal — dependency + sequence + state views.
+
+%% (1) Dependency DAG (acyclic; graph -> core after this phase)
+graph TD
+  parser[parser@master]
+  core["hymeko_core (Ir + IncidenceIndex @70b4f36)"]
+  hg["hymeko_graph (+ direct_ir, this phase)"]
+  pg[hymeko_pgraph]
+  nagare["nagare (downstream; dormant Berge traversal -> R1)"]
+  hotaru["hotaru (own CSR copy; full suite -> R2)"]
+  parser --> core
+  core --> hg
+  core --> pg
+  hg --> pg
+  hg --> nagare
+  core --> nagare
+  %% hymeko_core never depends on hymeko_graph (no cycle)
+
+%% (2) Source-first V&V sequence
+sequenceDiagram
+  participant S as *.hymeko
+  participant P as RealParser
+  participant M as ModuleStore::compile
+  participant I as Ir
+  participant X as IncidenceIndex<'ir>
+  participant A as direct_ir algorithm
+  S->>P: parse
+  P->>M: Description
+  M->>I: canonical Ir
+  I->>X: build_incidence_index (borrow)
+  X->>A: incident_arcs / resolve / arc.refs
+  A-->>A: alternating node->arc->node (visited_nodes AND visited_arcs)
+  A-->>S: canonical NodeId / HyperArcId / Berge steps
+
+%% (3) Alternating traversal state machine (one hyperarc expanded once)
+stateDiagram-v2
+  [*] --> NodeFrontier
+  NodeFrontier --> ArcExpand: pop node -> incident_arcs (unvisited arcs)
+  ArcExpand --> MarkArc: mark arc visited (once)
+  MarkArc --> NodeDiscover: arc.refs -> target nodes
+  NodeDiscover --> NodeFrontier: push unvisited targets (record pred node+arc)
+  NodeDiscover --> [*]: frontier empty / budget hit
