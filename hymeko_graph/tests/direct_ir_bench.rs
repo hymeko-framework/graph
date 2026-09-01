@@ -13,35 +13,16 @@
 //!
 //! Run: `cargo test -p hymeko_graph --release --test direct_ir_bench -- --ignored --nocapture`.
 //!
-//! A fast, non-ignored test asserts the five approaches agree on the reachable set and that a warm
-//! query allocates nothing (counting global allocator).
+//! A fast, non-ignored test asserts the five approaches agree on the reachable set (the warm-query
+//! zero-allocation proof lives in `direct_ir_alloc.rs`, which owns the counting global allocator in
+//! its own single-test binary so no parallel test can perturb the count).
 
-use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::{BTreeSet, VecDeque};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use hymeko::common::ids::{DeclId, NodeId};
 use hymeko::ir::incidence::{IncidenceIndex, build_incidence_index};
 use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR};
-
-// ---- counting global allocator (proves warm-query zero allocation) --------------------------
-
-struct Counting;
-static ALLOCS: AtomicUsize = AtomicUsize::new(0);
-
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        ALLOCS.fetch_add(1, Ordering::Relaxed);
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;
 
 // ---- timing helper (single typed unit: microseconds) ----------------------------------------
 
@@ -262,10 +243,10 @@ fn reachable_clique(cl: &CliqueCsr, start: usize) -> usize {
     count
 }
 
-// ---- fast correctness test: all five agree; warm query is zero-alloc -------------------------
+// ---- fast correctness test: all five agree ---------------------------------------------------
 
 #[test]
-fn all_approaches_agree_and_warm_query_is_zero_alloc() {
+fn all_approaches_agree() {
     let ir = build_window_ir(2_000, 5);
     let index = build_incidence_index(&ir).expect("index");
 
@@ -281,21 +262,23 @@ fn all_approaches_agree_and_warm_query_is_zero_alloc() {
         (a, a, a),
         "all controls agree on the reachable count"
     );
+}
 
-    // Warm-query zero-allocation: reuse one workspace, measure allocator deltas.
-    use hymeko_graph::direct_ir::{HyperTraversal, TraversalWorkspace};
-    let trav = HyperTraversal::new(&index);
-    let mut ws = TraversalWorkspace::new();
-    let _ = trav.reachable_nodes(&mut ws, NodeId::new(0)).unwrap().len(); // warm (sizes buffers)
-    let before = ALLOCS.load(Ordering::Relaxed);
-    for _ in 0..32 {
-        let _ = trav.reachable_nodes(&mut ws, NodeId::new(0)).unwrap().len();
-    }
-    let allocs = ALLOCS.load(Ordering::Relaxed) - before;
-    assert_eq!(
-        allocs, 0,
-        "warm reachable_nodes must allocate nothing (got {allocs})"
-    );
+#[test]
+fn large_scale_all_approaches_agree() {
+    // ~1e6 incidences: the direct traversal, the sparse star and the clique must all agree on the
+    // reachable count, at production scale, on the real structures.
+    let ir = build_window_ir(100_000, 10);
+    let nnz: usize = ir.arcs.iter().map(|a| a.refs.len()).sum();
+    assert!(nnz >= 900_000, "expected ~1e6 incidences, got {nnz}");
+    let index = build_incidence_index(&ir).expect("index");
+    let a = reachable_direct(&index, NodeId::new(0));
+    let star = build_star(&ir);
+    let c = reachable_star(&star, 0);
+    let clique = build_clique(&ir);
+    let d = reachable_clique(&clique, 0);
+    assert_eq!(a, 100_000, "direct reaches every node at scale");
+    assert_eq!((c, d), (a, a), "star and clique agree with direct at scale");
 }
 
 // ---- the measurement bench (ignored; run with --release --ignored --nocapture) ---------------
