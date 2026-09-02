@@ -1,0 +1,38 @@
+# Direct-Ir graph navigation & search performance
+
+The canonical HyMeKo graph search path is: **HyMeKo source → parser/lowering →
+`hymeko_core::ir::Ir` → `build_incidence_index` (sparse `IncidenceIndex`) → direct Berge
+navigation/search** (`hymeko_graph::direct_ir`). No dense graph, clique expansion, pairwise
+adjacency, sparse-star CSR, or second semantic model is built on the production path; such
+forms may exist only as benchmark controls/oracles.
+
+## Complexity
+- Creating a borrowed `HyperTraversal` / operator view: **O(1)**.
+- Applying B / Bᵀ / BᵀB (`node_to_arc` / `arc_to_node` / `star_operator`), and BFS/Dijkstra:
+  **Θ(nnz)** (a projection application is never O(1)).
+- Retained index memory: **~12 bytes per incidence** (an `(arc, slot)` pair), measured stable
+  across Steiner, Mycielski and random families.
+
+## Workloads (reusable test/bench generators, `tests/informed_common/mod.rs`)
+| family | generator | formula (verified independently) |
+|---|---|---|
+| Steiner STS(2^m−1) = PG(m−1,2) | `steiner_sts_ir(m)` | v=2^m−1; blocks v(v−1)/6; incidences v(v−1)/2; block size 3; every pair in exactly one block; degree (v−1)/2 |
+| Iterated Mycielski (from C5) | `mycielski_ir(5, C5, iters)` | n′=2n+1; e′=3e+n; rank-2; triangle-free; no self-loop/dup |
+| Seeded uniform rank-k | `uniform_rank_k_ir(seed, n, m, k)` | incidences = m·k; deterministic per seed |
+| Disconnected control | `two_disjoint_sts_ir(m)` | cross-component pairs unreachable |
+
+## Manifest (seeds / representative sizes)
+- STS: m ∈ {3,5,7} → v ∈ {7,31,127}. (STS(511)/STS(1023) fit the budget for a later cell.)
+- Mycielski: iters ∈ {2,4,6} → V ∈ {23,95,383}. Base C5 (triangle-free, χ=3).
+- Random: `uniform_rank_k_ir(seed=0x51EED, n, 3n, 3)` at n ∈ {1000, 30000}; determinism test
+  uses seed `0xC0FFEE`, n=500, m=800, k=3.
+
+## Running
+```
+cargo test -p hymeko_graph --test steiner_mycielski_nav                       # correctness (7)
+cargo test -p hymeko_graph --test steiner_mycielski_nav --release \
+    measure_navigation_matrix -- --nocapture                                  # measurement table
+cargo test -p hymeko_graph --test informed_search_vv --test informed_oracles  # engine V&V + oracles
+```
+Raw data: `reports/data/2026-09-03-navigation-measurement.tsv`. Full analysis + scope:
+`reports/2026-09-03-graph-navigation-performance.md`.
