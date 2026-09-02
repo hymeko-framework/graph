@@ -360,3 +360,191 @@ pub fn grid_positions(w: usize, h: usize) -> Vec<[f64; 2]> {
     }
     v
 }
+
+// ---- P3 workloads: Steiner triple systems, Mycielski, seeded random --------------------------------
+
+/// Expected STS(v) counts for v = 2^m - 1: (vertices, blocks = v(v-1)/6, incidences = v(v-1)/2,
+/// per-vertex degree = (v-1)/2). Formula-derived, independent of the emitted edge list.
+pub fn sts_expected_counts(m: u32) -> (usize, usize, usize, usize) {
+    let v = (1usize << m) - 1;
+    (v, v * (v - 1) / 6, v * (v - 1) / 2, (v - 1) / 2)
+}
+
+/// STS(2^m - 1) as a rank-3 hypergraph on the canonical `Ir` (the projective geometry PG(m-1,2)):
+/// points are the nonzero m-bit vectors `1..=v` (node index = value-1); a block is any triple
+/// `{a,b,c}` with `a ^ b ^ c == 0`. Emitting only when `c = a^b > b` yields each block exactly once
+/// (a<b<c). Each block is one arity-3 hyperarc. No pairwise projection.
+pub fn steiner_sts_ir(m: u32) -> Ir {
+    assert!((2..=12).contains(&m));
+    let v = (1usize << m) - 1;
+    let mut ir = Ir::default();
+    push_nodes(&mut ir, v);
+    for a in 1..=v {
+        for b in (a + 1)..=v {
+            let c = a ^ b;
+            if c > b {
+                let refs: Vec<SignedRefR> = [a, b, c]
+                    .into_iter()
+                    .map(|p| {
+                        SignedRefR::Plus(RefAtomR {
+                            target: DeclId::new(p - 1),
+                            anno: AnnoR::default(),
+                            weights: None,
+                        })
+                    })
+                    .collect();
+                ir.arcs.push(ArcRec {
+                    anno: AnnoR::default(),
+                    in_edge: DeclId::NONE,
+                    refs,
+                });
+            }
+        }
+    }
+    ir
+}
+
+/// Mycielski recurrence from a base `(n, e)` after `iters` iterations: `n' = 2n+1`, `e' = 3e+n`.
+pub fn mycielski_expected_counts(base_n: usize, base_e: usize, iters: u32) -> (usize, usize) {
+    let (mut n, mut e) = (base_n, base_e);
+    for _ in 0..iters {
+        let (nn, ne) = (2 * n + 1, 3 * e + n);
+        n = nn;
+        e = ne;
+    }
+    (n, e)
+}
+
+/// The 5-cycle C5 (triangle-free, chromatic number 3), the classic Mycielski base — `μ(C5)` is the
+/// Grötzsch graph. Returns `(n, edges)`.
+pub fn base_c5() -> (usize, Vec<(usize, usize)>) {
+    (5, vec![(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)])
+}
+
+/// Iterated Mycielskian of a base graph as a rank-2 hypergraph on the canonical `Ir`. `μ(G)` on
+/// `V={v_i} ∪ U={u_i} ∪ {w}`: original edges `{v_i,v_j}`; for each original edge the two shadow edges
+/// `{u_i,v_j}` and `{v_i,u_j}`; apex edges `{w,u_i}` for all `i`. `u_i = n+i`, `w = 2n`.
+pub fn mycielski_ir(base_n: usize, base_edges: &[(usize, usize)], iters: u32) -> Ir {
+    let mut n = base_n;
+    let mut edges: Vec<(usize, usize)> = base_edges.to_vec();
+    for _ in 0..iters {
+        let mut ne: Vec<(usize, usize)> = Vec::with_capacity(3 * edges.len() + n);
+        for &(i, j) in &edges {
+            ne.push((i, j));
+            ne.push((n + i, j));
+            ne.push((i, n + j));
+        }
+        for i in 0..n {
+            ne.push((2 * n, n + i));
+        }
+        edges = ne;
+        n = 2 * n + 1;
+    }
+    ir_from_rank2(n, &edges)
+}
+
+fn ir_from_rank2(n: usize, edges: &[(usize, usize)]) -> Ir {
+    let mut ir = Ir::default();
+    push_nodes(&mut ir, n);
+    for &(a, b) in edges {
+        ir.arcs.push(ArcRec {
+            anno: AnnoR::default(),
+            in_edge: DeclId::NONE,
+            refs: vec![
+                SignedRefR::Plus(RefAtomR {
+                    target: DeclId::new(a),
+                    anno: AnnoR::default(),
+                    weights: None,
+                }),
+                SignedRefR::Plus(RefAtomR {
+                    target: DeclId::new(b),
+                    anno: AnnoR::default(),
+                    weights: None,
+                }),
+            ],
+        });
+    }
+    ir
+}
+
+/// A deterministic 64-bit LCG (Numerical Recipes constants). Test-support only — the production
+/// `rand_lcg` in `src/` is not test-visible; this is a local, seeded, reproducible stream.
+pub struct Lcg(u64);
+impl Lcg {
+    pub fn new(seed: u64) -> Self {
+        Self(seed)
+    }
+    fn next_u64(&mut self) -> u64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        self.0
+    }
+    /// Uniform in `0..bound` (bound > 0).
+    pub fn below(&mut self, bound: usize) -> usize {
+        (self.next_u64() % bound as u64) as usize
+    }
+}
+
+/// Seeded uniform rank-`k` hypergraph: `m_edges` arcs, each `k` distinct nodes drawn uniformly from
+/// `n`. Deterministic for a given `seed`. Incidences = `m_edges * k`.
+pub fn uniform_rank_k_ir(seed: u64, n: usize, m_edges: usize, k: usize) -> Ir {
+    assert!(k >= 2 && n >= k);
+    let mut rng = Lcg::new(seed);
+    let mut ir = Ir::default();
+    push_nodes(&mut ir, n);
+    for _ in 0..m_edges {
+        let mut members: Vec<usize> = Vec::with_capacity(k);
+        while members.len() < k {
+            let x = rng.below(n);
+            if !members.contains(&x) {
+                members.push(x);
+            }
+        }
+        let refs = members
+            .into_iter()
+            .map(|t| {
+                SignedRefR::Plus(RefAtomR {
+                    target: DeclId::new(t),
+                    anno: AnnoR::default(),
+                    weights: None,
+                })
+            })
+            .collect();
+        ir.arcs.push(ArcRec {
+            anno: AnnoR::default(),
+            in_edge: DeclId::NONE,
+            refs,
+        });
+    }
+    ir
+}
+
+/// Two disjoint STS(2^m-1) components on one `Ir`; returns `(ir, offset)` where `offset` is the first
+/// node id of the second component. Cross-component pairs are unreachable (a disconnected control).
+pub fn two_disjoint_sts_ir(m: u32) -> (Ir, usize) {
+    let single = steiner_sts_ir(m);
+    let off = single.decl_nodes.len();
+    let mut ir = steiner_sts_ir(m);
+    push_nodes(&mut ir, off);
+    for arc in &single.arcs {
+        let refs = arc
+            .refs
+            .iter()
+            .map(|r| {
+                SignedRefR::Plus(RefAtomR {
+                    target: DeclId::new(r.target().raw() + off),
+                    anno: AnnoR::default(),
+                    weights: None,
+                })
+            })
+            .collect();
+        ir.arcs.push(ArcRec {
+            anno: AnnoR::default(),
+            in_edge: DeclId::NONE,
+            refs,
+        });
+    }
+    (ir, off)
+}
