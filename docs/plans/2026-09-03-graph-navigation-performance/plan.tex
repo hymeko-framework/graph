@@ -1,0 +1,26 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\title{Direct-Ir graph navigation \& search performance (P3)}
+\author{HYMEKO-PLATFORM-2026-09-01-v1 / ROADMAP-TASK P3}
+\date{2026-09-03}
+\begin{document}\maketitle
+\section{Standard path}
+HyMeKo source $\to$ parser/lowering $\to$ canonical \texttt{hymeko\_core::ir::Ir} $\to$ sparse
+\texttt{IncidenceIndex} $\to$ direct Berge navigation/search. No dense graph, clique expansion,
+pairwise adjacency, sparse-star CSR or second semantic model on the production path; those exist
+only as benchmark controls/oracles.
+\section{Reuse}
+Engine already on graph main \texttt{b234c487} (core \texttt{70b4f364}): reachability, components,
+s-connect, dual, Berge shortest path, A* (\texttt{astar\_berge\_path}, consistent-heuristic optimal),
+costs (Unit/IncidenceWeight/MetricStep), heuristics (Zero=Dijkstra/Metric), reusable
+\texttt{TraversalWorkspace}, Rayon batch. Test-support: \texttt{median\_us},
+\texttt{oracle\_dijkstra\_cost}, \texttt{exhaustive\_min\_cost}, Ir builders.
+\section{Deliver}
+Workloads (Steiner STS$(2^m-1)$ via PG$(m-1,2)$; iterated Mycielski $n'=2n+1,e'=3e+n$; seeded
+random) as reusable test-support emitting canonical Ir; formula-verified counts; oracle-checked
+navigation; cold/warm measurement matrix; bytes/incidence; honest reproducibility.
+\section{Complexity honesty}
+Borrowed view creation may be $O(1)$; applying $B,B^\top,B^\top B$ is $\Theta(\mathrm{nnz})$; a
+projection application is never $O(1)$.
+\section*{Note} plan.pdf not built (no TeX engine; forbidden to install). Sources retained.
+\end{document}
