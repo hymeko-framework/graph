@@ -64,3 +64,7 @@ ts_norm	chain1500	boolean-exact	1500	1499	2998	2	9	113.000	110.100	115.400	118.1
 ts_norm	chain1500	godel	1500	1499	2998	2	9	114.100	113.200	116.100	118.000	1500	1500	producible_count	production propagate; reliability=1.0 for BooleanExact, 0.9 for fuzzy norms
 ts_norm	chain1500	product	1500	1499	2998	2	9	25.000	24.600	25.100	27.700	197	197	producible_count	production propagate; reliability=1.0 for BooleanExact, 0.9 for fuzzy norms
 ts_norm	chain1500	lukasiewicz	1500	1499	2998	2	9	16.800	16.700	16.900	16.900	10	10	producible_count	production propagate; reliability=1.0 for BooleanExact, 0.9 for fuzzy norms
+correction_before_after	path65k	before_ce84134_incremental	65536	65535	131070	2_per_run	5x15	644.500	631.400	668.900	800.600	65535	1.000000	ratio_after_over_before	five alternating process-order rounds; each point is median of 15 samples
+correction_before_after	path65k	after_a471e1b_incremental	65536	65535	131070	2_per_run	5x15	661.600	644.700	696.600	706.200	65535	1.026532	ratio_after_over_before	+2.65%; within the independent path A/A envelope
+correction_before_after	grid256	before_ce84134_incremental	65536	130560	261120	2_per_run	5x15	3696.000	3394.600	3765.600	3857.100	65535	1.000000	ratio_after_over_before	five alternating process-order rounds; each point is median of 15 samples
+correction_before_after	grid256	after_a471e1b_incremental	65536	130560	261120	2_per_run	5x15	3994.100	3652.200	4022.700	4166.900	65535	1.080655	ratio_after_over_before	+8.07%; independent grid A/A drift was 9.43%, so no separable regression
