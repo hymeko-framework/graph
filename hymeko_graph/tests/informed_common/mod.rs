@@ -227,6 +227,69 @@ fn push_nodes(ir: &mut Ir, m: usize) {
     }
 }
 
+/// Push one node declaration + record + binding; return its `DeclId` (which, when nodes are pushed
+/// first, equals its `NodeId`). Shared inline builder for hand-constructed fixtures.
+pub fn node_decl(ir: &mut Ir) -> DeclId {
+    let d = ir.push_decl(DeclNode {
+        kind: DeclKind::Node,
+        name: SymId::new(0),
+        parent: DeclId::NONE,
+        first_child: DeclId::NONE,
+        last_child: DeclId::NONE,
+        next_sibling: DeclId::NONE,
+        anno: AnnoR::default(),
+    });
+    let nid = NodeId::new(ir.nodes.len());
+    ir.nodes.push(NodeRec::new(d, Vec::new()));
+    ir.bind_node_decl(d, nid).expect("bind node");
+    d
+}
+
+/// Push one **non-node** (edge-kind) declaration; return its `DeclId`. Used to build a target that is
+/// deliberately not a node (so `decl_to_node` returns `None`).
+pub fn edge_decl(ir: &mut Ir) -> DeclId {
+    ir.push_decl(DeclNode {
+        kind: DeclKind::Edge,
+        name: SymId::new(0),
+        parent: DeclId::NONE,
+        first_child: DeclId::NONE,
+        last_child: DeclId::NONE,
+        next_sibling: DeclId::NONE,
+        anno: AnnoR::default(),
+    })
+}
+
+/// A `+` incidence reference to `target`, optionally weighted.
+pub fn plus_ref(target: DeclId, weight: Option<f64>) -> SignedRefR {
+    SignedRefR::Plus(RefAtomR {
+        target,
+        anno: AnnoR::default(),
+        weights: weight.map(|w| vec![ValueR::Num(w)]),
+    })
+}
+
+/// Push one hyperarc with the given references.
+pub fn push_arc(ir: &mut Ir, refs: Vec<SignedRefR>) {
+    ir.arcs.push(ArcRec {
+        anno: AnnoR::default(),
+        in_edge: DeclId::NONE,
+        refs,
+    });
+}
+
+/// A weighted pairwise graph on `n` nodes from an explicit `(u, v, w)` edge list.
+pub fn weighted_graph_ir(n: usize, edges: &[(usize, usize, f64)]) -> Ir {
+    let mut ir = Ir::default();
+    let decls: Vec<DeclId> = (0..n).map(|_| node_decl(&mut ir)).collect();
+    for &(u, v, w) in edges {
+        push_arc(
+            &mut ir,
+            vec![plus_ref(decls[u], Some(w)), plus_ref(decls[v], Some(w))],
+        );
+    }
+    ir
+}
+
 fn signed_ref(sign: SignMode, member_idx: usize, target: usize, weight: Option<f64>) -> SignedRefR {
     let atom = RefAtomR {
         target: DeclId::new(target),

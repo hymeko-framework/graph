@@ -22,10 +22,14 @@
 
 mod error;
 mod facade;
+mod levi;
 mod rank2;
 mod workspace;
 
 pub use error::MatroidError;
 pub use facade::MatroidRef;
+pub use levi::{
+    IncrementalLevi, LeviCoord, levi_components, levi_independent, levi_rank, levi_spanning_basis,
+};
 pub use rank2::{IncrementalRank2, rank2_rank, rank2_spanning_forest, rank2_weighted_basis};
 pub use workspace::GraphicMatroidWorkspace;

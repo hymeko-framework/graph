@@ -128,7 +128,8 @@ pub use incidence::{
     build_edge_incidence, build_edge_incidence_vertex_adj,
 };
 pub use matroid::{
-    GraphicMatroidWorkspace, IncrementalRank2, MatroidError, MatroidRef, rank2_rank,
+    GraphicMatroidWorkspace, IncrementalLevi, IncrementalRank2, LeviCoord, MatroidError,
+    MatroidRef, levi_components, levi_independent, levi_rank, levi_spanning_basis, rank2_rank,
     rank2_spanning_forest, rank2_weighted_basis,
 };
 pub use pruner::{
