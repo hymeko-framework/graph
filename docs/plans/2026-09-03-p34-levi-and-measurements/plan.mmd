@@ -1,0 +1,44 @@
+%% P3.4 module + dataflow. Canonical Ir is the sole model; IncidenceIndex the sole derived view.
+graph TD
+    subgraph canonical["canonical (read-only; not modified)"]
+        IR["hymeko_core::ir::Ir"]
+        IDX["IncidenceIndex&lt;'ir&gt;  (= incidence.ir() gives back the Ir)"]
+        IR -->|build_incidence_index| IDX
+    end
+
+    subgraph matroid["hymeko_graph::matroid (directory module, approved edit)"]
+        FAC["facade.rs: MatroidRef{ incidence } — ONE word, O(1), 0-alloc; ir() = incidence.ir()"]
+        WS["workspace.rs: GraphicMatroidWorkspace (shared DSU: path-halving + union-by-rank + gen reset)"]
+        R2["rank2.rs: rank2_spanning_forest / rank2_rank / rank2_weighted_basis / IncrementalRank2"]
+        LV["levi.rs: levi_rank / levi_components / levi_spanning_basis / levi_independent / IncrementalLevi"]
+        ERR["error.rs: MatroidError (DanglingTarget, Overflow, ...)"]
+        IDX --> FAC
+        FAC --> R2
+        FAC --> LV
+        WS --> R2
+        WS --> LV
+        ERR --> R2
+        ERR --> LV
+    end
+
+    subgraph measure["measurement closure (tests / examples / scripts — benchmark-only)"]
+        CELL["examples/p34_cell.rs — one (workload, op, threads) cell"]
+        PS["scripts/p34_cpu_rss.ps1 — subprocess CPU (TotalProcessorTime) + peak RSS (PeakWorkingSet64)"]
+        REP["representation_breakeven.rs — direct / no-index scan / sparse-star CSR / clique / Levi certificate"]
+        TS["andor_ts_matrix.rs — propagate x {BooleanExact, Godel, Product, Lukasiewicz}"]
+        OPS["ir_ops_bench.rs (12A) — public construction/manipulation matrix"]
+        CELL --> PS
+        R2 --> CELL
+        LV --> CELL
+    end
+
+    subgraph out["artifacts"]
+        TSV["reports/data/*.tsv (CPU, RSS/alloc, Levi, break-even, T/S, 12A)"]
+        SVG["reports/figures/*.svg (CPU-scaling, memory, break-even, rank/basis-ratio)"]
+        MD["reports/2026-09-03-matroid-navigation-p34.md (COMPLETE or PARTIAL+exact blockers)"]
+        PS --> TSV
+        TS --> TSV
+        OPS --> TSV
+        TSV --> SVG
+        TSV --> MD
+    end
