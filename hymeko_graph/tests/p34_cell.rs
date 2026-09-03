@@ -26,23 +26,6 @@ use hymeko_graph::{
 #[path = "informed_common/mod.rs"]
 mod ic;
 
-fn build_workload(name: &str) -> Ir {
-    match name {
-        "sts511" => ic::steiner_sts_ir(9),
-        "sts1023" => ic::steiner_sts_ir(10),
-        "mycielski" => {
-            let (n, e) = ic::base_c5();
-            ic::mycielski_ir(n, &e, 8)
-        }
-        "random1e6" => ic::uniform_rank_k_ir(0x51EED, 200_000, 333_333, 3),
-        "map512" => ic::map_grid_ir(512, 512, &ic::map_obstacles(512, 512)),
-        "transport" => {
-            ic::map_grid_with_transport_ir(256, 256, &ic::map_obstacles(256, 256), 8, 5.0)
-        }
-        other => panic!("unknown workload {other}"),
-    }
-}
-
 /// Returns `(median_op_wall_seconds, checksum)`. A `checksum` of `u64::MAX` marks an op that does not
 /// apply to the workload (e.g. rank-2 on a multiway hypergraph), so the harness records `NA`.
 fn run_op(op: &str, ir: &Ir, idx: &IncidenceIndex<'_>, iters: usize) -> (f64, u64) {
@@ -76,8 +59,9 @@ fn run_op(op: &str, ir: &Ir, idx: &IncidenceIndex<'_>, iters: usize) -> (f64, u6
             let goal = NodeId::new(n.saturating_sub(1));
             let _ = dijkstra_berge_path(&trav, NodeId::new(0), goal, &cost, &Undirected, &mut ws);
             ic::median_us(iters, || {
-                let p = dijkstra_berge_path(&trav, NodeId::new(0), goal, &cost, &Undirected, &mut ws)
-                    .unwrap();
+                let p =
+                    dijkstra_berge_path(&trav, NodeId::new(0), goal, &cost, &Undirected, &mut ws)
+                        .unwrap();
                 checksum = p.map(|x| x.steps.len() as u64).unwrap_or(0);
             })
         }
@@ -89,9 +73,8 @@ fn run_op(op: &str, ir: &Ir, idx: &IncidenceIndex<'_>, iters: usize) -> (f64, u6
                 (0.0, 0.0, 0.0)
             } else {
                 ic::median_us(iters, || {
-                    checksum =
-                        rank2_spanning_forest(MatroidRef::new(idx), &mut ws, &mut out).unwrap()
-                            as u64;
+                    checksum = rank2_spanning_forest(MatroidRef::new(idx), &mut ws, &mut out)
+                        .unwrap() as u64;
                 })
             }
         }
@@ -119,7 +102,7 @@ fn run_cell() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(default_iters);
 
-    let ir = build_workload(&workload);
+    let ir = ic::named_workload(&workload);
     let idx = build_incidence_index(&ir).unwrap();
     let inc: usize = ir.arcs.iter().map(|a| a.refs.len()).sum();
     let (op_wall_s, checksum) = run_op(&op, &ir, &idx, iters);

@@ -227,6 +227,23 @@ fn push_nodes(ir: &mut Ir, m: usize) {
     }
 }
 
+/// The named P3.4 measurement workloads, shared by every subprocess cell / bench so the definitions
+/// never drift between harnesses (§6.1).
+pub fn named_workload(name: &str) -> Ir {
+    match name {
+        "sts511" => steiner_sts_ir(9),
+        "sts1023" => steiner_sts_ir(10),
+        "mycielski" => {
+            let (n, e) = base_c5();
+            mycielski_ir(n, &e, 8)
+        }
+        "random1e6" => uniform_rank_k_ir(0x51EED, 200_000, 333_333, 3),
+        "map512" => map_grid_ir(512, 512, &map_obstacles(512, 512)),
+        "transport" => map_grid_with_transport_ir(256, 256, &map_obstacles(256, 256), 8, 5.0),
+        other => panic!("unknown workload {other}"),
+    }
+}
+
 /// Push one node declaration + record + binding; return its `DeclId` (which, when nodes are pushed
 /// first, equals its `NodeId`). Shared inline builder for hand-constructed fixtures.
 pub fn node_decl(ir: &mut Ir) -> DeclId {
