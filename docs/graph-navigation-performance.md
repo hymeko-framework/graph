@@ -36,3 +36,22 @@ cargo test -p hymeko_graph --test informed_search_vv --test informed_oracles  # 
 ```
 Raw data: `reports/data/2026-09-03-navigation-measurement.tsv`. Full analysis + scope:
 `reports/2026-09-03-graph-navigation-performance.md`.
+
+## P3.1 — map routing + admissible heuristics
+
+Map workloads carry **coordinates and weights in the canonical `Ir`** (`DeclNode.anno.value =
+[x,y]`; incidence weights) — no parallel map object. Generators (`tests/informed_common`):
+`map_grid_ir` (weighted grid, arterial 1.0 / local 1.5 ≥ euclidean, deterministic obstacles),
+`map_grid_with_transport_ir` (one multiway metro hyperedge), `hop_distances_from` (discrete-
+heuristic prep). Heuristics are **test-side** `BergeHeuristic` adapters (no core edit):
+`IrPositions` (metric), `DiscreteHeuristic` (min remaining Berge hops × global min cost),
+`Combined = max(metric, discrete)`.
+
+Proven (`tests/map_routing_nav.rs`): non-negativity, `h(goal)=0`, admissibility `h ≤ oracle
+dist`, consistency `h(u) ≤ cost(u,v)+h(v)` (exhaustive on 16×16), A\* optimal-cost parity with
+Dijkstra/oracle for all three heuristics, blocked→typed `None`, multiway-transport discrete
+optimality. **Measured:** on uniform grids with far-corner queries, Dijkstra beats all three
+A\* heuristics (weak euclidean grid lower bound + prep/overhead; discrete prep never breaks
+even) — all return the correct optimal cost. Data:
+`reports/data/2026-09-03-map-routing-measurement.tsv`; full analysis + deferred items:
+`reports/2026-09-03-graph-navigation-p31.md`.
