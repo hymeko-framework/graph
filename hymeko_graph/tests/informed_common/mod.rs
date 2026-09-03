@@ -736,3 +736,26 @@ pub fn first_num_weight_pub(sref: &SignedRefR) -> f64 {
     };
     first_num_weight(w)
 }
+
+/// A deterministic serpentine **corridor** map on a `w x h` grid: horizontal runs on every row, vertical
+/// links only at alternating turn columns, so the goal sits behind a long forced path (the discriminating
+/// workload where a tight heuristic can prune). Coordinates + unit weights live in the Ir.
+pub fn corridor_map_ir(w: usize, h: usize) -> Ir {
+    assert!(w >= 3 && h >= 3);
+    let mut ir = Ir::default();
+    for r in 0..h {
+        for c in 0..w {
+            push_positioned_node(&mut ir, c as f64, r as f64);
+        }
+    }
+    for r in 0..h {
+        for c in 0..(w - 1) {
+            weighted_edge(&mut ir, r * w + c, r * w + c + 1, 1.0);
+        }
+        if r + 1 < h {
+            let turn = if r.is_multiple_of(2) { w - 1 } else { 0 };
+            weighted_edge(&mut ir, r * w + turn, (r + 1) * w + turn, 1.0);
+        }
+    }
+    ir
+}

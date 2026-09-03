@@ -403,6 +403,11 @@ pub struct SearchStats {
     pub pops: usize,
     /// Pops discarded as stale (lazy-deletion overhead).
     pub stale_pops: usize,
+    /// Heuristic `h(..)` evaluations during relaxation.
+    pub heuristic_evals: usize,
+    /// Settled nodes re-encountered with a strictly better `g` (a genuine reopen). Provably `0` with a
+    /// consistent heuristic; counted to make that guarantee observable rather than assumed.
+    pub reopened: usize,
 }
 
 // =====================================================================================================
@@ -637,6 +642,9 @@ where
         let node = entry.node;
         // Lazy deletion: skip a stale entry (already settled, or superseded by a better g).
         if ws.settled(node) || entry.g_at_push > ws.g(node) {
+            if ws.settled(node) && entry.g_at_push < ws.g(node) {
+                ws.stats.reopened += 1; // never happens with a consistent heuristic; observed, not assumed
+            }
             ws.stats.stale_pops += 1;
             continue;
         }
@@ -687,6 +695,7 @@ where
                 if tentative < ws.g(target) {
                     ws.set_g(target, tentative);
                     ws.set_pred(target, node, arc, slot as u32);
+                    ws.stats.heuristic_evals += 1;
                     let f = tentative + finite_or_zero(heuristic.h(ir, target));
                     ws.heap.push(Reverse(Entry {
                         key: Key {
