@@ -479,6 +479,37 @@ fn incremental_stream_equals_full_rebuild() {
 }
 
 #[test]
+fn incremental_stream_rejects_a_foreign_snapshot_after_binding() {
+    let a = ic::weighted_graph_ir(3, &[(0, 1, 1.0), (1, 2, 1.0)]);
+    let foreign = ic::weighted_graph_ir(3, &[(0, 2, 1.0)]);
+    let mut ws = GraphicMatroidWorkspace::new();
+    let mut stream = IncrementalRank2::begin(&mut ws, a.nodes.len()).unwrap();
+    assert!(stream.offer(&a, HyperArcId::new(0)).unwrap());
+    assert!(
+        stream.offer(&foreign, HyperArcId::new(0)).is_err(),
+        "an incremental session must not mix canonical snapshots"
+    );
+}
+
+#[test]
+fn incremental_stream_rejects_an_out_of_range_arc_without_panicking() {
+    let ir = ic::weighted_graph_ir(2, &[(0, 1, 1.0)]);
+    let mut ws = GraphicMatroidWorkspace::new();
+    let mut stream = IncrementalRank2::begin(&mut ws, ir.nodes.len()).unwrap();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        stream.offer(&ir, HyperArcId::new(ir.arcs.len()))
+    }));
+    assert!(
+        result.is_ok(),
+        "a public typed API must not panic on an unknown arc ID"
+    );
+    assert!(
+        result.unwrap().is_err(),
+        "an unknown arc ID must be a typed error"
+    );
+}
+
+#[test]
 fn workspace_reuse_is_deterministic_across_interleaved_graphs() {
     let a = ic::grid_ir(4, 4);
     let b = ic::window_ir(20, 2, false, SignMode::AllPlus);

@@ -255,6 +255,18 @@ fn levi_output_deterministic_and_workspace_reuse() {
     );
 }
 
+#[test]
+fn levi_incremental_rejects_a_foreign_snapshot() {
+    let a = ic::grid_ir(3, 2);
+    let foreign = ic::window_ir(6, 3, false, ic::SignMode::AllPlus);
+    let mut ws = GraphicMatroidWorkspace::new();
+    let mut stream = IncrementalLevi::begin(&mut ws, &a).unwrap();
+    assert!(
+        stream.offer(&foreign, HyperArcId::new(0), 0).is_err(),
+        "an incremental Levi session must not accept coordinates from a foreign canonical snapshot"
+    );
+}
+
 // ---------------------------------------------------------------------------------------------------
 // §3.3 — independence axioms exhaustive on a small cyclic Levi instance.
 // ---------------------------------------------------------------------------------------------------
