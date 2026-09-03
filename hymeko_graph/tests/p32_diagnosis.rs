@@ -229,3 +229,30 @@ fn measure_heuristic_diagnosis() {
         emit("discrete", u4, &ws);
     }
 }
+
+// ---- counters reset correctly under workspace reuse (§9 mandatory) --------------------------------
+
+#[test]
+fn counters_reset_under_reuse() {
+    let ir = ic::map_grid_ir(16, 16, &ic::map_obstacles(16, 16));
+    let idx = build_incidence_index(&ir).unwrap();
+    let trav = HyperTraversal::new(&idx);
+    let mut ws = InformedSearchWorkspace::new();
+    let (s, g) = (NodeId::new(0), NodeId::new(16 * 16 - 1));
+    let _ = dijkstra_berge_path(&trav, s, g, &cost(), &Undirected, &mut ws).unwrap();
+    let first = ws.stats();
+    // a second identical query on the reused workspace must produce IDENTICAL stats (a fresh reset),
+    // not accumulated ones — this is what an omitted counter reset would break.
+    let _ = dijkstra_berge_path(&trav, s, g, &cost(), &Undirected, &mut ws).unwrap();
+    let second = ws.stats();
+    assert_eq!(
+        first.expanded_nodes, second.expanded_nodes,
+        "expanded reset under reuse"
+    );
+    assert_eq!(first.pushes, second.pushes, "pushes reset under reuse");
+    assert_eq!(first.pops, second.pops, "pops reset under reuse");
+    assert_eq!(
+        first.heuristic_evals, second.heuristic_evals,
+        "h_eval reset under reuse"
+    );
+}

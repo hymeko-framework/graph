@@ -307,3 +307,34 @@ fn bench_row(name: &str, ir: &hymeko::ir::ir::Ir) {
         "{name:<18} {v:>7} {e:>8} {nnz:>9} {idx_us:>12.2} {reach_us:>12.2} {dij_us:>12.2} {bytes_per_inc:>10.2}"
     );
 }
+
+// ---- P3.2: STS(1023) large-instance formula validation (§5/§9 mandatory) ---------------------------
+
+#[test]
+fn sts_1023_formula_validation() {
+    // STS(2^10 - 1) = STS(1023): v=1023, blocks=v(v-1)/6=174251, incidences=v(v-1)/2=522753,
+    // degree=(v-1)/2=511. Predicted retained: 522753 incidences * ~fat SignedRefR — well under 16 GiB.
+    let (v, blocks, incidences, degree) = ic::sts_expected_counts(10);
+    assert_eq!((v, blocks, incidences, degree), (1023, 174251, 522753, 511));
+    let ir = ic::steiner_sts_ir(10);
+    assert_eq!(ir.decl_nodes.len(), v);
+    assert_eq!(ir.arcs.len(), blocks);
+    let inc: usize = ir.arcs.iter().map(|a| a.refs.len()).sum();
+    assert_eq!(inc, incidences);
+    assert!(ir.arcs.iter().all(|a| a.refs.len() == 3));
+    // uniform degree, without the O(V^2) pair map (too large to store here; covered on small m).
+    let mut deg = vec![0usize; v];
+    for a in &ir.arcs {
+        for r in &a.refs {
+            deg[r.target().raw()] += 1;
+        }
+    }
+    assert!(
+        deg.iter().all(|&d| d == degree),
+        "STS(1023) uniform degree 511"
+    );
+    // navigation sanity: connected (reachable from node 0 == all V).
+    let idx = build_incidence_index(&ir).unwrap();
+    let eng = reachable_decls(&idx, NodeId::new(0));
+    assert_eq!(eng.len(), v, "STS(1023) connected");
+}
