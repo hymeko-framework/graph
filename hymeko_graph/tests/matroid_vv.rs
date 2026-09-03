@@ -510,6 +510,24 @@ fn incremental_stream_rejects_an_out_of_range_arc_without_panicking() {
 }
 
 #[test]
+fn incremental_stream_rejects_a_mismatched_node_universe_without_panicking() {
+    let ir = ic::weighted_graph_ir(2, &[(0, 1, 1.0)]);
+    let mut ws = GraphicMatroidWorkspace::new();
+    let mut stream = IncrementalRank2::begin(&mut ws, 1).unwrap();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        stream.offer(&ir, HyperArcId::new(0))
+    }));
+    assert!(
+        result.is_ok(),
+        "a public typed API must not panic on a mismatched universe"
+    );
+    assert!(
+        result.unwrap().is_err(),
+        "an arc outside the declared node universe must be a typed error"
+    );
+}
+
+#[test]
 fn workspace_reuse_is_deterministic_across_interleaved_graphs() {
     let a = ic::grid_ir(4, 4);
     let b = ic::window_ir(20, 2, false, SignMode::AllPlus);
