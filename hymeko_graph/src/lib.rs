@@ -98,6 +98,7 @@ pub mod cycle_sampler;
 pub mod direct_ir;
 pub mod hyper_operator;
 pub mod incidence;
+pub mod matroid;
 pub mod path_closure;
 pub mod pruner;
 pub mod quadtree;
@@ -125,6 +126,10 @@ pub use hyper_operator::{HyperIncidenceError, SignedHyperIncidence};
 pub use incidence::{
     BuildOpts as IncidenceBuildOpts, IncidenceCoo, IncidenceOutput, IncidenceResult,
     build_edge_incidence, build_edge_incidence_vertex_adj,
+};
+pub use matroid::{
+    GraphicMatroidWorkspace, IncrementalRank2, MatroidError, MatroidRef, rank2_rank,
+    rank2_spanning_forest, rank2_weighted_basis,
 };
 pub use pruner::{
     CompositePruner, CountingPruner, CyclePruner, NoOpPruner, PrunerDecision, PrunerStats,
