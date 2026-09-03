@@ -543,7 +543,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 [[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#75c6c7b2c7fce2dd512575a4a642494f7d9f9943"
+source = "git+ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#70b4f364d9559602d2d229cde5bfe0d8b8cc5113"
 dependencies = [
  "blake3",
  "nalgebra",
@@ -560,6 +560,7 @@ name = "hymeko_graph"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "hymeko_core",
  "rayon",
 ]
 
@@ -865,7 +866,7 @@ dependencies = [
 [[package]]
 name = "parser"
 version = "0.1.0"
-source = "git+ssh://git@amaterasu.local:2222/hymeko/parser.git?branch=master#284c490d68232973a006bcba974279fed6f89ce8"
+source = "git+ssh://git@amaterasu.local:2222/hymeko/parser.git?branch=master#e28a205147c48273980e63aa3338ca286974a6ed"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
