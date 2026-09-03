@@ -1,5 +1,5 @@
 //! P3.3 §6 — the O(1), zero-allocation facade proof for [`MatroidRef`]. Two independent lines of
-//! evidence: (1) *structural* — the facade is exactly two machine words (two thin references), is `Copy`,
+//! evidence: (1) *structural* — the facade is exactly one machine word (a single thin reference), is `Copy`,
 //! and carries no per-entity state; (2) *empirical* — with a counting global allocator, constructing the
 //! facade and reading its accessors performs **zero** heap allocations, and that cost is **independent of
 //! graph size** (a 4-node graph and a ~250k-incidence graph both cost 0 allocations for the facade). The
@@ -47,21 +47,24 @@ fn assert_copy<T: Copy>() {}
 // ---- (1) structural proof -------------------------------------------------------------------------
 
 #[test]
-fn facade_is_two_words_and_copy() {
-    // two thin references → exactly two machine words, no more.
+fn facade_is_one_word_and_copy() {
+    // one thin reference → exactly one machine word, no more (the P3.4 provenance-safe facade).
     assert_eq!(
         std::mem::size_of::<MatroidRef>(),
-        2 * std::mem::size_of::<usize>(),
-        "MatroidRef must be exactly two references wide (no owned topology)"
+        std::mem::size_of::<usize>(),
+        "MatroidRef must be exactly one reference wide (holds only &IncidenceIndex; the Ir travels through it)"
     );
     // Copy (and therefore Clone) — a facade, not an owner.
     assert_copy::<MatroidRef>();
     // a bit-for-bit copy is a valid independent handle (Copy semantics).
     let ir = ic::grid_ir(3, 3);
     let idx = build_incidence_index(&ir).unwrap();
-    let a = MatroidRef::new(&ir, &idx);
+    let a = MatroidRef::new(&idx);
     let b = a; // Copy
-    assert!(std::ptr::eq(a.ir(), b.ir()), "the copy borrows the same Ir");
+    assert!(
+        std::ptr::eq(a.incidence().ir(), b.incidence().ir()),
+        "the copy borrows the same Ir"
+    );
     assert!(
         std::ptr::eq(a.incidence(), b.incidence()),
         "the copy borrows the same index"
@@ -81,13 +84,13 @@ fn facade_construction_is_zero_alloc_and_size_independent() {
 
     // measure ONLY the facade construction + accessor reads, after the index already exists.
     let a0 = allocs();
-    let mref_small = MatroidRef::new(&small, &small_idx);
-    std::hint::black_box(mref_small.ir());
+    let mref_small = MatroidRef::new(&small_idx);
+    std::hint::black_box(mref_small.incidence().ir());
     std::hint::black_box(mref_small.incidence());
     let a1 = allocs();
 
-    let mref_big = MatroidRef::new(&big, &big_idx);
-    std::hint::black_box(mref_big.ir());
+    let mref_big = MatroidRef::new(&big_idx);
+    std::hint::black_box(mref_big.incidence().ir());
     std::hint::black_box(mref_big.incidence());
     let a2 = allocs();
 
@@ -108,12 +111,12 @@ fn facade_copies_are_free_and_stateless() {
     // copying the facade N times allocates nothing and each copy is an equivalent handle.
     let ir = ic::window_ir(64, 2, false, SignMode::AllPlus);
     let idx = build_incidence_index(&ir).unwrap();
-    let base = MatroidRef::new(&ir, &idx);
+    let base = MatroidRef::new(&idx);
     let a0 = allocs();
     let mut acc = 0usize;
     for _ in 0..1000 {
         let c = base; // Copy
-        acc += std::hint::black_box(c.ir().nodes.len());
+        acc += std::hint::black_box(c.incidence().ir().nodes.len());
     }
     let a1 = allocs();
     assert_eq!(a1 - a0, 0, "1000 facade copies allocate nothing");
@@ -130,7 +133,7 @@ fn rank_computation_is_not_o1_but_facade_is() {
     // ground set (Θ(arcs)). This test documents that boundary rather than asserting rank is free.
     let ir = ic::grid_ir(16, 16);
     let idx = build_incidence_index(&ir).unwrap();
-    let m = MatroidRef::new(&ir, &idx);
+    let m = MatroidRef::new(&idx);
     let mut ws = GraphicMatroidWorkspace::new();
     // warm the workspace so the first-use resize is not counted.
     let _ = rank2_rank(m, &mut ws).unwrap();

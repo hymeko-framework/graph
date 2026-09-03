@@ -181,11 +181,8 @@ fn weighted_graph_ir(n: usize, edges: &[(usize, usize, f64)]) -> Ir {
     ir
 }
 
-fn mref<'a, 'ir>(
-    ir: &'a Ir,
-    idx: &'a hymeko::ir::incidence::IncidenceIndex<'ir>,
-) -> MatroidRef<'a, 'ir> {
-    MatroidRef::new(ir, idx)
+fn mref<'a, 'ir>(idx: &'a hymeko::ir::incidence::IncidenceIndex<'ir>) -> MatroidRef<'a, 'ir> {
+    MatroidRef::new(idx)
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -205,7 +202,7 @@ fn rank_equals_n_minus_components_across_families() {
     for (name, ir) in &cases {
         let n = ir.nodes.len();
         let idx = build_incidence_index(ir).unwrap();
-        let m = mref(ir, &idx);
+        let m = mref(&idx);
 
         let matroid_rank = rank2_rank(m, &mut ws).unwrap();
         let (oracle_forest, oracle_c) = oracle_forest_and_components(ir);
@@ -263,7 +260,7 @@ fn rank_correct_with_offset_node_decl_ids() {
     let idx = build_incidence_index(&ir).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();
     assert_eq!(
-        rank2_rank(mref(&ir, &idx), &mut ws).unwrap(),
+        rank2_rank(mref(&idx), &mut ws).unwrap(),
         2,
         "triangle rank = 3 nodes - 1 comp"
     );
@@ -279,9 +276,9 @@ fn empty_arc_set_has_rank_zero() {
     let idx = build_incidence_index(&ir).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();
     let mut basis = Vec::new();
-    assert_eq!(rank2_rank(mref(&ir, &idx), &mut ws).unwrap(), 0);
+    assert_eq!(rank2_rank(mref(&idx), &mut ws).unwrap(), 0);
     assert_eq!(
-        rank2_spanning_forest(mref(&ir, &idx), &mut ws, &mut basis).unwrap(),
+        rank2_spanning_forest(mref(&idx), &mut ws, &mut basis).unwrap(),
         0
     );
     assert!(basis.is_empty());
@@ -373,7 +370,7 @@ fn independence_axioms_exhaustive_grid2x3() {
 
     // the rank (max independent set size) matches rank2_rank.
     assert_eq!(
-        rank2_rank(mref(&ir, &idx), &mut ws).unwrap(),
+        rank2_rank(mref(&idx), &mut ws).unwrap(),
         max_rank,
         "rank == max independent set"
     );
@@ -422,7 +419,7 @@ fn weighted_basis_matches_independent_kruskal() {
     let mut ws = GraphicMatroidWorkspace::new();
     for (name, ir) in &cases {
         let idx = build_incidence_index(ir).unwrap();
-        let m = mref(ir, &idx);
+        let m = mref(&idx);
         let mut out = Vec::new();
 
         let min_total = rank2_weighted_basis(m, true, &mut ws, &mut out).unwrap();
@@ -457,7 +454,7 @@ fn incremental_stream_equals_full_rebuild() {
     let mut ws = GraphicMatroidWorkspace::new();
 
     let mut batch = Vec::new();
-    rank2_spanning_forest(mref(&ir, &idx), &mut ws, &mut batch).unwrap();
+    rank2_spanning_forest(mref(&idx), &mut ws, &mut batch).unwrap();
 
     // stream the arcs in the same (canonical) order and collect the accepted ones.
     let mut streamed = Vec::new();
@@ -492,18 +489,18 @@ fn workspace_reuse_is_deterministic_across_interleaved_graphs() {
     let mut ws = GraphicMatroidWorkspace::new();
 
     let mut first = Vec::new();
-    rank2_spanning_forest(mref(&a, &ia), &mut ws, &mut first).unwrap();
+    rank2_spanning_forest(mref(&ia), &mut ws, &mut first).unwrap();
 
     // run a different-sized graph on the same workspace, then re-run the first.
     let mut other = Vec::new();
-    rank2_spanning_forest(mref(&b, &ib), &mut ws, &mut other).unwrap();
+    rank2_spanning_forest(mref(&ib), &mut ws, &mut other).unwrap();
     let mut again = Vec::new();
-    rank2_spanning_forest(mref(&a, &ia), &mut ws, &mut again).unwrap();
+    rank2_spanning_forest(mref(&ia), &mut ws, &mut again).unwrap();
 
     // and a truly fresh workspace, for the ground truth.
     let mut fresh_ws = GraphicMatroidWorkspace::new();
     let mut fresh = Vec::new();
-    rank2_spanning_forest(mref(&a, &ia), &mut fresh_ws, &mut fresh).unwrap();
+    rank2_spanning_forest(mref(&ia), &mut fresh_ws, &mut fresh).unwrap();
 
     assert_eq!(
         first, again,
@@ -536,16 +533,16 @@ fn rank_and_optimum_are_arc_permutation_invariant() {
     let idx = build_incidence_index(&base).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();
     let mut out = Vec::new();
-    let base_rank = rank2_rank(mref(&base, &idx), &mut ws).unwrap();
-    let base_min = rank2_weighted_basis(mref(&base, &idx), true, &mut ws, &mut out).unwrap();
+    let base_rank = rank2_rank(mref(&idx), &mut ws).unwrap();
+    let base_min = rank2_weighted_basis(mref(&idx), true, &mut ws, &mut out).unwrap();
 
     // a deterministic reversal + rotation permutation of the arcs.
     let mut perm = base.clone();
     perm.arcs.reverse();
     perm.arcs.rotate_left(3);
     let pidx = build_incidence_index(&perm).unwrap();
-    let perm_rank = rank2_rank(mref(&perm, &pidx), &mut ws).unwrap();
-    let perm_min = rank2_weighted_basis(mref(&perm, &pidx), true, &mut ws, &mut out).unwrap();
+    let perm_rank = rank2_rank(mref(&pidx), &mut ws).unwrap();
+    let perm_min = rank2_weighted_basis(mref(&pidx), true, &mut ws, &mut out).unwrap();
 
     assert_eq!(base_rank, perm_rank, "rank is permutation invariant");
     assert!(
@@ -566,7 +563,7 @@ fn parallel_edges_counted_once() {
     let idx = build_incidence_index(&ir).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();
     let mut basis = Vec::new();
-    let rank = rank2_spanning_forest(mref(&ir, &idx), &mut ws, &mut basis).unwrap();
+    let rank = rank2_spanning_forest(mref(&idx), &mut ws, &mut basis).unwrap();
     assert_eq!(rank, 4, "the duplicate of each edge closes a cycle");
     assert_eq!(basis.len(), 4);
     // offering the parallel copy after the original must close a cycle.
@@ -594,7 +591,7 @@ fn multiway_hyperarc_is_rejected() {
     let idx = build_incidence_index(&ir).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();
     let mut out = Vec::new();
-    let err = rank2_spanning_forest(mref(&ir, &idx), &mut ws, &mut out).unwrap_err();
+    let err = rank2_spanning_forest(mref(&idx), &mut ws, &mut out).unwrap_err();
     assert!(
         matches!(
             err,
@@ -616,7 +613,7 @@ fn self_loop_is_rejected() {
     let idx = build_incidence_index(&ir).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();
     let mut out = Vec::new();
-    let err = rank2_spanning_forest(mref(&ir, &idx), &mut ws, &mut out).unwrap_err();
+    let err = rank2_spanning_forest(mref(&idx), &mut ws, &mut out).unwrap_err();
     assert!(
         matches!(err, MatroidError::SelfLoop { .. }),
         "self-loop rejected, got {err:?}"
@@ -641,7 +638,7 @@ fn dangling_non_node_target_is_rejected() {
     let idx = build_incidence_index(&ir).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();
     let mut out = Vec::new();
-    let err = rank2_spanning_forest(mref(&ir, &idx), &mut ws, &mut out).unwrap_err();
+    let err = rank2_spanning_forest(mref(&idx), &mut ws, &mut out).unwrap_err();
     assert!(
         matches!(err, MatroidError::DanglingTarget { .. }),
         "non-node target rejected, got {err:?}"
@@ -654,7 +651,7 @@ fn non_finite_weight_is_rejected() {
     let idx = build_incidence_index(&ir).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();
     let mut out = Vec::new();
-    let err = rank2_weighted_basis(mref(&ir, &idx), true, &mut ws, &mut out).unwrap_err();
+    let err = rank2_weighted_basis(mref(&idx), true, &mut ws, &mut out).unwrap_err();
     assert!(
         matches!(err, MatroidError::NonFiniteWeight { .. }),
         "NaN weight rejected, got {err:?}"
@@ -683,9 +680,9 @@ fn matroid_operations_do_not_mutate_the_ir() {
     let idx = build_incidence_index(&ir).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();
     let mut out = Vec::new();
-    let _ = rank2_rank(mref(&ir, &idx), &mut ws).unwrap();
-    let _ = rank2_spanning_forest(mref(&ir, &idx), &mut ws, &mut out).unwrap();
-    let _ = rank2_weighted_basis(mref(&ir, &idx), true, &mut ws, &mut out).unwrap();
+    let _ = rank2_rank(mref(&idx), &mut ws).unwrap();
+    let _ = rank2_spanning_forest(mref(&idx), &mut ws, &mut out).unwrap();
+    let _ = rank2_weighted_basis(mref(&idx), true, &mut ws, &mut out).unwrap();
 
     let after = (ir.nodes.len(), ir.arcs.len(), engine_component_count(&ir));
     let weight_sum_after: f64 = (0..ir.arcs.len()).map(|a| oracle_weight(&ir, a)).sum();

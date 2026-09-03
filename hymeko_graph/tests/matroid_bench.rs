@@ -89,7 +89,7 @@ fn measure_matroid_latency() {
             let _ = build_incidence_index(ir).unwrap();
         });
         let idx = build_incidence_index(ir).unwrap();
-        let m = MatroidRef::new(ir, &idx);
+        let m = MatroidRef::new(&idx);
 
         // warm the workspace, then measure the spanning-forest computation.
         let rank = rank2_spanning_forest(m, &mut ws, &mut out).unwrap();
