@@ -55,3 +55,31 @@ A\* heuristics (weak euclidean grid lower bound + prep/overhead; discrete prep n
 even) — all return the correct optimal cost. Data:
 `reports/data/2026-09-03-map-routing-measurement.tsv`; full analysis + deferred items:
 `reports/2026-09-03-graph-navigation-p31.md`.
+
+## P3.3 — zero-copy rank-2 graphic matroid
+
+A **matroid view over the same canonical objects**, not a new model. `hymeko_graph::matroid`
+adds a borrowed `MatroidRef<'a,'ir>{ ir, incidence }` (two words, `Copy`, O(1)/0-alloc — proven
+in `tests/matroid_facade.rs`) and a caller-owned `GraphicMatroidWorkspace` union-find (path
+halving + union by rank + generation-stamped lazy reset). Ground elements are canonical
+`HyperArcId`s that resolve to **exactly two** node incidences; a multiway hyperarc is a typed
+`MatroidError::WrongCardinality`, never silently reinterpreted as a pairwise edge. No second ID
+space, no materialised Levi/star, no serialized matroid. Full design:
+`docs/matroid-over-canonical-ir.md`.
+
+Operations (all Θ(ground set), never O(1) — the *facade* is O(1), the *computation* is not):
+`rank2_spanning_forest` / `rank2_rank` (rank = **N − C**), `rank2_weighted_basis`
+(min/max = the greedy = Kruskal), and an append-only `IncrementalRank2` cycle stream.
+
+Verified (`tests/matroid_vv.rs`, 14 tests): the rank formula triangulated three ways
+(matroid == `N − connected_components().count()` == an independent from-scratch union-find);
+the independence axioms (I1/I2/I3) **exhaustively** on a 7-edge cyclic grid, with the matroid's
+notion of independence proven equal to acyclicity on every subset; greedy == an independent
+Kruskal; incremental == full rebuild; workspace-reuse determinism across interleaved graphs;
+arc-permutation invariance of rank and optimum weight; correctness under node-DeclId ≠ NodeId;
+and the four typed rejections. 9 source mutants injected and each caught by a named test
+(restored bit-for-bit). **Measured** (`reports/data/2026-09-03-p33-matroid-latency.tsv`):
+spanning forest Θ(A·α) (~9 ns/arc on a path, ~26 ns/arc on a grid — cache-scattered node
+access); weighted basis 3–7× that (Kruskal sort); DSU workspace **12 bytes/node** (3×u32),
+retained at high-water across reuse. Full analysis + PARTIAL scope:
+`reports/2026-09-03-zero-copy-matroid-performance.md`.
