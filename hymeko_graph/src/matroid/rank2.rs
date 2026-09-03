@@ -27,7 +27,10 @@ fn arc_weight(arc: &ArcRec) -> Option<f64> {
 
 /// The two node endpoints of a rank-2 hyperarc, or a typed error if it is not a clean pairwise edge.
 fn rank2_endpoints(ir: &Ir, arc_id: HyperArcId) -> Result<(NodeId, NodeId), MatroidError> {
-    let arc = &ir.arcs[arc_id.raw()];
+    let arc = ir
+        .arcs
+        .get(arc_id.raw())
+        .ok_or(MatroidError::UnknownArc { arc: arc_id })?;
     let mut ends: [Option<NodeId>; 2] = [None, None];
     let mut count = 0usize;
     for (slot, sref) in arc.refs.iter().enumerate() {
@@ -152,13 +155,16 @@ pub fn rank2_weighted_basis(
 /// An **incremental**, append-only rank-2 independence stream: feed hyperarcs one at a time into a
 /// caller-owned workspace; each call returns `true` if the hyperarc is independent of those already
 /// accepted (joins the forest) or `false` if it closes a cycle. Deletion is **not** supported.
-pub struct IncrementalRank2<'ws> {
+pub struct IncrementalRank2<'ws, 'ir> {
     ws: &'ws mut GraphicMatroidWorkspace,
+    n_nodes: usize,
+    snapshot: Option<&'ir Ir>,
     accepted: usize,
 }
 
-impl<'ws> IncrementalRank2<'ws> {
-    /// Begin an incremental session over an `n_nodes`-node snapshot.
+impl<'ws, 'ir> IncrementalRank2<'ws, 'ir> {
+    /// Begin an incremental session over an `n_nodes`-node universe. The first offered arc binds the
+    /// session to that canonical `Ir` snapshot; later offers from another snapshot are rejected.
     ///
     /// # Errors
     /// [`MatroidError::Overflow`] if `n_nodes` exceeds `u32`.
@@ -167,13 +173,31 @@ impl<'ws> IncrementalRank2<'ws> {
         n_nodes: usize,
     ) -> Result<Self, MatroidError> {
         ws.begin(n_nodes)?;
-        Ok(Self { ws, accepted: 0 })
+        Ok(Self {
+            ws,
+            n_nodes,
+            snapshot: None,
+            accepted: 0,
+        })
     }
     /// Offer one rank-2 hyperarc; `Ok(true)` = independent (accepted), `Ok(false)` = closes a cycle.
     ///
     /// # Errors
     /// As [`rank2_spanning_forest`] for a non-rank-2 hyperarc.
-    pub fn offer(&mut self, ir: &Ir, arc: HyperArcId) -> Result<bool, MatroidError> {
+    pub fn offer(&mut self, ir: &'ir Ir, arc: HyperArcId) -> Result<bool, MatroidError> {
+        if ir.nodes.len() != self.n_nodes {
+            return Err(MatroidError::NodeUniverseMismatch {
+                expected: self.n_nodes,
+                actual: ir.nodes.len(),
+            });
+        }
+        match self.snapshot {
+            None => self.snapshot = Some(ir),
+            Some(snapshot) if !std::ptr::eq(snapshot, ir) => {
+                return Err(MatroidError::ForeignSnapshot);
+            }
+            Some(_) => {}
+        }
         let (u, v) = rank2_endpoints(ir, arc)?;
         let joined = self.ws.union(u.raw() as u32, v.raw() as u32);
         if joined {

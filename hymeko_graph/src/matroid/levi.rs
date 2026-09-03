@@ -167,18 +167,19 @@ pub fn levi_independent(
 /// An **incremental**, append-only Levi independence stream: feed incidence coordinates one at a time;
 /// each call returns `true` if the coordinate is independent of those already accepted (joins the forest)
 /// or `false` if it closes a cycle. Deletion is **not** supported.
-pub struct IncrementalLevi<'ws> {
+pub struct IncrementalLevi<'ws, 'ir> {
     ws: &'ws mut GraphicMatroidWorkspace,
+    snapshot: &'ir Ir,
     n_nodes: usize,
     accepted: usize,
 }
 
-impl<'ws> IncrementalLevi<'ws> {
+impl<'ws, 'ir> IncrementalLevi<'ws, 'ir> {
     /// Begin an incremental session over the `N + A` vertex universe of `ir`.
     ///
     /// # Errors
     /// [`MatroidError::Overflow`] if `N + A` exceeds `u32`.
-    pub fn begin(ws: &'ws mut GraphicMatroidWorkspace, ir: &Ir) -> Result<Self, MatroidError> {
+    pub fn begin(ws: &'ws mut GraphicMatroidWorkspace, ir: &'ir Ir) -> Result<Self, MatroidError> {
         let vtx = ir
             .nodes
             .len()
@@ -187,6 +188,7 @@ impl<'ws> IncrementalLevi<'ws> {
         ws.begin(vtx)?;
         Ok(Self {
             ws,
+            snapshot: ir,
             n_nodes: ir.nodes.len(),
             accepted: 0,
         })
@@ -195,8 +197,11 @@ impl<'ws> IncrementalLevi<'ws> {
     ///
     /// # Errors
     /// As [`levi_rank`] for a non-node / dangling coordinate.
-    pub fn offer(&mut self, ir: &Ir, arc: HyperArcId, slot: u32) -> Result<bool, MatroidError> {
-        let (nc, ac) = levi_endpoints(ir, self.n_nodes, arc, slot as usize)?;
+    pub fn offer(&mut self, ir: &'ir Ir, arc: HyperArcId, slot: u32) -> Result<bool, MatroidError> {
+        if !std::ptr::eq(self.snapshot, ir) {
+            return Err(MatroidError::ForeignSnapshot);
+        }
+        let (nc, ac) = levi_endpoints(self.snapshot, self.n_nodes, arc, slot as usize)?;
         let joined = self.ws.union(nc, ac);
         if joined {
             self.accepted += 1;
