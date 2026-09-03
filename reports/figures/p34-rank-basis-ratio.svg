@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="380" font-family="sans-serif">
+<text x="360.0" y="24" text-anchor="middle" font-size="16" font-weight="bold">P3.4 Levi basis: rank/incidence ratio and ns per incidence</text>
+<line x1="60" y1="320" x2="660" y2="320" stroke="#333"/>
+<line x1="60" y1="60" x2="60" y2="320" stroke="#333"/>
+<text x="16" y="190.0" text-anchor="middle" font-size="11" transform="rotate(-90 16 190.0)">value</text>
+<rect x="85.0" y="309.9" width="45.0" height="10.1" fill="#3b6"/>
+<rect x="135.0" y="265.3" width="45.0" height="54.7" fill="#b36"/>
+<text x="135.0" y="334" text-anchor="middle" font-size="10">path1k</text>
+<rect x="235.0" y="316.5" width="45.0" height="3.5" fill="#3b6"/>
+<rect x="285.0" y="273.5" width="45.0" height="46.5" fill="#b36"/>
+<text x="285.0" y="334" text-anchor="middle" font-size="10">sts127</text>
+<rect x="385.0" y="316.6" width="45.0" height="3.4" fill="#3b6"/>
+<rect x="435.0" y="139.0" width="45.0" height="181.0" fill="#b36"/>
+<text x="435.0" y="334" text-anchor="middle" font-size="10">sts1023</text>
+<rect x="535.0" y="314.6" width="45.0" height="5.4" fill="#3b6"/>
+<rect x="585.0" y="60.0" width="45.0" height="260.0" fill="#b36"/>
+<text x="585.0" y="334" text-anchor="middle" font-size="10">random1e6</text>
+<rect x="510" y="60" width="12" height="12" fill="#3b6"/>
+<text x="526" y="71" font-size="11">basis/incidence ratio</text>
+<rect x="510" y="78" width="12" height="12" fill="#b36"/>
+<text x="526" y="89" font-size="11">ns per incidence</text>
+</svg>

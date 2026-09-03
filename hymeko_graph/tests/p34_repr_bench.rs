@@ -406,6 +406,10 @@ fn measure_representation_breakeven() {
         for (rep, prep, q, ret, c, loss) in &recs {
             assert_eq!(*c, truth, "[{wname}/{rep}] C_node must match ground truth");
             let t = |qq: f64| prep + qq * q;
+            assert!(
+                (t(1.0) - (prep + q)).abs() < 1e-6,
+                "break-even total(1) must include preparation (guards prep-excluded-from-break-even)"
+            );
             // break-even vs direct: smallest Q>=1 with prep + Q*q < Q*direct_q.
             let be = if *q >= direct_q {
                 if *prep <= 0.0 {

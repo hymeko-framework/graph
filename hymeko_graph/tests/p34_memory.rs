@@ -133,6 +133,10 @@ fn measure_memory() {
         let basis_out_b = lout.capacity() * std::mem::size_of::<LeviCoord>();
 
         let total = since(start);
+        assert!(
+            total.1 > index_retained as u64,
+            "whole-workload allocated bytes must exceed the IncidenceIndex alone (guards index-as-total-memory)"
+        );
         let decls = ir.decl_nodes.len();
         let nodes = ir.nodes.len();
         let arcs = ir.arcs.len();

@@ -270,16 +270,20 @@ fn ts_matrix() {
                 .join("\t"),
             );
         };
-        emit(
-            "BooleanExact",
-            run_norm(&view, &BooleanExact, &UnitReliability, cfg_exact),
-        );
+        let exact = run_norm(&view, &BooleanExact, &UnitReliability, cfg_exact);
+        let luka = run_norm(&view, &Lukasiewicz, &damped, cfg_fuzzy);
+        if *tname == "chain" {
+            // guards a T-norm branch being swapped for an S-norm branch: on the damped chain the
+            // Lukasiewicz T-norm collapses far more availability than BooleanExact's min/max.
+            assert_ne!(
+                exact.5, luka.5,
+                "distinct norm families must give distinct producible counts on the damped chain"
+            );
+        }
+        emit("BooleanExact", exact);
         emit("Godel", run_norm(&view, &Godel, &damped, cfg_fuzzy));
         emit("Product", run_norm(&view, &Product, &damped, cfg_fuzzy));
-        emit(
-            "Lukasiewicz",
-            run_norm(&view, &Lukasiewicz, &damped, cfg_fuzzy),
-        );
+        emit("Lukasiewicz", luka);
     }
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),

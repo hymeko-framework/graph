@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="380" font-family="sans-serif">
+<text x="360.0" y="24" text-anchor="middle" font-size="16" font-weight="bold">P3.4 connectivity break-even vs direct (STS(1023)): queries to amortize prep</text>
+<line x1="60" y1="320" x2="660" y2="320" stroke="#333"/>
+<line x1="60" y1="60" x2="60" y2="320" stroke="#333"/>
+<text x="16" y="190.0" text-anchor="middle" font-size="11" transform="rotate(-90 16 190.0)">queries Q*</text>
+<rect x="90.0" y="320.0" width="54.0" height="0.0" fill="#63b"/>
+<text x="120.0" y="334" text-anchor="middle" font-size="10">direct</text>
+<rect x="210.0" y="268.0" width="54.0" height="52.0" fill="#63b"/>
+<text x="240.0" y="334" text-anchor="middle" font-size="10">no index scan</text>
+<rect x="330.0" y="60.0" width="54.0" height="260.0" fill="#63b"/>
+<text x="360.0" y="334" text-anchor="middle" font-size="10">sparse star csr</text>
+<rect x="450.0" y="112.0" width="54.0" height="208.0" fill="#63b"/>
+<text x="480.0" y="334" text-anchor="middle" font-size="10">clique 2section</text>
+<rect x="570.0" y="216.0" width="54.0" height="104.0" fill="#63b"/>
+<text x="600.0" y="334" text-anchor="middle" font-size="10">levi certificate</text>
+<rect x="510" y="60" width="12" height="12" fill="#63b"/>
+<text x="526" y="71" font-size="11">break-even Q (0 = baseline/NEVER)</text>
+</svg>

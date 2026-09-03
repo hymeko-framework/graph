@@ -1,0 +1,7 @@
+workload	generator	nodes	arcs	incidences	levi_vtx	components	levi_rank	rank2_applicable
+sts511	steiner_sts_ir(9)	511	43435	130305	43946	1	43945	no(k=3)
+sts1023	steiner_sts_ir(10)	1023	174251	522753	175274	1	175273	no(k=3)
+mycielski	mycielski_ir(C5,8)	1535	67355	134710	68890	1	68889	yes(k=2)
+random1e6	uniform_rank_k_ir(0x51EED,200000,333333,3)	200000	333333	999999	533333	1323	532010	no(k=3)
+map512	map_grid_ir(512,512,obstacles)	262144	521632	1043264	783776	409	783367	yes(k=2)
+transport	map_grid_with_transport_ir(256,256,obst,8,5.0)	65536	129745	259496	195281	205	195076	no(multiway)

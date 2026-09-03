@@ -21,19 +21,22 @@ except a caller-owned scratch buffer that holds union-find bookkeeping, never to
 
 ## The two objects
 
-### `MatroidRef<'a, 'ir>` — the O(1) facade
+### `MatroidRef<'a, 'ir>` — the one-word, provenance-safe O(1) facade
 
 ```rust
 #[derive(Clone, Copy)]
-pub struct MatroidRef<'a, 'ir> { ir: &'a Ir, incidence: &'a IncidenceIndex<'ir> }
+pub struct MatroidRef<'a, 'ir> { incidence: &'a IncidenceIndex<'ir> }
 ```
 
-Two thin references, hence exactly two machine words, `Copy`, and constructible with zero
-allocations regardless of graph size. It cannot outlive the borrowed snapshot and is never
-serialized. It carries **no** per-entity state: the "graph" it represents is entirely the borrowed
-`Ir`. This is the sense in which the matroid *view* is O(1) — proven structurally
-(`size_of == 2·size_of::<usize>()`, `Copy`) and empirically (0 allocations to build the facade on
-both a 4-node graph and a 511-point Steiner system) in `tests/matroid_facade.rs`.
+**Updated P3.4:** the facade holds **only** `&IncidenceIndex` and reaches the `Ir` through
+`IncidenceIndex::ir()`. There is no separate `&Ir`, so an index can never be paired with a *foreign*
+`Ir` — that invalid state is **unrepresentable** at the type level, not runtime-checked (no
+`debug_assert`, no pointer compare, no `SnapshotMismatch`). One thin reference, hence exactly **one
+machine word**, `Copy`, constructible with zero allocations regardless of graph size, cannot outlive
+the borrowed snapshot, never serialized. Proven structurally (`size_of == size_of::<usize>()`, `Copy`,
+a `compile_fail` doctest that the old two-argument `new(&ir, &idx)` no longer compiles) and empirically
+(0 allocations to build the facade on both a 4-node graph and a 511-point Steiner system) in
+`tests/matroid_facade.rs`.
 
 The honest boundary: the **facade** is O(1); a rank / basis **computation** over it is Θ(ground
 set) — it must touch every hyperarc. `rank_computation_is_not_o1_but_facade_is` documents exactly
@@ -100,3 +103,20 @@ Fault injection: nine source mutants — facade-owns-state, wrong-endpoint-slot,
 overlap, cardinality-check defeated, greedy-sort reversed, union-omitted, reset-omitted,
 raw-DeclId-as-offset, incremental-accepts-a-cycle — were each injected and shown to make a **named**
 test fail, then reverted with the source hash verified back to the pristine baseline.
+
+## The implicit incidence/Levi graphic matroid (added P3.4)
+
+`matroid/levi.rs` adds a second matroid over the *same* objects: the graphic matroid of the implicit
+bipartite incidence (Levi) graph. Ground elements are exact incidence coordinates `(HyperArcId,
+slot)`; the implicit graph has one vertex per node and one per hyperarc, and one edge per incidence
+coordinate. Nothing is materialised — the `Ir` is iterated in place and the **same**
+`GraphicMatroidWorkspace` DSU is reused over the combined coordinate space (node `n` → `n`, hyperarc
+`a` → `N + a`). The vertex universe is **all** N nodes and **all** A hyperarcs, so an isolated node
+and a zero-incidence hyperarc are singleton components, and `rank = basis = (N + A) − C`. A non-node
+or dangling target is a typed `DanglingTarget` (never silently skipped); duplicate/parallel
+coordinates stay distinct ground elements (the second is dependent, not deduplicated). Operations:
+`levi_rank`, `levi_components`, `levi_spanning_basis`, `levi_independent`, `IncrementalLevi`. Like the
+rank-2 basis, a Levi basis is a **connectivity certificate only**. V&V (`tests/matroid_levi_vv.rs`)
+reconciles it with the direct-Ir engine via `C_levi = C_node + Z` (Z = zero-incidence hyperarcs) and
+validates STS(1023) (rank 175273) and random-1e6 (rank 532010); see
+`reports/2026-09-03-matroid-navigation-p34.md`.
