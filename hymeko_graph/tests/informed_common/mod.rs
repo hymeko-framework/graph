@@ -548,3 +548,191 @@ pub fn two_disjoint_sts_ir(m: u32) -> (Ir, usize) {
     }
     (ir, off)
 }
+
+// ---- P3.1 map/routing workload (coords + weights in the canonical Ir; no parallel DTO) -------------
+
+use std::collections::HashSet;
+
+fn push_positioned_node(ir: &mut Ir, x: f64, y: f64) {
+    let d = ir.push_decl(DeclNode {
+        kind: DeclKind::Node,
+        name: SymId::new(0),
+        parent: DeclId::NONE,
+        first_child: DeclId::NONE,
+        last_child: DeclId::NONE,
+        next_sibling: DeclId::NONE,
+        anno: AnnoR {
+            tags: Vec::new(),
+            value: Some(ValueR::List(vec![ValueR::Num(x), ValueR::Num(y)])),
+        },
+    });
+    let nid = NodeId::new(ir.nodes.len());
+    ir.nodes.push(NodeRec::new(d, Vec::new()));
+    ir.bind_node_decl(d, nid).expect("bind node");
+}
+
+/// Read a node's `[x, y]` coordinate back out of the canonical `Ir` (`DeclNode.anno.value`).
+pub fn ir_position(ir: &Ir, decl: DeclId) -> Option<[f64; 2]> {
+    match &ir.decl_nodes[decl.raw()].anno.value {
+        Some(ValueR::List(v)) if v.len() == 2 => match (&v[0], &v[1]) {
+            (ValueR::Num(x), ValueR::Num(y)) => Some([*x, *y]),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The global minimum incidence weight across the map (the discrete heuristic's per-hop lower bound).
+pub fn map_min_edge_cost(ir: &Ir) -> f64 {
+    let mut m = f64::INFINITY;
+    for a in &ir.arcs {
+        for r in &a.refs {
+            let w = match r {
+                SignedRefR::Plus(x) | SignedRefR::Minus(x) | SignedRefR::Neutral(x) => {
+                    first_num_weight(x.weights.as_deref())
+                }
+            };
+            if w > 0.0 && w < m {
+                m = w;
+            }
+        }
+    }
+    if m.is_finite() { m } else { 1.0 }
+}
+
+fn weighted_edge(ir: &mut Ir, a: usize, b: usize, w: f64) {
+    let mk = |t: usize| {
+        SignedRefR::Plus(RefAtomR {
+            target: DeclId::new(t),
+            anno: AnnoR::default(),
+            weights: Some(vec![ValueR::Num(w)]),
+        })
+    };
+    ir.arcs.push(ArcRec {
+        anno: AnnoR::default(),
+        in_edge: DeclId::NONE,
+        refs: vec![mk(a), mk(b)],
+    });
+}
+
+/// A weighted street grid on `w x h` intersections as canonical `Ir`. Node `(r,c) = r*w+c` carries its
+/// coordinate in `DeclNode.anno.value = [c, r]`. Street segments are arity-2 arcs to the right and down
+/// neighbour with weight `euclidean(=1) * class_factor`: **arterial** lines (`r%4==0 || c%4==0`) cost
+/// `1.0`, **local** roads cost `1.5`. Every weight `>= 1.0 = euclidean` (so the metric heuristic is
+/// admissible). `blocked` intersections get no incident edges (isolated -> unreachable regions/obstacles).
+pub fn map_grid_ir(w: usize, h: usize, blocked: &HashSet<usize>) -> Ir {
+    assert!(w >= 2 && h >= 2);
+    let mut ir = Ir::default();
+    for r in 0..h {
+        for c in 0..w {
+            push_positioned_node(&mut ir, c as f64, r as f64);
+        }
+    }
+    let arterial = |r: usize, c: usize| r.is_multiple_of(4) || c.is_multiple_of(4);
+    for r in 0..h {
+        for c in 0..w {
+            let id = r * w + c;
+            if blocked.contains(&id) {
+                continue;
+            }
+            if c + 1 < w && !blocked.contains(&(id + 1)) {
+                let cost = if arterial(r, c) && arterial(r, c + 1) {
+                    1.0
+                } else {
+                    1.5
+                };
+                weighted_edge(&mut ir, id, id + 1, cost);
+            }
+            if r + 1 < h && !blocked.contains(&(id + w)) {
+                let cost = if arterial(r, c) && arterial(r + 1, c) {
+                    1.0
+                } else {
+                    1.5
+                };
+                weighted_edge(&mut ir, id, id + w, cost);
+            }
+        }
+    }
+    ir
+}
+
+/// A deterministic diagonal obstacle set for a `w x h` grid (blocks a broken diagonal wall, leaving a
+/// reachable detour). Seeded only by the dimensions.
+pub fn map_obstacles(w: usize, h: usize) -> HashSet<usize> {
+    let mut s = HashSet::new();
+    let d = w.min(h);
+    for i in 1..(d - 1) {
+        if !i.is_multiple_of(5) {
+            // leave a gap every 5th cell so the grid stays connected
+            s.insert(i * w + i);
+        }
+    }
+    s
+}
+
+/// `map_grid_ir` plus one genuinely multiway **transport** hyperedge (a metro line): an arity-`k` arc
+/// connecting `k` evenly-spaced stations at a flat cheap `fare`. This edge is *not* metric-admissible
+/// (its fare can be below the station-pair euclidean distance), which is exactly why the discrete
+/// heuristic is needed there; returned separately so metric tests can use the pure grid.
+pub fn map_grid_with_transport_ir(
+    w: usize,
+    h: usize,
+    blocked: &HashSet<usize>,
+    k: usize,
+    fare: f64,
+) -> Ir {
+    let mut ir = map_grid_ir(w, h, blocked);
+    let stations: Vec<usize> = (0..k).map(|i| (i * (w * h - 1)) / (k - 1)).collect();
+    let refs = stations
+        .into_iter()
+        .filter(|s| !blocked.contains(s))
+        .map(|s| {
+            SignedRefR::Plus(RefAtomR {
+                target: DeclId::new(s),
+                anno: AnnoR::default(),
+                weights: Some(vec![ValueR::Num(fare)]),
+            })
+        })
+        .collect();
+    ir.arcs.push(ArcRec {
+        anno: AnnoR::default(),
+        in_edge: DeclId::NONE,
+        refs,
+    });
+    ir
+}
+
+/// Unit-hop Berge distances from `goal` to every reachable node (a plain BFS over the incidence index),
+/// used to prepare the discrete heuristic. `u32::MAX` for unreachable. Engine-independent.
+pub fn hop_distances_from(ir: &Ir, index: &IncidenceIndex<'_>, goal: NodeId) -> Vec<u32> {
+    let n = ir.decl_nodes.len();
+    let mut dist = vec![u32::MAX; n];
+    let goal_d = ir.nodes[goal.raw()].decl.raw();
+    dist[goal_d] = 0;
+    let mut frontier = vec![DeclId::new(goal_d)];
+    while !frontier.is_empty() {
+        let mut next = Vec::new();
+        for u in frontier {
+            let du = dist[u.raw()];
+            for &arc in index.incident_arcs(u) {
+                for (slot, _) in ir.arcs[arc.raw()].refs.iter().enumerate() {
+                    let v = index.resolve(arc, slot as u32).target;
+                    if dist[v.raw()] == u32::MAX {
+                        dist[v.raw()] = du + 1;
+                        next.push(v);
+                    }
+                }
+            }
+        }
+        frontier = next;
+    }
+    dist
+}
+
+/// The first numeric weight of a signed ref (0.0 if none) — public accessor for consistency checks.
+pub fn first_num_weight_pub(sref: &SignedRefR) -> f64 {
+    let w = match sref {
+        SignedRefR::Plus(x) | SignedRefR::Minus(x) | SignedRefR::Neutral(x) => x.weights.as_deref(),
+    };
+    first_num_weight(w)
+}
