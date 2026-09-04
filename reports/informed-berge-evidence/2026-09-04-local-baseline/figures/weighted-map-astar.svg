@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="536" font-family="sans-serif">
+<rect width="100%" height="100%" fill="white"/>
+<text x="500" y="28" text-anchor="middle" font-size="18" font-weight="bold">Weighted-map A* query speedup</text>
+<text x="500" y="48" text-anchor="middle" font-size="11">relative to same-workload Dijkstra; red line is parity</text>
+<line x1="369.7" y1="60" x2="369.7" y2="501" stroke="#b33" stroke-dasharray="5 4"/>
+<text x="250" y="82" text-anchor="end" font-size="10">map32/metric</text>
+<line x1="260.0" y1="78.0" x2="345.8" y2="78.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="351.8" y="82" font-size="10">0.78x</text>
+<text x="250" y="114" text-anchor="end" font-size="10">map32/discrete</text>
+<line x1="260.0" y1="110.0" x2="329.2" y2="110.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="335.2" y="114" font-size="10">0.63x</text>
+<text x="250" y="146" text-anchor="end" font-size="10">map32/combined</text>
+<line x1="260.0" y1="142.0" x2="329.1" y2="142.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="335.1" y="146" font-size="10">0.63x</text>
+<text x="250" y="178" text-anchor="end" font-size="10">map128/metric</text>
+<line x1="260.0" y1="174.0" x2="352.2" y2="174.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="358.2" y="178" font-size="10">0.84x</text>
+<text x="250" y="210" text-anchor="end" font-size="10">map128/discrete</text>
+<line x1="260.0" y1="206.0" x2="333.3" y2="206.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="339.3" y="210" font-size="10">0.67x</text>
+<text x="250" y="242" text-anchor="end" font-size="10">map128/combined</text>
+<line x1="260.0" y1="238.0" x2="334.3" y2="238.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="340.3" y="242" font-size="10">0.68x</text>
+<text x="250" y="274" text-anchor="end" font-size="10">map512/metric</text>
+<line x1="260.0" y1="270.0" x2="355.7" y2="270.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="361.7" y="274" font-size="10">0.87x</text>
+<text x="250" y="306" text-anchor="end" font-size="10">map512/discrete</text>
+<line x1="260.0" y1="302.0" x2="346.5" y2="302.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="352.5" y="306" font-size="10">0.79x</text>
+<text x="250" y="338" text-anchor="end" font-size="10">map512/combined</text>
+<line x1="260.0" y1="334.0" x2="344.7" y2="334.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="350.7" y="338" font-size="10">0.77x</text>
+<text x="250" y="370" text-anchor="end" font-size="10">corridor128/metric</text>
+<line x1="260.0" y1="366.0" x2="369.9" y2="366.0" stroke="#287a52" stroke-width="7"/>
+<text x="375.9" y="370" font-size="10">1.00x</text>
+<text x="250" y="402" text-anchor="end" font-size="10">corridor128/discrete</text>
+<line x1="260.0" y1="398.0" x2="369.9" y2="398.0" stroke="#287a52" stroke-width="7"/>
+<text x="375.9" y="402" font-size="10">1.00x</text>
+<text x="250" y="434" text-anchor="end" font-size="10">corridor128/combined</text>
+<line x1="260.0" y1="430.0" x2="366.7" y2="430.0" stroke="#b45f2d" stroke-width="7"/>
+<text x="372.7" y="434" font-size="10">0.97x</text>
+<text x="250" y="466" text-anchor="end" font-size="10">transport128/discrete</text>
+<line x1="260.0" y1="462.0" x2="878.2" y2="462.0" stroke="#287a52" stroke-width="7"/>
+<text x="884.2" y="466" font-size="10">5.63x</text>
+</svg>
