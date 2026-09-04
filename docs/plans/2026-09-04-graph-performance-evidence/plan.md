@@ -190,3 +190,53 @@ Acceptance requires:
 Rollback is commit-level revert of test instrumentation, scripts and evidence artifacts. The
 production library remains byte-identical throughout, so rollback cannot alter runtime
 behavior.
+
+## Approved follow-up amendment: Dijkstra and comparability closure
+
+**Approved:** 2026-09-04 CEST, explicitly by the user after review of the first evidence run.
+
+**Approval text:** “Jóváhagyom a Dijkstra slot-iteráció minimalista production javítását, a
+benchmark-korrekciókat és az újramérést; core IR layoutváltás nélkül.”
+
+The first evidence review found two benchmark weaknesses and one bounded production hot path:
+
+1. Dijkstra evidence checks only path length even though `WeightedBergePath::path_hash()` can pin
+   the full canonical path and cost.
+2. The representation cell returns the same scalar, but its canonical path constructs a complete
+   `ComponentLabeling` while the controls compute only a count. That confounds representation and
+   output work.
+3. `astar_berge_path` iterates `incident_arcs(node)` and then calls `u_slot_in`, which linearly
+   rescans the same node row for every newly activated arc. On STS(1023) this executes 57,303,686
+   slot comparisons for 348,502 target relaxations and changes the documented linear walk into a
+   high-degree `sum(degree^2)` term.
+
+The approved production surface is exactly
+`hymeko_graph/src/direct_ir/informed.rs`: zip the already-parallel `incident_arcs` and
+`incident_slots` slices and pass the matching slot directly to `resolve`; remove the now-unused
+linear `u_slot_in` helper. Public types, signatures, ordering, cost/policy semantics, topology and
+dependencies remain unchanged. Existing path hashes must remain byte-identical across the change.
+Rollback is the single production-fix commit.
+
+The approved test/evidence surface is the existing `performance_evidence` client and scripts:
+
+- use the full `path_hash()` as Dijkstra's deterministic checksum;
+- emit exact `SearchStats` work counters for every Dijkstra cell;
+- replace the label-producing canonical representation query with a test-only count-only kernel
+  over canonical arcs and the same control DSU lifecycle used by other count-only variants;
+- report canonical workspace bytes instead of `UNMEASURED`;
+- add fixed-near-one-million-incidence rank-2/3/8/32/128 representation workloads; and
+- preserve the first run under `reports/performance-evidence/2026-09-04`, writing the corrective
+  run to `reports/performance-evidence/2026-09-04-dijkstra-comparability`.
+
+The canonical count kernel is benchmark-control code only. It neither becomes a production
+algorithm nor creates retained topology: it scans the borrowed canonical `Ir`, unions each
+hyperarc's node members in reusable scratch and returns one `usize`, exactly like the other
+variants. The separate production `components` operation cell continues measuring the public full
+labeling API.
+
+Follow-up acceptance requires all original gates plus: pre/post Dijkstra path hashes match on all
+five operation workloads; Dijkstra work counters are non-zero and deterministic; every
+representation returns the same count; each representation query returns only the count; all five
+arity cells finish without an unreported OOM/skip; the old evidence directory and all historical
+P3.4 artifacts remain byte-identical; and no core repository, Cargo manifest/lock or production
+file outside the one approved graph source is changed.
