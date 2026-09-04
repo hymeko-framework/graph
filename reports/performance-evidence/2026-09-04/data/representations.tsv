@@ -1,0 +1,13 @@
+process_run	run	workload	representation	representation_b	workspace_b	output_b	semantic_loss
+representation_cell-sts1023-canonical_index-t1	representation_cell-sts1023-canonical_index-t1	sts1023	canonical_index	6277132	UNMEASURED	8	none
+representation_cell-sts1023-implicit_levi-t1	representation_cell-sts1023-implicit_levi-t1	sts1023	implicit_levi	6277132	2103288	8	signs,weights,paths,incidence payload
+representation_cell-sts1023-sparse_star-t1	representation_cell-sts1023-sparse_star-t1	sts1023	sparse_star	4883124	2103288	8	signs,weights,exact incidence slots
+representation_cell-sts1023-clique_2section-t1	representation_cell-sts1023-clique_2section-t1	sts1023	clique_2section	4194304	12276	8	hyperarc identity,cardinality,signs,weights,exact incidence slots
+representation_cell-random1e6-canonical_index-t1	representation_cell-random1e6-canonical_index-t1	random1e6	canonical_index	12799992	UNMEASURED	8	none
+representation_cell-random1e6-implicit_levi-t1	representation_cell-random1e6-implicit_levi-t1	random1e6	implicit_levi	12799992	6399996	8	signs,weights,paths,incidence payload
+representation_cell-random1e6-sparse_star-t1	representation_cell-random1e6-sparse_star-t1	random1e6	sparse_star	10133328	6399996	8	signs,weights,exact incidence slots
+representation_cell-random1e6-clique_2section-t1	representation_cell-random1e6-clique_2section-t1	random1e6	clique_2section	8388608	2400000	8	hyperarc identity,cardinality,signs,weights,exact incidence slots
+representation_cell-map512-canonical_index-t1	representation_cell-map512-canonical_index-t1	map512	canonical_index	13567748	UNMEASURED	8	none
+representation_cell-map512-implicit_levi-t1	representation_cell-map512-implicit_levi-t1	map512	implicit_levi	13567748	9405312	8	signs,weights,paths,incidence payload
+representation_cell-map512-sparse_star-t1	representation_cell-map512-sparse_star-t1	map512	sparse_star	11481220	9405312	8	signs,weights,exact incidence slots
+representation_cell-map512-clique_2section-t1	representation_cell-map512-clique_2section-t1	map512	clique_2section	4194304	3145728	8	hyperarc identity,cardinality,signs,weights,exact incidence slots
