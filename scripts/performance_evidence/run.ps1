@@ -339,6 +339,8 @@ $manifestRows = @(
     [pscustomobject]@{ key='warmups'; value='2' },
     [pscustomobject]@{ key='samples'; value='9' },
     [pscustomobject]@{ key='cpu_batch_target_us'; value='250000' },
+    [pscustomobject]@{ key='random1e6_seed'; value='0x51eed' },
+    [pscustomobject]@{ key='workload_definitions'; value='path65k=window_ir(65536,2);grid256=grid_ir(256,256);sts1023=steiner_triple_system(1023);random1e6=uniform_rank_k_ir(0x51eed,200000,333333,3);map512=map_grid_ir(512,512,map_obstacles)' },
     [pscustomobject]@{ key='logical_processors'; value="$logicalProcessors" },
     [pscustomobject]@{ key='ambient_cpu_avg_pct'; value="$ambientAverage" },
     [pscustomobject]@{ key='ambient_cpu_max_pct'; value="$ambientMaximum" },

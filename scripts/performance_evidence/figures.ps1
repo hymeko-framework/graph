@@ -226,4 +226,17 @@ $svg.Add('<line x1="85" y1="70" x2="85" y2="455" stroke="#333"/>')
 $svg.Add('<text x="20" y="260" text-anchor="middle" font-size="12" transform="rotate(-90 20 260)">total time (µs, log scale)</text>')
 Write-Svg 'representation-total.svg' $svg
 
+$artifactLines = [Collections.Generic.List[string]]::new()
+$artifactLines.Add("path`tsha256")
+$artifacts = @(
+    Get-ChildItem -LiteralPath $dataDir -Filter '*.tsv'
+    Get-ChildItem -LiteralPath $figureDir -Filter '*.svg'
+) | Sort-Object FullName
+foreach ($artifact in $artifacts) {
+    $relative = $artifact.FullName.Substring($repoRoot.Length + 1).Replace('\', '/')
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $artifact.FullName).Hash.ToLowerInvariant()
+    $artifactLines.Add("$relative`t$hash")
+}
+[IO.File]::WriteAllLines((Join-Path $evidenceRoot 'artifact-sha256.tsv'), $artifactLines, $utf8)
+
 Write-Host "wrote performance-evidence figures to $figureDir"
