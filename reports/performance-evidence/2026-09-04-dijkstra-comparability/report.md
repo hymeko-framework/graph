@@ -188,5 +188,25 @@ single-query parallelism.
 - [`processes.tsv`](data/processes.tsv) and [`rss.tsv`](data/rss.tsv): process evidence;
 - [`artifact-sha256.tsv`](artifact-sha256.tsv): frozen data and figure hashes.
 
-Repository-wide and benchmark-workspace gates are recorded in the closing commit and
-handoff after this evidence package is frozen.
+## 7. Repository gates and change boundary
+
+The final tree passed:
+
+- `cargo fmt --all -- --check`;
+- workspace Clippy with all features and targets under `-D warnings`;
+- workspace check and build with all features and targets;
+- workspace tests with all features and targets;
+- workspace doctests with all features; and
+- separate benchmark-workspace no-run plus smoke execution of `graph_bench`,
+  `incidence_bench`, `pgraph_bench` and `spine_bench`.
+
+The population is reported without mixing scopes: all-target has 559 named tests (544
+normal-policy passes and 15 deliberate ignores), while doctest has six names (four passes
+and two deliberate ignores). Combined, that is 565 names, 548 normal-policy passes and
+17 documented ignores.
+
+Relative to the approved follow-up base `c4bc981`, production changes are confined to
+`hymeko_graph/src/direct_ir/informed.rs`. The rest is the approved plan, test harness,
+runner/figure scripts and new dated evidence directory. `hymeko_pgraph/src`, every Cargo
+manifest, `Cargo.lock`, the resolved core repository and the prior evidence directories
+are unchanged.
