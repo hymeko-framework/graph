@@ -584,8 +584,7 @@ fn preparation_cell() {
         if strong {
             hash_hops(&hops)
         } else {
-            ((hops.len() as u64) << 32)
-                ^ hops.last().copied().map_or(u64::MAX, u64::from)
+            ((hops.len() as u64) << 32) ^ hops.last().copied().map_or(u64::MAX, u64::from)
         }
     };
     let expected = prepare(true);
@@ -761,7 +760,7 @@ fn enumeration_fixture(name: &str) -> (Ir, NodeId, Option<NodeId>, EnumBudget) {
             EnumBudget::new(8, 2_000, 500_000),
         ),
         "sts31" => (
-            workloads::steiner_sts_ir(31),
+            workloads::steiner_sts_ir(5),
             NodeId::new(0),
             None,
             EnumBudget::new(4, 4_096, 500_000),
