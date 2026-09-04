@@ -4,9 +4,7 @@ use std::mem::size_of;
 
 use hymeko::ir::incidence::{IncidenceIndex, build_incidence_index};
 use hymeko::ir::ir::Ir;
-use hymeko_graph::{
-    GraphicMatroidWorkspace, MatroidRef, TraversalWorkspace, connected_components, levi_components,
-};
+use hymeko_graph::{GraphicMatroidWorkspace, MatroidRef, levi_components};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RepresentationKind {
@@ -213,7 +211,7 @@ pub struct RetainedBytes {
 pub enum PreparedRepresentation<'ir> {
     Canonical {
         index: IncidenceIndex<'ir>,
-        workspace: TraversalWorkspace,
+        workspace: ControlDsu,
     },
     Levi {
         index: IncidenceIndex<'ir>,
@@ -236,7 +234,7 @@ impl<'ir> PreparedRepresentation<'ir> {
         let mut prepared = match kind {
             RepresentationKind::CanonicalIndex => Self::Canonical {
                 index: build_incidence_index(ir).expect("canonical index"),
-                workspace: TraversalWorkspace::new(),
+                workspace: ControlDsu::new(ir.nodes.len()),
             },
             RepresentationKind::ImplicitLevi => Self::Levi {
                 index: build_incidence_index(ir).expect("canonical index"),
@@ -266,9 +264,23 @@ impl<'ir> PreparedRepresentation<'ir> {
 
     pub fn query(&mut self) -> usize {
         match self {
-            Self::Canonical { index, workspace } => connected_components(index, workspace)
-                .expect("canonical components")
-                .count() as usize,
+            Self::Canonical { index, workspace } => {
+                let ir = index.ir();
+                workspace.reset();
+                for record in &ir.arcs {
+                    let mut members = record.refs.iter().map(|incidence| {
+                        ir.as_node(incidence.target())
+                            .expect("benchmark workload contains only node incidences")
+                            .raw() as u32
+                    });
+                    if let Some(anchor) = members.next() {
+                        for member in members {
+                            workspace.union(anchor, member);
+                        }
+                    }
+                }
+                workspace.count_distinct_roots(ir.nodes.len())
+            }
             Self::Levi {
                 index,
                 workspace,
@@ -304,9 +316,9 @@ impl<'ir> PreparedRepresentation<'ir> {
 
     pub fn retained_bytes(&self) -> RetainedBytes {
         match self {
-            Self::Canonical { index, .. } => RetainedBytes {
+            Self::Canonical { index, workspace } => RetainedBytes {
                 representation: index.retained_bytes(),
-                workspace: None,
+                workspace: Some(workspace.retained_bytes()),
             },
             Self::Levi {
                 index, workspace, ..

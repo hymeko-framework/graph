@@ -123,6 +123,55 @@ pub fn measure_calibrated(mut operation: impl FnMut() -> u64) -> Measurement {
     measure_repeated(repetitions, operation)
 }
 
+/// Measure a cheap observation of each operation while computing one stronger checksum outside every
+/// sample's wall/CPU boundary. This keeps an O(output) integrity digest from becoming benchmark work.
+pub fn measure_calibrated_verified(mut operation: impl FnMut(bool) -> u64) -> Measurement {
+    let start = Instant::now();
+    black_box(operation(false));
+    let probe_us = start.elapsed().as_secs_f64() * 1e6;
+    let repetitions = if probe_us > 0.0 {
+        (CPU_RESOLUTION_TARGET_US / probe_us).ceil() as usize
+    } else {
+        MAX_REPETITIONS_PER_SAMPLE
+    }
+    .clamp(1, MAX_REPETITIONS_PER_SAMPLE);
+
+    for _ in 0..DEFAULT_WARMUPS {
+        for _ in 0..repetitions {
+            black_box(operation(false));
+        }
+    }
+
+    let mut measured_sentinel = None;
+    let mut samples = Vec::with_capacity(DEFAULT_SAMPLES);
+    for ordinal in 0..DEFAULT_SAMPLES {
+        let cpu_before = process_cpu_us();
+        let start = Instant::now();
+        for _ in 0..repetitions {
+            let current = black_box(operation(false));
+            match measured_sentinel {
+                None => measured_sentinel = Some(current),
+                Some(expected) => {
+                    assert_eq!(current, expected, "measured result drift within a sample")
+                }
+            }
+        }
+        let wall_us = start.elapsed().as_secs_f64() * 1e6 / repetitions as f64;
+        let cpu_after = process_cpu_us();
+        let cpu_us = cpu_before
+            .zip(cpu_after)
+            .map(|(before, after)| (after - before).max(0.0) / repetitions as f64);
+        let checksum = black_box(operation(true));
+        samples.push(Sample {
+            ordinal,
+            wall_us,
+            cpu_us,
+            checksum,
+        });
+    }
+    finish(DEFAULT_WARMUPS, repetitions, samples)
+}
+
 /// Measure creation through the returned ready-to-query object, but exclude its destruction.
 /// The final measured object is retained for the subsequent warm-query measurement.
 pub fn measure_factory<T>(mut factory: impl FnMut() -> (T, u64)) -> (Measurement, T) {

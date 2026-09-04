@@ -11,7 +11,8 @@ use hymeko::common::ids::NodeId;
 use hymeko::ir::incidence::{IncidenceIndex, build_incidence_index};
 use hymeko::ir::ir::Ir;
 use hymeko_graph::direct_ir::{
-    HyperTraversal, IncidenceWeightCost, InformedSearchWorkspace, Undirected, dijkstra_berge_path,
+    HyperTraversal, IncidenceWeightCost, InformedSearchWorkspace, SearchStats, Undirected,
+    dijkstra_berge_path,
 };
 use hymeko_graph::{
     GraphicMatroidWorkspace, MatroidRef, TraversalWorkspace, connected_components,
@@ -28,7 +29,7 @@ mod telemetry;
 mod workloads;
 
 use representations::{PreparedRepresentation, RepresentationKind};
-use statistics::{Measurement, measure_calibrated, measure_factory};
+use statistics::{Measurement, measure_calibrated, measure_calibrated_verified, measure_factory};
 
 fn dimensions(ir: &Ir) -> (usize, usize, usize) {
     (
@@ -42,6 +43,11 @@ fn evidence_workload(name: &str) -> Ir {
     match name {
         "path65k" => workloads::window_ir(65_536, 2, true, workloads::SignMode::AllPlus),
         "grid256" => workloads::grid_ir(256, 256),
+        "arity2_1m" => workloads::uniform_rank_k_ir(0x51EED ^ 2, 200_000, 500_000, 2),
+        "arity3_1m" => workloads::uniform_rank_k_ir(0x51EED ^ 3, 200_000, 333_333, 3),
+        "arity8_1m" => workloads::uniform_rank_k_ir(0x51EED ^ 8, 200_000, 125_000, 8),
+        "arity32_1m" => workloads::uniform_rank_k_ir(0x51EED ^ 32, 200_000, 31_250, 32),
+        "arity128_1m" => workloads::uniform_rank_k_ir(0x51EED ^ 128, 200_000, 7_812, 128),
         other => workloads::named_workload(other),
     }
 }
@@ -60,6 +66,20 @@ fn emit_phase(run: &str, workload: &str, subject: &str, phase: &str) {
             "EVIDENCE_PHASE\trun={run}\tworkload={workload}\tsubject={subject}\tphase={phase}\tworking_set_b=NA\tself_peak_b=NA"
         ),
     }
+}
+
+fn emit_search_work(run: &str, workload: &str, subject: &str, stats: SearchStats) {
+    println!(
+        "EVIDENCE_WORK\trun={run}\tworkload={workload}\tsubject={subject}\texpanded_nodes={}\texpanded_arcs={}\tresolved_incidences={}\tpushes={}\tpops={}\tstale_pops={}\theuristic_evals={}\treopened={}",
+        stats.expanded_nodes,
+        stats.expanded_arcs,
+        stats.resolved_incidences,
+        stats.pushes,
+        stats.pops,
+        stats.stale_pops,
+        stats.heuristic_evals,
+        stats.reopened
+    );
 }
 
 fn emit_measurement(
@@ -177,22 +197,49 @@ fn measure_operation(
             let cost = IncidenceWeightCost { base: 1.0 };
             let mut workspace = InformedSearchWorkspace::new();
             let goal = NodeId::new(node_count.saturating_sub(1));
-            let mut run_query = || {
-                dijkstra_berge_path(
-                    &traversal,
-                    NodeId::new(0),
-                    goal,
-                    &cost,
-                    &Undirected,
-                    &mut workspace,
-                )
-                .expect("Dijkstra")
-                .map_or(0, |path| path.steps.len() as u64)
+            let (expected, measurement) = {
+                let mut run_query = |strong_checksum: bool| {
+                    dijkstra_berge_path(
+                        &traversal,
+                        NodeId::new(0),
+                        goal,
+                        &cost,
+                        &Undirected,
+                        &mut workspace,
+                    )
+                    .expect("Dijkstra")
+                    .map_or(0, |path| {
+                        if strong_checksum {
+                            path.path_hash()
+                        } else {
+                            path.steps.len() as u64
+                        }
+                    })
+                };
+                let expected = run_query(true);
+                emit_phase(run, workload, operation, "prepared");
+                let measurement = measure_calibrated_verified(&mut run_query);
+                (expected, measurement)
             };
-            let expected = run_query();
-            emit_phase(run, workload, operation, "prepared");
-            let measurement = measure_calibrated(run_query);
             assert_eq!(measurement.checksum, expected);
+            let measured_work = workspace.stats();
+            let verification = dijkstra_berge_path(
+                &traversal,
+                NodeId::new(0),
+                goal,
+                &cost,
+                &Undirected,
+                &mut workspace,
+            )
+            .expect("Dijkstra verification")
+            .map_or(0, |path| path.path_hash());
+            assert_eq!(verification, expected, "post-measurement path hash drift");
+            assert_eq!(
+                workspace.stats(),
+                measured_work,
+                "Dijkstra work counters must be deterministic"
+            );
+            emit_search_work(run, workload, operation, measured_work);
             Some(measurement)
         }
         "rank2" => {
@@ -338,6 +385,43 @@ fn representation_queries_have_component_parity() {
         match expected {
             None => expected = Some(initial),
             Some(expected) => assert_eq!(initial, expected, "{} parity", kind.key()),
+        }
+    }
+}
+
+#[test]
+fn canonical_count_control_matches_production_labeling() {
+    for ir in [
+        workloads::steiner_sts_ir(5),
+        workloads::uniform_rank_k_ir(0xC0DEC, 256, 128, 8),
+    ] {
+        let index = build_incidence_index(&ir).expect("canonical index");
+        let mut traversal_workspace = TraversalWorkspace::new();
+        let expected = connected_components(&index, &mut traversal_workspace)
+            .expect("production component labeling")
+            .count() as usize;
+        let (mut prepared, initial) =
+            PreparedRepresentation::build(RepresentationKind::CanonicalIndex, &ir);
+        assert_eq!(initial, expected);
+        assert_eq!(prepared.query(), expected);
+    }
+}
+
+#[test]
+fn representation_controls_match_across_arities() {
+    for arity in [2, 3, 8, 32, 128] {
+        let edge_count = (512 / arity).max(1);
+        let ir = workloads::uniform_rank_k_ir(0xA11CE ^ arity as u64, 256, edge_count, arity);
+        let mut expected = None;
+        for kind in RepresentationKind::ALL {
+            let (mut prepared, initial) = PreparedRepresentation::build(kind, &ir);
+            assert_eq!(prepared.query(), initial, "arity={arity}");
+            match expected {
+                None => expected = Some(initial),
+                Some(expected) => {
+                    assert_eq!(initial, expected, "arity={arity}, kind={}", kind.key())
+                }
+            }
         }
     }
 }

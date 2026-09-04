@@ -95,6 +95,7 @@ $sampleRows = [Collections.Generic.List[object]]::new()
 $cellRows = [Collections.Generic.List[object]]::new()
 $phaseRows = [Collections.Generic.List[object]]::new()
 $retainedRows = [Collections.Generic.List[object]]::new()
+$workRows = [Collections.Generic.List[object]]::new()
 
 function Invoke-EvidenceProcess(
     [string]$testName,
@@ -210,6 +211,16 @@ function Invoke-EvidenceProcess(
                     semantic_loss = $value.semantic_loss
                 })
             }
+            'EVIDENCE_WORK' {
+                $workRows.Add([pscustomobject][ordered]@{
+                    process_run = $processRun; run = $value.run; workload = $value.workload
+                    subject = $value.subject; expanded_nodes = $value.expanded_nodes
+                    expanded_arcs = $value.expanded_arcs
+                    resolved_incidences = $value.resolved_incidences; pushes = $value.pushes
+                    pops = $value.pops; stale_pops = $value.stale_pops
+                    heuristic_evals = $value.heuristic_evals; reopened = $value.reopened
+                })
+            }
         }
     }
 }
@@ -218,7 +229,7 @@ if ($Quick) {
     $scaleWorkloads = @('sts511')
     $threadList = @(1, [Math]::Min(2, $logicalProcessors)) | Select-Object -Unique
     $serialWorkloads = @('path65k')
-    $serialOperations = @('rank2', 'levi')
+    $serialOperations = @('dijkstra', 'rank2', 'levi')
     $representationWorkloads = @('sts511')
 } else {
     $scaleWorkloads = @('sts1023', 'random1e6', 'map512')
@@ -226,7 +237,10 @@ if ($Quick) {
         Where-Object { $_ -le $logicalProcessors } | Select-Object -Unique
     $serialWorkloads = @('path65k', 'grid256', 'sts1023', 'random1e6', 'map512')
     $serialOperations = @('reachable', 'components', 'dijkstra', 'rank2', 'levi')
-    $representationWorkloads = @('sts1023', 'random1e6', 'map512')
+    $representationWorkloads = @(
+        'sts1023', 'random1e6', 'map512',
+        'arity2_1m', 'arity3_1m', 'arity8_1m', 'arity32_1m', 'arity128_1m'
+    )
 }
 
 foreach ($workload in $scaleWorkloads) {
@@ -288,6 +302,21 @@ foreach ($processRow in $processRows) {
     }
 }
 
+$dijkstraCells = @($okCells | Where-Object {
+    $_.section -eq 'operation' -and $_.subject -eq 'dijkstra'
+})
+if ($workRows.Count -ne $dijkstraCells.Count) {
+    throw "Dijkstra work-row count $($workRows.Count) does not match cell count $($dijkstraCells.Count)"
+}
+foreach ($work in $workRows) {
+    foreach ($field in @('expanded_nodes','expanded_arcs','resolved_incidences','pushes','pops')) {
+        if ([uint64]$work.$field -eq 0) { throw "$($work.process_run) has zero $field" }
+    }
+    if ([uint64]$work.reopened -ne 0) {
+        throw "$($work.process_run) reopened a node under the consistent zero heuristic"
+    }
+}
+
 foreach ($workload in $representationWorkloads) {
     $rows = @($okCells | Where-Object {
         $_.workload -eq $workload -and $_.section -like 'representation_*'
@@ -324,6 +353,10 @@ Write-Tsv (Join-Path $dataDir 'representations.tsv') $retainedRows @(
     'process_run','run','workload','representation','representation_b','workspace_b','output_b',
     'semantic_loss'
 )
+Write-Tsv (Join-Path $dataDir 'search-work.tsv') $workRows @(
+    'process_run','run','workload','subject','expanded_nodes','expanded_arcs',
+    'resolved_incidences','pushes','pops','stale_pops','heuristic_evals','reopened'
+)
 
 $head = (& git -C $repoRoot rev-parse HEAD).Trim()
 $rustc = (& rustc --version).Trim()
@@ -340,7 +373,7 @@ $manifestRows = @(
     [pscustomobject]@{ key='samples'; value='9' },
     [pscustomobject]@{ key='cpu_batch_target_us'; value='250000' },
     [pscustomobject]@{ key='random1e6_seed'; value='0x51eed' },
-    [pscustomobject]@{ key='workload_definitions'; value='path65k=window_ir(65536,2);grid256=grid_ir(256,256);sts1023=steiner_triple_system(1023);random1e6=uniform_rank_k_ir(0x51eed,200000,333333,3);map512=map_grid_ir(512,512,map_obstacles)' },
+    [pscustomobject]@{ key='workload_definitions'; value='path65k=window_ir(65536,2);grid256=grid_ir(256,256);sts1023=steiner_triple_system(1023);random1e6=uniform_rank_k_ir(0x51eed,200000,333333,3);map512=map_grid_ir(512,512,map_obstacles);arityK_1m=uniform_rank_k_ir(0x51eed^K,200000,floor(1000000/K),K),K=2,3,8,32,128' },
     [pscustomobject]@{ key='logical_processors'; value="$logicalProcessors" },
     [pscustomobject]@{ key='ambient_cpu_avg_pct'; value="$ambientAverage" },
     [pscustomobject]@{ key='ambient_cpu_max_pct'; value="$ambientMaximum" },
