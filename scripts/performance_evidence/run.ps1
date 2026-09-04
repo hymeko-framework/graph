@@ -331,6 +331,18 @@ foreach ($workload in $representationWorkloads) {
     if ($checksums.Count -ne 1) { throw "representation semantic mismatch for $workload" }
 }
 
+foreach ($arity in @(2, 3, 8, 32, 128)) {
+    $workload = "arity${arity}_1m"
+    if ($representationWorkloads -notcontains $workload) { continue }
+    $expectedIncidences = [Math]::Floor(1000000 / $arity) * $arity
+    $dimensions = @($okCells | Where-Object {
+        $_.workload -eq $workload -and $_.section -eq 'representation_query'
+    } | Select-Object -ExpandProperty incidences -Unique)
+    if ($dimensions.Count -ne 1 -or [int]$dimensions[0] -ne $expectedIncidences) {
+        throw "$workload incidence count is not the fixed-budget value $expectedIncidences"
+    }
+}
+
 Write-Tsv (Join-Path $dataDir 'processes.tsv') $processRows @(
     'process_run','test','workload','subject','threads','process_wall_ms','process_cpu_ms',
     'external_peak_rss_b','exit_code'
@@ -374,6 +386,8 @@ $manifestRows = @(
     [pscustomobject]@{ key='cpu_batch_target_us'; value='250000' },
     [pscustomobject]@{ key='random1e6_seed'; value='0x51eed' },
     [pscustomobject]@{ key='workload_definitions'; value='path65k=window_ir(65536,2);grid256=grid_ir(256,256);sts1023=steiner_triple_system(1023);random1e6=uniform_rank_k_ir(0x51eed,200000,333333,3);map512=map_grid_ir(512,512,map_obstacles);arityK_1m=uniform_rank_k_ir(0x51eed^K,200000,floor(1000000/K),K),K=2,3,8,32,128' },
+    [pscustomobject]@{ key='dijkstra_checksum'; value='WeightedBergePath::path_hash; one verification query outside each measured wall/CPU sample' },
+    [pscustomobject]@{ key='representation_contract'; value='count-only global canonical-node components; no cached result; canonical baseline scans borrowed Ir arcs with reusable control DSU' },
     [pscustomobject]@{ key='logical_processors'; value="$logicalProcessors" },
     [pscustomobject]@{ key='ambient_cpu_avg_pct'; value="$ambientAverage" },
     [pscustomobject]@{ key='ambient_cpu_max_pct'; value="$ambientMaximum" },

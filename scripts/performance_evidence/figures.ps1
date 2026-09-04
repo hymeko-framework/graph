@@ -11,6 +11,7 @@ $figureDir = Join-Path $evidenceRoot 'figures'
 [void](New-Item -ItemType Directory -Force -Path $figureDir)
 $cells = Import-Csv -Delimiter "`t" -LiteralPath (Join-Path $dataDir 'cells.tsv')
 $rss = Import-Csv -Delimiter "`t" -LiteralPath (Join-Path $dataDir 'rss.tsv')
+$representations = Import-Csv -Delimiter "`t" -LiteralPath (Join-Path $dataDir 'representations.tsv')
 $utf8 = New-Object Text.UTF8Encoding($false)
 
 function F([double]$value, [string]$pattern = '0.0') {
@@ -225,6 +226,87 @@ $svg.Add('<line x1="85" y1="455" x2="840" y2="455" stroke="#333"/>')
 $svg.Add('<line x1="85" y1="70" x2="85" y2="455" stroke="#333"/>')
 $svg.Add('<text x="20" y="260" text-anchor="middle" font-size="12" transform="rotate(-90 20 260)">total time (µs, log scale)</text>')
 Write-Svg 'representation-total.svg' $svg
+
+# Fixed-incidence arity sweep: query latency and total retained derived-representation bytes.
+$arityRows = [Collections.Generic.List[object]]::new()
+foreach ($workload in $representationWorkloads) {
+    if ($workload -notmatch '^arity(\d+)_1m$') { continue }
+    $arity = [int]$Matches[1]
+    foreach ($kind in @('canonical_index','implicit_levi','sparse_star','clique_2section')) {
+        $timing = $totalRows | Where-Object {
+            $_.workload -eq $workload -and $_.representation -eq $kind
+        } | Select-Object -First 1
+        $retained = $representations | Where-Object {
+            $_.workload -eq $workload -and $_.representation -eq $kind
+        } | Select-Object -First 1
+        if (-not $timing -or -not $retained -or $retained.workspace_b -eq 'UNMEASURED') {
+            throw "incomplete arity evidence for $workload/$kind"
+        }
+        $totalBytes = [uint64]$retained.representation_b + [uint64]$retained.workspace_b + [uint64]$retained.output_b
+        $arityRows.Add([pscustomobject][ordered]@{
+            workload = $workload; arity = $arity; representation = $kind
+            prep_us = $timing.prep_us; query_us = $timing.query_us
+            representation_b = $retained.representation_b; workspace_b = $retained.workspace_b
+            output_b = $retained.output_b; retained_total_b = $totalBytes
+        })
+    }
+}
+$arityColumns = @('workload','arity','representation','prep_us','query_us','representation_b','workspace_b','output_b','retained_total_b')
+$arityLines = [Collections.Generic.List[string]]::new(); $arityLines.Add(($arityColumns -join "`t"))
+foreach ($row in ($arityRows | Sort-Object arity,representation)) {
+    $arityLines.Add((($arityColumns | ForEach-Object { $row.$_ }) -join "`t"))
+}
+[IO.File]::WriteAllLines((Join-Path $dataDir 'arity-sweep.tsv'), $arityLines, $utf8)
+
+if ($arityRows.Count -gt 0) {
+    $arities = @(2,3,8,32,128)
+    $left = 90.0; $right = 930.0
+    $topA = 70.0; $bottomA = 290.0; $topB = 365.0; $bottomB = 585.0
+    $queryValues = @($arityRows | ForEach-Object { [double]$_.query_us })
+    $memoryValues = @($arityRows | ForEach-Object { [double]$_.retained_total_b / 1MB })
+    $queryMin = [Math]::Log10(($queryValues | Measure-Object -Minimum).Minimum)
+    $queryMax = [Math]::Log10(($queryValues | Measure-Object -Maximum).Maximum)
+    $memoryMin = [Math]::Log10(($memoryValues | Measure-Object -Minimum).Minimum)
+    $memoryMax = [Math]::Log10(($memoryValues | Measure-Object -Maximum).Maximum)
+    $xArity = { param([int]$arity) $left + ([Math]::Log($arity,2)-1) / 6 * ($right-$left) }
+    $yQuery = { param([double]$value) $bottomA - ([Math]::Log10($value)-$queryMin) / ($queryMax-$queryMin) * ($bottomA-$topA) }
+    $yMemory = { param([double]$value) $bottomB - ([Math]::Log10($value)-$memoryMin) / ($memoryMax-$memoryMin) * ($bottomB-$topB) }
+    $svg = [Collections.Generic.List[string]]::new()
+    $svg.Add('<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="650" font-family="sans-serif">')
+    $svg.Add('<rect width="100%" height="100%" fill="white"/>')
+    $svg.Add('<text x="500" y="28" text-anchor="middle" font-size="18" font-weight="bold">Fixed-incidence arity sweep</text>')
+    $svg.Add('<text x="500" y="48" text-anchor="middle" font-size="11">approximately one million incidences; count-only component query</text>')
+    $svg.Add('<text x="22" y="185" text-anchor="middle" font-size="12" transform="rotate(-90 22 185)">query time (us, log)</text>')
+    $svg.Add('<text x="22" y="475" text-anchor="middle" font-size="12" transform="rotate(-90 22 475)">retained MiB (log)</text>')
+    foreach ($arity in $arities) {
+        $x = & $xArity $arity
+        $svg.Add(('<line x1="{0}" y1="70" x2="{0}" y2="585" stroke="#eee"/>' -f (F $x)))
+        $svg.Add(('<text x="{0}" y="610" text-anchor="middle" font-size="11">k={1}</text>' -f (F $x),$arity))
+    }
+    $legendY = 72
+    foreach ($kind in @('canonical_index','implicit_levi','sparse_star','clique_2section')) {
+        $rows = @($arityRows | Where-Object { $_.representation -eq $kind } | Sort-Object arity)
+        $queryPoints = [Collections.Generic.List[string]]::new()
+        $memoryPoints = [Collections.Generic.List[string]]::new()
+        foreach ($row in $rows) {
+            $x = & $xArity ([int]$row.arity)
+            $qy = & $yQuery ([double]$row.query_us)
+            $my = & $yMemory ([double]$row.retained_total_b / 1MB)
+            $queryPoints.Add(('{0},{1}' -f (F $x),(F $qy)))
+            $memoryPoints.Add(('{0},{1}' -f (F $x),(F $my)))
+            $svg.Add(('<circle cx="{0}" cy="{1}" r="4" fill="{2}"/>' -f (F $x),(F $qy),$colors[$kind]))
+            $svg.Add(('<circle cx="{0}" cy="{1}" r="4" fill="{2}"/>' -f (F $x),(F $my),$colors[$kind]))
+        }
+        $svg.Add(('<polyline points="{0}" fill="none" stroke="{1}" stroke-width="2.5"/>' -f ($queryPoints -join ' '),$colors[$kind]))
+        $svg.Add(('<polyline points="{0}" fill="none" stroke="{1}" stroke-width="2.5"/>' -f ($memoryPoints -join ' '),$colors[$kind]))
+        $svg.Add(('<rect x="730" y="{0}" width="12" height="12" fill="{1}"/>' -f $legendY,$colors[$kind]))
+        $svg.Add(('<text x="748" y="{0}" font-size="10">{1}</text>' -f ($legendY+10),($kind -replace '_',' ')))
+        $legendY += 18
+    }
+    $svg.Add('<line x1="90" y1="290" x2="930" y2="290" stroke="#333"/>')
+    $svg.Add('<line x1="90" y1="585" x2="930" y2="585" stroke="#333"/>')
+    Write-Svg 'arity-sweep.svg' $svg
+}
 
 $artifactLines = [Collections.Generic.List[string]]::new()
 $artifactLines.Add("path`tsha256")
