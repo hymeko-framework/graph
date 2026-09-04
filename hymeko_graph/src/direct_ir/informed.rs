@@ -656,7 +656,9 @@ where
         }
         let gu = ws.g(node);
         let arcs = index.incident_arcs(node);
-        for &arc in arcs {
+        let entry_slots = index.incident_slots(node);
+        debug_assert_eq!(arcs.len(), entry_slots.len());
+        for (&arc, &entry_slot) in arcs.iter().zip(entry_slots) {
             if C::EXIT_INDEPENDENT {
                 if ws.arc_active(arc) {
                     continue;
@@ -664,7 +666,7 @@ where
                 ws.mark_arc_active(arc);
             }
             ws.stats.expanded_arcs += 1;
-            let from_iref = index.resolve(arc, u_slot_in(ir, index, node, arc));
+            let from_iref = index.resolve(arc, entry_slot);
             let refs = &ir.arcs[arc.raw()].refs;
             for (slot, sref) in refs.iter().enumerate() {
                 let target = sref.target();
@@ -777,21 +779,6 @@ fn reconstruct(
 // =====================================================================================================
 // small helpers
 // =====================================================================================================
-
-/// The slot of `node` within `arc` (its incidence coordinate on that arc). The index stores the parallel
-/// `incident_arcs`/`incident_slots`; find the matching arc. This is a small linear scan over `node`'s
-/// degree (typically tiny); it is only done once per (settled node, incident arc).
-#[inline]
-fn u_slot_in(_ir: &Ir, index: &IncidenceIndex<'_>, node: DeclId, arc: HyperArcId) -> u32 {
-    let arcs = index.incident_arcs(node);
-    let slots = index.incident_slots(node);
-    for (i, &a) in arcs.iter().enumerate() {
-        if a == arc {
-            return slots[i];
-        }
-    }
-    0
-}
 
 /// First top-level `Num` weight of an incidence, or `0.0`. Deterministic; nested lists are ignored (the
 /// fixtures attach a single scalar).
