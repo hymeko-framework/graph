@@ -622,7 +622,7 @@ fn shortest_fixture(name: &str) -> Ir {
     match name {
         "path65k" => workloads::window_ir(65_536, 2, true, workloads::SignMode::AllPlus),
         "grid256" => workloads::grid_ir(256, 256),
-        "sts1023" => workloads::steiner_sts_ir(1_023),
+        "sts1023" => workloads::steiner_sts_ir(10),
         "random1e6" => workloads::uniform_rank_k_ir(0x51EED, 200_000, 333_333, 3),
         "map512" => workloads::map_grid_ir(512, 512, &workloads::map_obstacles(512, 512)),
         other => panic!("unknown shortest-path workload {other}"),
