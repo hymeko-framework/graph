@@ -1,0 +1,24 @@
+key	value
+run	20260904-034654+02:00
+source_commit	393978dc09e9a56fe8665c0c38c7c11f9b33a24b
+binary_path	D:\h\codex-graph-p34-audit\target\release\deps\performance_evidence-749748b2b3d77b35.exe
+binary_sha256	d064514ef7a8c5b41595b9871d97da75b3ec7f7b419a02ef2023292b899ac204
+profile	release
+warmups	2
+samples	9
+cpu_batch_target_us	250000
+random1e6_seed	0x51eed
+workload_definitions	path65k=window_ir(65536,2);grid256=grid_ir(256,256);sts1023=steiner_triple_system(1023);random1e6=uniform_rank_k_ir(0x51eed,200000,333333,3);map512=map_grid_ir(512,512,map_obstacles);arityK_1m=uniform_rank_k_ir(0x51eed^K,200000,floor(1000000/K),K),K=2,3,8,32,128
+dijkstra_checksum	WeightedBergePath::path_hash; one verification query outside each measured wall/CPU sample
+paired_dijkstra_comparison	data/dijkstra-pre-post.tsv; release binary before=dfb4320 after=3b14899; 2 warmups + 9 measured samples per side; sequential diagnostic, not quiet-host gated
+paired_dijkstra_invariance	path_hash and SearchStats fields matched before/after for all five workloads
+representation_contract	count-only global canonical-node components; no cached result; canonical baseline scans borrowed Ir arcs with reusable control DSU
+logical_processors	24
+ambient_cpu_avg_pct	10.8
+ambient_cpu_max_pct	23
+os	Microsoft Windows 11 Home build 26200
+cpu	Intel(R) Core(TM) Ultra 9 275HX
+ram_bytes	68097818624
+rustc	rustc 1.97.1 (8bab26f4f 2026-07-14)
+cargo	cargo 1.97.1 (c980f4866 2026-06-30)
+command	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/performance_evidence/run.ps1 -RunDate 2026-09-04-dijkstra-comparability
