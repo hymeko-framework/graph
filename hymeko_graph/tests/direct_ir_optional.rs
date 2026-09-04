@@ -59,6 +59,16 @@ fn berge_paths_budget_bound_is_reported() {
         Some(BudgetKind::Results),
         "truncation is reported, not silent"
     );
+
+    let zero_paths = enumerate_berge_paths(
+        &index,
+        w.node("a"),
+        Some(w.node("d")),
+        EnumBudget::new(8, 0, 100_000),
+    )
+    .expect("zero-result path budget");
+    assert!(zero_paths.items.is_empty());
+    assert_eq!(zero_paths.bound, Some(BudgetKind::Results));
 }
 
 const TRIANGLE: &str = r#"
@@ -92,6 +102,50 @@ fn berge_cycles_dedup_to_one_canonical_cycle() {
         nodes,
         BTreeSet::from([w.node("a").raw(), w.node("b").raw(), w.node("c").raw()])
     );
+
+    let zero_cycles = enumerate_berge_cycles(&index, w.node("a"), EnumBudget::new(8, 0, 100_000))
+        .expect("zero-result cycle budget");
+    assert!(zero_cycles.items.is_empty());
+    assert_eq!(zero_cycles.bound, Some(BudgetKind::Results));
+}
+
+const PARALLEL_ARCS: &str = r#"
+vv {}
+g {
+    a {} b {}
+    @e1 { (+ a, + b); }
+    @e2 { (+ a, + b); }
+    @e3 { (+ a, + b); }
+}
+"#;
+
+#[test]
+fn berge_cycles_keep_parallel_arc_identity() {
+    let w = compile(PARALLEL_ARCS);
+    let index = build_incidence_index(w.ir()).expect("index");
+    let out = enumerate_berge_cycles(&index, w.node("a"), EnumBudget::new(2, 100, 1_000))
+        .expect("cycles");
+    assert_eq!(out.items.len(), 3, "one cycle for each pair of arcs");
+    assert!(out.bound.is_none());
+
+    let pairs: BTreeSet<Vec<usize>> = out
+        .items
+        .iter()
+        .map(|cycle| {
+            assert_eq!(cycle.nodes.len(), 2);
+            assert_eq!(cycle.arcs.len(), 2);
+            let mut arcs: Vec<usize> = cycle.arcs.iter().map(|arc| arc.raw()).collect();
+            arcs.sort_unstable();
+            arcs
+        })
+        .collect();
+    let mut expected = BTreeSet::new();
+    for (a, b) in [("e1", "e2"), ("e1", "e3"), ("e2", "e3")] {
+        let mut arcs = vec![w.edge_arc(a).raw(), w.edge_arc(b).raw()];
+        arcs.sort_unstable();
+        expected.insert(arcs);
+    }
+    assert_eq!(pairs, expected);
 }
 
 const SLINE: &str = r#"

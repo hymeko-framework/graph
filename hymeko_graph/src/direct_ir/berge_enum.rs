@@ -78,9 +78,10 @@ pub fn enumerate_berge_paths(
     let mut en = Enumerator::new(index, budget, start);
     en.on_path_set(start_decl, true);
     en.dfs_paths(start_decl, goal_decl)?;
+    let bound = en.reported_bound();
     Ok(EnumOutcome {
         items: en.paths,
-        bound: en.bound,
+        bound,
     })
 }
 
@@ -99,9 +100,10 @@ pub fn enumerate_berge_cycles(
     let mut en = Enumerator::new(index, budget, start);
     en.on_path_set(start_decl, true);
     en.dfs_cycles(start_decl, start_decl)?;
+    let bound = en.reported_bound();
     Ok(EnumOutcome {
         items: en.cycles,
-        bound: en.bound,
+        bound,
     })
 }
 
@@ -115,9 +117,10 @@ struct Enumerator<'a, 'ir> {
     steps: Vec<BergeStep>,
     expansions: usize,
     bound: Option<BudgetKind>,
+    depth_truncated: bool,
     paths: Vec<BergePath>,
     cycles: Vec<BergeCycle>,
-    seen_cycles: HashSet<Vec<usize>>,
+    seen_cycles: HashSet<Vec<(usize, usize)>>,
 }
 
 impl<'a, 'ir> Enumerator<'a, 'ir> {
@@ -131,7 +134,8 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
             used_arc: vec![false; ir.arcs.len()],
             steps: Vec::new(),
             expansions: 0,
-            bound: None,
+            bound: (budget.max_results == 0).then_some(BudgetKind::Results),
+            depth_truncated: false,
             paths: Vec::new(),
             cycles: Vec::new(),
             seen_cycles: HashSet::new(),
@@ -149,6 +153,12 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
         self.bound.is_some()
     }
 
+    #[inline]
+    fn reported_bound(&self) -> Option<BudgetKind> {
+        self.bound
+            .or_else(|| self.depth_truncated.then_some(BudgetKind::Depth))
+    }
+
     /// Charge one arc expansion; sets the expansion bound and returns false if over budget.
     #[inline]
     fn charge_expansion(&mut self) -> bool {
@@ -161,7 +171,11 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
     }
 
     fn dfs_paths(&mut self, cur: DeclId, goal: Option<DeclId>) -> Result<(), DirectIrError> {
-        if self.steps.len() >= self.budget.max_depth || self.stopped() {
+        if self.stopped() {
+            return Ok(());
+        }
+        if self.steps.len() >= self.budget.max_depth {
+            self.depth_truncated = true;
             return Ok(());
         }
         let ir = self.index.ir();
@@ -201,10 +215,8 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
                 });
                 self.on_path[target.raw()] = true;
 
-                let emit = match goal {
-                    Some(g) => target == g,
-                    None => true,
-                };
+                let reached_goal = goal == Some(target);
+                let emit = reached_goal || goal.is_none();
                 if emit {
                     self.paths.push(BergePath {
                         start: self.start,
@@ -214,7 +226,7 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
                         self.bound = Some(BudgetKind::Results);
                     }
                 }
-                if !self.stopped() {
+                if !reached_goal && !self.stopped() {
                     self.dfs_paths(target, goal)?;
                 }
 
@@ -233,7 +245,11 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
     }
 
     fn dfs_cycles(&mut self, cur: DeclId, start_decl: DeclId) -> Result<(), DirectIrError> {
-        if self.steps.len() >= self.budget.max_depth || self.stopped() {
+        if self.stopped() {
+            return Ok(());
+        }
+        if self.steps.len() >= self.budget.max_depth {
+            self.depth_truncated = true;
             return Ok(());
         }
         let ir = self.index.ir();
@@ -310,29 +326,45 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
         let mut arcs: Vec<HyperArcId> = self.steps.iter().map(|s| s.arc).collect();
         arcs.push(closing_arc);
 
-        let key = canonical_cycle_key(&nodes);
+        let key = canonical_cycle_key(&nodes, &arcs);
         if self.seen_cycles.insert(key) {
             self.cycles.push(BergeCycle { nodes, arcs });
         }
     }
 }
 
-/// Canonical key for a cycle's node ring: rotate so the smallest id is first, then take the
-/// lexicographically smaller of the forward and reversed rotations. Rotation + reflection invariant.
-fn canonical_cycle_key(nodes: &[NodeId]) -> Vec<usize> {
-    let raw: Vec<usize> = nodes.iter().map(|n| n.raw()).collect();
-    let n = raw.len();
+/// Canonical key for the alternating node/arc ring. Every rotation and both traversal directions
+/// compare lexicographically, preserving the identity of parallel hyperarcs.
+fn canonical_cycle_key(nodes: &[NodeId], arcs: &[HyperArcId]) -> Vec<(usize, usize)> {
+    debug_assert_eq!(nodes.len(), arcs.len());
+    let n = nodes.len();
     if n == 0 {
-        return raw;
+        return Vec::new();
     }
-    let min_pos = (0..n).min_by_key(|&i| raw[i]).unwrap_or(0);
-    let forward: Vec<usize> = (0..n).map(|k| raw[(min_pos + k) % n]).collect();
-    // reversed ring starting at the same min element
-    let mut backward: Vec<usize> = (0..n).map(|k| raw[(min_pos + n - k) % n]).collect();
-    backward.rotate_left(0);
-    if backward < forward {
-        backward
-    } else {
-        forward
+
+    let mut best: Option<Vec<(usize, usize)>> = None;
+    for start in 0..n {
+        let forward: Vec<_> = (0..n)
+            .map(|step| {
+                let i = (start + step) % n;
+                (nodes[i].raw(), arcs[i].raw())
+            })
+            .collect();
+        let backward: Vec<_> = (0..n)
+            .map(|step| {
+                let node_i = (start + n - step) % n;
+                let arc_i = (node_i + n - 1) % n;
+                (nodes[node_i].raw(), arcs[arc_i].raw())
+            })
+            .collect();
+        for candidate in [forward, backward] {
+            if best
+                .as_ref()
+                .is_none_or(|current| candidate.as_slice() < current.as_slice())
+            {
+                best = Some(candidate);
+            }
+        }
     }
+    best.unwrap_or_default()
 }
