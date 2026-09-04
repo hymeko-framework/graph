@@ -8,7 +8,7 @@ use super::telemetry::process_cpu_us;
 pub const DEFAULT_WARMUPS: usize = 2;
 pub const DEFAULT_SAMPLES: usize = 9;
 const CPU_RESOLUTION_TARGET_US: f64 = 250_000.0;
-const MAX_REPETITIONS_PER_SAMPLE: usize = 2_048;
+const MAX_REPETITIONS_PER_SAMPLE: usize = 262_144;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Sample {
