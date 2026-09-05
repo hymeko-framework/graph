@@ -21,6 +21,26 @@ mod ic;
 
 use ic::{OracleCost, SignMode};
 
+fn unit_path_cost<P: hymeko_graph::direct_ir::TransitionPolicy>(
+    ir: &Ir,
+    start: NodeId,
+    goal: NodeId,
+    policy: &P,
+    workspace: &mut InformedSearchWorkspace,
+) -> Option<f64> {
+    let index = build_incidence_index(ir).unwrap();
+    dijkstra_berge_path(
+        &HyperTraversal::new(&index),
+        start,
+        goal,
+        &UnitCost,
+        policy,
+        workspace,
+    )
+    .unwrap()
+    .map(|path| path.total_cost)
+}
+
 // ---- test-only position provider + a coupled metric probe ------------------------------------------
 
 struct LinePos {
@@ -425,28 +445,16 @@ fn directed_producer_consumer_policy_restricts() {
     // Alternating signs: producer(-)->consumer(+) steps only. On an all-plus graph, no directed step is
     // legal, so a 2-hop goal becomes unreachable under the directed policy (but reachable undirected).
     let ir = ic::window_ir(20, 2, false, SignMode::AllPlus);
-    let idx = build_incidence_index(&ir).unwrap();
-    let trav = HyperTraversal::new(&idx);
     let mut ws = InformedSearchWorkspace::new();
-    let undirected = dijkstra_berge_path(
-        &trav,
-        NodeId::new(0),
-        NodeId::new(5),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap();
+    let undirected = unit_path_cost(&ir, NodeId::new(0), NodeId::new(5), &Undirected, &mut ws);
     assert!(undirected.is_some());
-    let directed = dijkstra_berge_path(
-        &trav,
+    let directed = unit_path_cost(
+        &ir,
         NodeId::new(0),
         NodeId::new(5),
-        &UnitCost,
         &DirectedProducerConsumer,
         &mut ws,
-    )
-    .unwrap();
+    );
     assert!(
         directed.is_none(),
         "all-plus graph admits no producer->consumer step"
@@ -571,4 +579,130 @@ fn duplicate_incidence_preserves_cost_and_is_observable() {
         dup_resolved > plain_resolved,
         "duplicate multiplicity must be observable in resolved incidences"
     );
+}
+#[test]
+fn directed_arc_remains_available_after_rejected_entry() {
+    let w = dc::compile(
+        "vv {}\ng { s {} p {} goal {} @shared { (+ s, - p, + goal); } @entry { (- s, + p); } }\n",
+    );
+    // Producer s -> consumer p through entry, producer p -> consumer goal through shared.
+    assert_eq!(
+        unit_path_cost(
+            w.ir(),
+            w.node("s"),
+            w.node("goal"),
+            &DirectedProducerConsumer,
+            &mut InformedSearchWorkspace::new()
+        ),
+        Some(2.0)
+    );
+}
+
+#[test]
+fn directed_duplicate_entry_slots_preserve_signs() {
+    let w = dc::compile("vv {}\ng { s {} goal {} @shared { (+ s, - s, + goal); } }\n");
+    // The second occurrence of s is a producer, so the one-hop path is legal.
+    assert_eq!(
+        unit_path_cost(
+            w.ir(),
+            w.node("s"),
+            w.node("goal"),
+            &DirectedProducerConsumer,
+            &mut InformedSearchWorkspace::new()
+        ),
+        Some(1.0)
+    );
+}
+
+struct ConsistentBound;
+impl BergeHeuristic for ConsistentBound {
+    const ADMISSIBLE: bool = true;
+    const CONSISTENT: bool = true;
+    fn h(&self, _ir: &Ir, node: DeclId) -> f64 {
+        if node.raw() == 2 { 1.0 } else { 0.0 }
+    }
+}
+
+#[test]
+fn consistent_astar_preserves_cheapest_entry_to_shared_arc() {
+    use hymeko::ir::ir::ValueR;
+    let mut ir = ic::window_ir(4, 2, false, ic::SignMode::AllPlus);
+    ir.arcs = [
+        vec![(0, 1.0), (1, 2.0)],
+        vec![(0, 1.0), (2, 1.0)],
+        vec![(1, 1.0), (2, 1.0), (3, 10.0)],
+    ]
+    .into_iter()
+    .map(|members| ArcRec {
+        anno: AnnoR::default(),
+        in_edge: DeclId::NONE,
+        refs: members
+            .into_iter()
+            .map(|(node, weight)| {
+                SignedRefR::Plus(RefAtomR {
+                    target: DeclId::new(node),
+                    anno: AnnoR::default(),
+                    weights: Some(vec![ValueR::Num(weight)]),
+                })
+            })
+            .collect(),
+    })
+    .collect();
+    let idx = build_incidence_index(&ir).unwrap();
+    let trav = HyperTraversal::new(&idx);
+    let cost = IncidenceWeightCost { base: 0.0 };
+    let mut ws = InformedSearchWorkspace::new();
+    // h = [0,0,1,0]; only nonzero source bound is 1, and every outgoing step costs >= 1.
+    // Exact goal distances are [11,10,10,0], proving admissibility independently.
+    for (node, distance) in [11.0, 10.0, 10.0, 0.0].into_iter().enumerate() {
+        assert!(ConsistentBound.h(&ir, DeclId::new(node)) <= distance);
+    }
+    for arc in &ir.arcs {
+        for from in &arc.refs {
+            for to in &arc.refs {
+                let target = to.target();
+                let h_from = ConsistentBound.h(&ir, from.target());
+                let h_to = ConsistentBound.h(&ir, target);
+                let step = if target.raw() == 3 {
+                    10.0
+                } else if target.raw() == 1 && arc.refs.len() == 2 {
+                    2.0
+                } else {
+                    1.0
+                };
+                assert!(h_from <= step + h_to);
+            }
+        }
+    }
+    let oracle = ic::oracle_dijkstra_cost(
+        &ir,
+        &idx,
+        NodeId::new(0),
+        NodeId::new(3),
+        ic::OracleCost::Weight { base: 0.0 },
+    );
+    assert_eq!(oracle, Some(11.0));
+    let dijkstra = dijkstra_berge_path(
+        &trav,
+        NodeId::new(0),
+        NodeId::new(3),
+        &cost,
+        &Undirected,
+        &mut ws,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(dijkstra.total_cost, 11.0);
+    let astar = astar_berge_path(
+        &trav,
+        NodeId::new(0),
+        NodeId::new(3),
+        &cost,
+        &ConsistentBound,
+        &Undirected,
+        &mut ws,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(astar.total_cost, dijkstra.total_cost);
 }

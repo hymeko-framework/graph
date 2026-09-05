@@ -22,10 +22,10 @@
 //!
 //! Costs are finite and non-negative; `NaN`, `±∞` or a negative value is a typed
 //! [`InformedSearchError::BadCost`] (never swallowed). The **primary** cost model is *exit-independent
-//! separable* (`c = w_arc + w_entry`, depending only on the target incidence): under it an arc is
-//! activated **once** at its first-settled member (`EXIT_INDEPENDENT = true`), keeping the walk
-//! `O(nodes + arcs + incidences)`. A general (exit-dependent, e.g. metric) cost sets the const `false` and
-//! the engine relaxes each member (`O(arity)` per incident arc), still correct.
+//! separable* (`c = w_arc + w_entry`, depending only on the target incidence). Combined with an
+//! entry-independent transition policy, arc work is reused when an entry has no better g. Dijkstra
+//! therefore expands such an arc once; A* may improve its entry cost and must expand it again.
+//! General costs or entry-dependent policies relax every exact entry slot (`O(arity)` per incidence).
 //!
 //! # Optimality
 //!
@@ -149,9 +149,9 @@ impl std::error::Error for InformedSearchError {}
 /// The incremental, non-negative cost of *arriving at a target incidence*.
 ///
 /// `EXIT_INDEPENDENT = true` (the default) asserts the cost depends only on the target incidence
-/// `(arc, slot_v)` and the arc — not on the entry node `from` beyond its `g`. Under that assertion the
-/// engine activates each arc once (at its first-settled member); a `false` const forces per-member
-/// relaxation (correct for exit-dependent costs like metric edge length).
+/// `(arc, slot_v)` and the arc — not on the entry node `from` beyond its `g`. With an entry-independent
+/// policy, this permits reuse at an equal or worse entry g, not unconditional first-member closure.
+/// A `false` const forces per-member relaxation (for example, metric edge length).
 pub trait BergeCost {
     /// See the trait docs. Default: exit-independent (the unit / incidence-weight models).
     const EXIT_INDEPENDENT: bool = true;
@@ -180,6 +180,13 @@ pub trait BergeHeuristic {
 /// Whether a Berge step `from -> to` (two incidences of the same arc) is legal. A **filter only** — it
 /// never changes a cost.
 pub trait TransitionPolicy {
+    /// Whether legality is independent of the entry incidence within an arc.
+    /// The conservative default preserves arbitrary caller policies. If true,
+    /// `allows(from, to)` must agree for every entry incidence and fixed `to`.
+    fn entry_independent(&self) -> bool {
+        false
+    }
+
     /// `true` iff the step is allowed. `from`/`to` are the resolved incidences of the shared arc.
     fn allows(&self, from: &IncidenceRef<'_>, to: &IncidenceRef<'_>) -> bool;
 }
@@ -288,6 +295,9 @@ impl<P: PositionProvider> BergeHeuristic for MetricHeuristic<'_, P> {
 #[derive(Clone, Copy, Default)]
 pub struct Undirected;
 impl TransitionPolicy for Undirected {
+    fn entry_independent(&self) -> bool {
+        true
+    }
     #[inline]
     fn allows(&self, _from: &IncidenceRef<'_>, _to: &IncidenceRef<'_>) -> bool {
         true
@@ -393,7 +403,8 @@ impl WeightedBergePath {
 pub struct SearchStats {
     /// Nodes popped-and-settled (each once).
     pub expanded_nodes: usize,
-    /// Arcs expanded (activated). With `EXIT_INDEPENDENT`, each at most once.
+    /// Arc expansions. Entry-independent policies and costs reuse an expansion
+    /// unless a later entry has a strictly smaller g (possible under A*).
     pub expanded_arcs: usize,
     /// Incidences resolved (member visits) during relaxation.
     pub resolved_incidences: usize,
@@ -474,6 +485,7 @@ pub struct InformedSearchWorkspace {
     g_gen: Vec<u32>,
     settled_gen: Vec<u32>,
     arc_active_gen: Vec<u32>,
+    arc_entry_g: Vec<f64>,
     pred_node: Vec<DeclId>,
     pred_arc: Vec<HyperArcId>,
     pred_slot: Vec<u32>,
@@ -505,6 +517,7 @@ impl InformedSearchWorkspace {
         }
         if self.arc_active_gen.len() < n_arcs {
             self.arc_active_gen.resize(n_arcs, 0);
+            self.arc_entry_g.resize(n_arcs, f64::INFINITY);
         }
     }
 
@@ -555,8 +568,9 @@ impl InformedSearchWorkspace {
             .is_some_and(|&g| g == self.stamp)
     }
     #[inline]
-    fn mark_arc_active(&mut self, a: HyperArcId) {
+    fn mark_arc_active(&mut self, a: HyperArcId, entry_g: f64) {
         self.arc_active_gen[a.raw()] = self.stamp;
+        self.arc_entry_g[a.raw()] = entry_g;
     }
     #[inline]
     fn set_pred(&mut self, node: DeclId, pred: DeclId, arc: HyperArcId, slot: u32) {
@@ -648,15 +662,17 @@ where
         }
         let gu = ws.g(node);
         let arcs = index.incident_arcs(node);
-        for &arc in arcs {
-            if C::EXIT_INDEPENDENT {
-                if ws.arc_active(arc) {
+        for (&arc, &entry_slot) in arcs.iter().zip(index.incident_slots(node)) {
+            if C::EXIT_INDEPENDENT && policy.entry_independent() {
+                // A* settles by f, so the first member need not have the best g.
+                // Only an entry with no lower g is dominated by prior work.
+                if ws.arc_active(arc) && gu >= ws.arc_entry_g[arc.raw()] {
                     continue;
                 }
-                ws.mark_arc_active(arc);
+                ws.mark_arc_active(arc, gu);
             }
             ws.stats.expanded_arcs += 1;
-            let from_iref = index.resolve(arc, u_slot_in(ir, index, node, arc));
+            let from_iref = index.resolve(arc, entry_slot);
             let refs = &ir.arcs[arc.raw()].refs;
             for (slot, sref) in refs.iter().enumerate() {
                 let target = sref.target();
@@ -768,21 +784,6 @@ fn reconstruct(
 // =====================================================================================================
 // small helpers
 // =====================================================================================================
-
-/// The slot of `node` within `arc` (its incidence coordinate on that arc). The index stores the parallel
-/// `incident_arcs`/`incident_slots`; find the matching arc. This is a small linear scan over `node`'s
-/// degree (typically tiny); it is only done once per (settled node, incident arc).
-#[inline]
-fn u_slot_in(_ir: &Ir, index: &IncidenceIndex<'_>, node: DeclId, arc: HyperArcId) -> u32 {
-    let arcs = index.incident_arcs(node);
-    let slots = index.incident_slots(node);
-    for (i, &a) in arcs.iter().enumerate() {
-        if a == arc {
-            return slots[i];
-        }
-    }
-    0
-}
 
 /// First top-level `Num` weight of an incidence, or `0.0`. Deterministic; nested lists are ignored (the
 /// fixtures attach a single scalar).
