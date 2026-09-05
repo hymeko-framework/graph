@@ -1,0 +1,16 @@
+    Updating git repository `ssh://git@amaterasu.local:2222/hymeko/core.git`
+From ssh://192.168.1.228:2222/hymeko/core
+ * [new branch]      audit/core-distributed-semantics-2026-09-05 -> origin/audit/core-distributed-semantics-2026-09-05
+   70d0de2..9c2f87e  feat/humanoid-actuation -> origin/feat/humanoid-actuation
+    Updating crates.io index
+    Updating git repository `ssh://git@amaterasu.local:2222/hymeko/parser.git`
+     Locking 7 packages to latest Rust 1.97.1 compatible versions
+      Adding ciborium v0.2.2
+      Adding ciborium-io v0.2.2
+      Adding ciborium-ll v0.2.2
+      Adding crunchy v0.2.4
+      Adding half v2.7.1
+    Removing hymeko_core v0.1.0 (ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#70b4f364)
+      Adding hymeko_core v0.1.0 (ssh://git@amaterasu.local:2222/hymeko/core.git?rev=ac1131b5490734b855021f6076753417e1337cd6#ac1131b5)
+    Updating parser v0.1.0 (ssh://git@amaterasu.local:2222/hymeko/parser.git?branch=master#e28a2051) -> #284c490d
+note: pass `--verbose` to see 15 unchanged dependencies behind latest

@@ -1,0 +1,23 @@
+{
+  "revision": "ecf08d719c1e6c0dfc70ef7bbbe309e70d3a1719",
+  "identities": {
+    "hymeko_core": [
+      "git+ssh://git@amaterasu.local:2222/hymeko/core.git?rev=ac1131b5490734b855021f6076753417e1337cd6#ac1131b5490734b855021f6076753417e1337cd6"
+    ],
+    "parser": [
+      "git+ssh://git@amaterasu.local:2222/hymeko/parser.git?branch=master#284c490d68232973a006bcba974279fed6f89ce8"
+    ]
+  },
+  "test_counts": {
+    "passed": 486,
+    "failed": 0,
+    "ignored": 6
+  },
+  "resources": [
+    "resource stage=workspace-tests elapsed_s=53.76 max_rss_kib=508176 exit=0",
+    "resource stage=bench-compile elapsed_s=19.48 max_rss_kib=516080 exit=0"
+  ],
+  "memory_peak_bytes": 1641177088,
+  "container_exit_code": 0,
+  "source_status": ""
+}
