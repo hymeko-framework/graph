@@ -3,7 +3,7 @@
 //! Combinatorial enumeration is explicitly bounded: every run carries a [`EnumBudget`] with a
 //! `max_depth` (hyperedges), a `max_results`, and a `max_expansions` (arc-expansion budget), and
 //! stops deterministically. There is no implicit unbounded all-path enumeration. When a budget
-//! stops the run, [`EnumOutcome::bound`] names which one -- truncation is reported, never silent.
+//! prunes a branch or stops the run, [`EnumOutcome::bound`] reports it.
 //!
 //! A Berge path here is *simple*: distinct nodes and distinct hyperedges. A Berge cycle returns to
 //! its start over `>= 2` distinct hyperedges with distinct intermediate nodes; cycles are
@@ -20,9 +20,9 @@ use super::{BudgetKind, DirectIrError, decl_to_node, is_node, node_to_decl};
 /// Hard bounds on a combinatorial enumeration. All three are required; pick finite values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EnumBudget {
-    /// Maximum path/cycle length in hyperedges.
+    /// Maximum path/cycle length in hyperedges. Longer branches are pruned locally.
     pub max_depth: usize,
-    /// Maximum number of results to emit.
+    /// Maximum number of results to emit. Zero stops immediately after endpoint validation.
     pub max_results: usize,
     /// Maximum number of arc expansions before a deterministic stop.
     pub max_expansions: usize,
@@ -40,12 +40,16 @@ impl EnumBudget {
     }
 }
 
-/// The result of a bounded enumeration: the emitted items, and which budget (if any) stopped it.
+/// The result of a bounded enumeration: emitted items and any encountered budget limit.
 #[derive(Debug, Clone)]
 pub struct EnumOutcome<T> {
     /// The enumerated paths or cycles.
     pub items: Vec<T>,
-    /// The budget that stopped enumeration, or `None` if it finished naturally.
+    /// `Depth` means an unused incident arc was left unopened at the depth cap; it does not
+    /// prove that another result exists. Other branches continue. `Results` or `Expansions`
+    /// stop the whole run and take precedence over an earlier `Depth`. Depth is checked before
+    /// charging an expansion. `Results` is reported upon reaching the cap, including zero.
+    /// `None` means enumeration finished without encountering a limit.
     pub bound: Option<BudgetKind>,
 }
 
@@ -131,7 +135,7 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
             used_arc: vec![false; ir.arcs.len()],
             steps: Vec::new(),
             expansions: 0,
-            bound: None,
+            bound: (budget.max_results == 0).then_some(BudgetKind::Results),
             paths: Vec::new(),
             cycles: Vec::new(),
             seen_cycles: HashSet::new(),
@@ -143,15 +147,22 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
         self.on_path[d.raw()] = v;
     }
 
-    /// True if a budget has stopped the run.
+    /// True if a budget has stopped the whole run rather than pruned a branch.
     #[inline]
     fn stopped(&self) -> bool {
-        self.bound.is_some()
+        matches!(
+            self.bound,
+            Some(BudgetKind::Results | BudgetKind::Expansions)
+        )
     }
 
-    /// Charge one arc expansion; sets the expansion bound and returns false if over budget.
+    /// Check an unused frontier arc against depth, then charge an allowed expansion.
     #[inline]
     fn charge_expansion(&mut self) -> bool {
+        if self.steps.len() >= self.budget.max_depth {
+            self.bound = Some(BudgetKind::Depth);
+            return false;
+        }
         if self.expansions >= self.budget.max_expansions {
             self.bound = Some(BudgetKind::Expansions);
             return false;
@@ -161,7 +172,7 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
     }
 
     fn dfs_paths(&mut self, cur: DeclId, goal: Option<DeclId>) -> Result<(), DirectIrError> {
-        if self.steps.len() >= self.budget.max_depth || self.stopped() {
+        if self.stopped() {
             return Ok(());
         }
         let ir = self.index.ir();
@@ -233,7 +244,7 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
     }
 
     fn dfs_cycles(&mut self, cur: DeclId, start_decl: DeclId) -> Result<(), DirectIrError> {
-        if self.steps.len() >= self.budget.max_depth || self.stopped() {
+        if self.stopped() {
             return Ok(());
         }
         let ir = self.index.ir();
