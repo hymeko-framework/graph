@@ -1,6 +1,27 @@
 # Parsing and graph ingestion benchmarks
 
-Created-at: 2026-09-06 17:43 +02:00. Status: implementation verified; platform campaign pending.
+Created-at: 2026-09-06 17:43 +02:00. Updated 18:43 +02:00. Status: phase breakdown verified; supplementary measurements and publication pending.
+
+## Explicit phase breakdown
+
+The user's 18:36 request authorizes measurement and website publication. Five additional phases extend the existing client: `generate_ir` (existing deterministic generator including direct IR construction), `emit_source` (IR to HyMeKo text), `read_source` (local UTF-8 file, warm OS cache), `dijkstra_prepared` (compiled IR and index ready; fresh query workspace), and directly measured `file_to_dijkstra` (read, fresh compilation, index and query). Original five-stage evidence remains immutable under its original revision. New stages use a separate `stages/` campaign with its own measured revision; results are never pooled across source revisions. File creation, sync, validation and final object destruction are outside the timed operation. Intermediate destruction remains inside. External-map import is not implemented or measured in this benchmark-only extension.
+
+The existing generators directly construct IR, so topology generation and direct IR construction are explicitly a combined measurement. AST-to-IR remains a separate source-ingestion path. These rows are not additive partitions: complete pipeline timings are measured directly. Process RSS includes setup, validation and retained sampler objects, not a per-stage memory delta.
+
+```text
+DISCOVERY LEDGER — benchmark phase breakdown
+  find:    rg --files ../graph/scripts ../graph/hymeko_graph/tests -> existing campaign.py, parsing.rs, statistics.rs
+  grep:    rg -n 'measure_factory|mod statistics' ../graph/hymeko_graph/tests -> existing factory sampler and parsing client
+  symbols: rg -n 'Campaign|Evidence|parsing|map_grid' ../graph/SYMBOLS.md -> existing Campaign, CampaignSummary and Evidence owners
+  read:    parsing.rs, statistics.rs, campaign.py, test_campaign.py, existing plan and report; website model.ts, catalog.ts, explorer.tsx
+  verdict: EXTEND existing Graph parsing client, campaign, plan/report and /srv/apps/benchmark
+```
+
+Fresh fetch: Graph f6bd760 equals task upstream, contains current main eae7a57. Parser 284c490d equals master. Core checkout 2d43e82 diverges from current main f305ade and remains read-only; the measured Graph lock remains fc3eda9b/284c490d. Remote Graph checkout is the existing detached f6bd760 at `/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph`, refreshed from its host's read-only Gitea source. Website `/srv/apps/benchmark` is local-only Git, HEAD 84196e5, clean before this extension, with no remote. No new checkout/worktree; no production or dependency edits.
+
+Verification at 18:43: 9 focused Rust tests passed, 5 benchmark entrypoints ignored in ordinary testing. Full release workspace tests including doctests passed. Focused clippy passed. Eight Python campaign tests passed. Symbols check passed. Duplication 517 clones / 12272 cloned lines before and after: delta 0 / 0. Temporary-file tests verify exact bytes, invalid UTF-8 rejection and cleanup; extended phase tests exercise all ten phases and nine samples. Test-only expects remain outside production.
+
+The original missing remote matrix is running as `hymeko-parsing-original-20260906.service` (18:39 launch): native followed serially by ARM64 parser-only. Logs: `reports/parsing-benchmarks/2026-09-06/native-driver.log` and `arm64-driver.log` in the remote checkout. Windows original full matrix finished 18:15, 240/240 processes. The earlier ARM64 full-compile map512 smoke exceeded 180 seconds; it has no accepted latency row. Original accepted target is 240 Windows + 240 native + 48 ARM64 processes. Supplementary target is 240 Windows + 240 native processes; ARM64 supplementary stages are not measured.
 
 This extends the existing Graph evidence client and driver with actual HyMeKo source ingestion for all 16 distinct source topologies in the 59-cell Graph campaign. The five stages are parser AST construction; AST interning/resolution/lowering; fresh ModuleStore compilation; incidence index; and directly measured source-to-Dijkstra. The production parser and Core compile pipeline are called through public APIs. No production implementation or dependency is added.
 

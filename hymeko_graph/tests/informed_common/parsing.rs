@@ -2,7 +2,8 @@
 //! The projection deliberately supports this fixture vocabulary, not arbitrary IR.
 
 use std::fmt::Write;
-use std::path::Path;
+use std::io::Write as IoWrite;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use hymeko::ir::ir::{AnnoR, RefAtomR, SignedRefR, ValueR};
@@ -23,10 +24,18 @@ struct SourceFixture {
     start: NodeId,
     goal: NodeId,
     weighted: bool,
+    workload: Option<String>,
 }
 
 impl SourceFixture {
     fn named(name: &str) -> Self {
+        let (ir, start, goal, weighted) = Self::generate(name);
+        let mut fixture = Self::new(ir, start, goal, weighted);
+        fixture.workload = Some(name.to_owned());
+        fixture
+    }
+
+    fn generate(name: &str) -> (Ir, NodeId, NodeId, bool) {
         let (ir, start, goal) = match name {
             "path65k" | "grid256" | "sts1023" | "random1e6" => {
                 let ir = shortest_fixture(name);
@@ -49,7 +58,7 @@ impl SourceFixture {
             name,
             "map32" | "map128" | "map512" | "corridor128" | "transport128"
         );
-        Self::new(ir, start, goal, weighted)
+        (ir, start, goal, weighted)
     }
 
     fn new(ir: Ir, start: NodeId, goal: NodeId, weighted: bool) -> Self {
@@ -60,6 +69,7 @@ impl SourceFixture {
             start,
             goal,
             weighted,
+            workload: None,
         }
     }
 
@@ -155,7 +165,11 @@ impl SourceFixture {
     }
 
     fn compile(&self) -> (Store, Arc<CompiledProgram>) {
-        let provider = MemProvider::default().with_file("benchmark.hymeko", self.source.clone());
+        Self::compile_source(self.source.clone())
+    }
+
+    fn compile_source(source: Arc<str>) -> (Store, Arc<CompiledProgram>) {
+        let provider = MemProvider::default().with_file("benchmark.hymeko", source);
         let mut store = ModuleStore::new(provider, RealParser);
         let compiled = store
             .compile(Path::new("benchmark.hymeko"))
@@ -194,7 +208,11 @@ impl SourceFixture {
 
     fn query(&self, ir: &Ir) -> Option<WeightedBergePath> {
         let index = build_incidence_index(ir).expect("parsed incidence index");
-        let traversal = HyperTraversal::new(&index);
+        self.query_prepared(&index)
+    }
+
+    fn query_prepared(&self, index: &IncidenceIndex) -> Option<WeightedBergePath> {
+        let traversal = HyperTraversal::new(index);
         let mut workspace = InformedSearchWorkspace::new();
         if self.weighted {
             dijkstra_berge_path(
@@ -275,7 +293,103 @@ impl SourceFixture {
                 })
                 .0
             }
+            _ => self.measure_input_or_query(phase, hash),
+        }
+    }
+
+    fn measure_input_or_query(&self, phase: &str, hash: u64) -> Measurement {
+        match phase {
+            "generate_ir" => {
+                let name = self.workload.as_deref().expect("named generator required");
+                let (measurement, (ir, start, goal, weighted)) =
+                    statistics::measure_factory(|| (Self::generate(name), hash));
+                self.assert_equivalent(&ir);
+                assert_eq!(
+                    (start, goal, weighted),
+                    (self.start, self.goal, self.weighted)
+                );
+                measurement
+            }
+            "emit_source" => {
+                let (measurement, source) =
+                    statistics::measure_factory(|| (Self::project(&self.ir), hash));
+                assert_eq!(source, self.source.as_ref());
+                measurement
+            }
+            "dijkstra_prepared" => {
+                let (_, compiled) = self.compile();
+                let index = build_incidence_index(&compiled.ir).expect("untimed index");
+                let expected = self.query_prepared(&index);
+                let (measurement, path) =
+                    statistics::measure_factory(|| (self.query_prepared(&index), hash));
+                assert_eq!(path, expected);
+                measurement
+            }
+            "read_source" | "file_to_dijkstra" => {
+                let file = SourceFile::new(&self.source);
+                // Writing and the verification read warm the OS cache before timing.
+                assert_eq!(file.read().expect("fixture read"), self.source.as_ref());
+                if phase == "read_source" {
+                    let (measurement, source) = statistics::measure_factory(|| {
+                        (file.read().expect("timed UTF-8 read"), hash)
+                    });
+                    assert_eq!(source, self.source.as_ref());
+                    measurement
+                } else {
+                    let (measurement, (_, compiled, path)) = statistics::measure_factory(|| {
+                        let source = file.read().expect("timed UTF-8 read");
+                        let (store, compiled) = Self::compile_source(source.into());
+                        let path = self.query(&compiled.ir);
+                        ((store, compiled, path), hash)
+                    });
+                    self.assert_equivalent(&compiled.ir);
+                    assert_eq!(path, self.query(&compiled.ir));
+                    measurement
+                }
+            }
             _ => panic!("unknown parsing phase {phase}"),
+        }
+    }
+}
+
+/// Per-process temporary fixture; file creation/deletion are outside the sampler.
+struct SourceFile(PathBuf);
+
+impl SourceFile {
+    fn new(source: &str) -> Self {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let path = env::temp_dir().join(format!(
+            "hymeko-benchmark-{}-{stamp}.hymeko",
+            std::process::id()
+        ));
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .expect("unique temporary source");
+        let fixture = Self(path);
+        file.write_all(source.as_bytes())
+            .expect("source fixture write");
+        file.sync_all()
+            .expect("flush source before warm-cache measurement");
+        fixture
+    }
+
+    fn read(&self) -> std::io::Result<String> {
+        std::fs::read_to_string(&self.0)
+    }
+}
+
+impl Drop for SourceFile {
+    fn drop(&mut self) {
+        if let Err(error) = std::fs::remove_file(&self.0) {
+            eprintln!(
+                "temporary source cleanup failed: {}: {error}",
+                self.0.display()
+            );
         }
     }
 }
@@ -290,9 +404,15 @@ fn parsing_cell() {
     let fixture = SourceFixture::named(&workload);
     fixture.validate();
     println!(
-        "EVIDENCE_SOURCE\tbytes={}\tfnv1a64={}\tprojection=graph_fixture_v1\tfile_io=false\tfinal_drop=false",
+        "EVIDENCE_SOURCE\tbytes={}\tfnv1a64={}\tprojection=graph_fixture_v1\tfile_io={}\tfinal_drop=false\tfile_cache={}",
         fixture.source.len(),
-        fixture.source_hash()
+        fixture.source_hash(),
+        matches!(subject.as_str(), "read_source" | "file_to_dijkstra"),
+        if matches!(subject.as_str(), "read_source" | "file_to_dijkstra") {
+            "warm"
+        } else {
+            "NA"
+        }
     );
     emit_phase(&run, &workload, &subject, "source_validated");
     let measurement = fixture.measure(&subject);
@@ -365,10 +485,33 @@ fn every_phase_runs_real_production_code_and_returns_nine_samples() {
         "compile",
         "incidence_index",
         "source_to_dijkstra",
+        "generate_ir",
+        "emit_source",
+        "read_source",
+        "dijkstra_prepared",
+        "file_to_dijkstra",
     ] {
         let measurement = fixture.measure(phase);
         assert_eq!(measurement.samples.len(), 9);
         assert_eq!(measurement.checksum, fixture.source_hash());
         assert!(measurement.wall.median > 0.0);
     }
+}
+
+#[test]
+fn source_file_has_exact_bytes_and_rejects_missing_or_invalid_utf8() {
+    let fixture = SourceFile::new("ParsingBenchmark {}\nn0;\n");
+    assert_eq!(fixture.read().unwrap(), "ParsingBenchmark {}\nn0;\n");
+    std::fs::write(&fixture.0, [0xff]).unwrap();
+    assert_eq!(
+        fixture.read().unwrap_err().kind(),
+        std::io::ErrorKind::InvalidData
+    );
+    let path = fixture.0.clone();
+    drop(fixture);
+    assert!(!path.exists());
+    assert_eq!(
+        std::fs::read_to_string(path).unwrap_err().kind(),
+        std::io::ErrorKind::NotFound
+    );
 }

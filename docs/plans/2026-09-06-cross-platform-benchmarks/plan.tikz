@@ -1,1 +1,1 @@
-\begin{tikzpicture}\node[draw,text width=11cm,align=center]{Existing graph fixtures $\to$ HyMeKo text $\to$ real parser AST $\to$ Core IR $\to$ incidence index $\to$ Dijkstra\\Separate phase timings and directly measured complete pipeline};\end{tikzpicture}
+\begin{tikzpicture}\node[draw,text width=11cm,align=center]{Generator and direct IR construction $\to$ HyMeKo text $\to$ local file\\File read $\to$ real parser AST $\to$ Core IR $\to$ incidence index $\to$ Dijkstra\\Separate phase timings; directly measured file-to-result; warm OS file cache};\end{tikzpicture}

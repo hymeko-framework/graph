@@ -1,5 +1,9 @@
 flowchart LR
-  Fixture[Existing graph fixtures] --> Source[Deterministic HyMeKo text]
+  Generator[Generator plus direct IR construction] --> Fixture[Existing graph fixtures]
+  Fixture --> Source[Deterministic HyMeKo text]
+  Source --> File[Local source file]
+  File --> Read[UTF-8 read - warm OS cache]
+  Read --> AST
   Source --> AST[Real parser AST]
   AST --> IR[Core resolved IR]
   IR --> Index[Incidence index]

@@ -20,6 +20,47 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+PHASES = (
+    (
+        "generate_ir",
+        "generation",
+        "Deterministic generator including direct IR construction",
+    ),
+    (
+        "emit_source",
+        "serialization",
+        "Existing fixture IR to resident HyMeKo UTF-8 text",
+    ),
+    ("read_source", "input", "Local HyMeKo file to resident UTF-8 text; warm OS cache"),
+    ("parse_ast", "parsing", "Resident HyMeKo UTF-8 text to AST"),
+    (
+        "ast_to_ir",
+        "graph_build",
+        "Existing AST through interning, resolution and IR lowering",
+    ),
+    (
+        "compile",
+        "compilation",
+        "Resident text through fresh ModuleStore compilation, validation and hashes",
+    ),
+    ("incidence_index", "preparation", "Compiled IR to incidence index"),
+    (
+        "dijkstra_prepared",
+        "execution",
+        "Dijkstra on compiled IR and ready index; fresh query workspace",
+    ),
+    (
+        "source_to_dijkstra",
+        "end_to_end_memory",
+        "Resident text through fresh compilation, index and Dijkstra",
+    ),
+    (
+        "file_to_dijkstra",
+        "end_to_end_file",
+        "Local file read, fresh compilation, index and Dijkstra; warm OS cache",
+    ),
+)
+
 
 @dataclass(frozen=True)
 class Cell:
@@ -48,7 +89,7 @@ class Cell:
         return result
 
     @staticmethod
-    def matrix(suite: str = "graph") -> list[Cell]:
+    def matrix(suite: str = "graph", phases: list[str] | None = None) -> list[Cell]:
         if suite == "parsing":
             workloads = (
                 "grid200_d80",
@@ -68,17 +109,19 @@ class Cell:
                 "parallel16",
                 "sts511",
             )
-            phases = (
+            selected = phases or (
                 "parse_ast",
                 "ast_to_ir",
                 "compile",
                 "incidence_index",
                 "source_to_dijkstra",
             )
+            if any(p not in {item[0] for item in PHASES} for p in selected):
+                raise ValueError("unknown parsing phase")
             return [
                 Cell("informed", "parsing::parsing_cell", w, p)
                 for w in workloads
-                for p in phases
+                for p in selected
             ]
         if suite != "graph":
             raise ValueError(f"unknown suite: {suite}")
@@ -188,6 +231,11 @@ class Evidence:
                 or sources[0]["projection"] != "graph_fixture_v1"
             ):
                 raise ValueError("parsing input identity mismatch")
+            if cell.get("subject") in {"read_source", "file_to_dijkstra"} and (
+                sources[0].get("file_io") != "true"
+                or sources[0].get("file_cache") != "warm"
+            ):
+                raise ValueError("missing file I/O measurement boundary")
         return records
 
 
@@ -352,8 +400,9 @@ class Campaign:
             "runtime",
             "runs",
             "smoke",
+            "phases",
         ):
-            if current[key] != saved[key]:
+            if current.get(key) != saved.get(key):
                 raise ValueError(f"checkpoint identity changed: {key}")
         identities = [(c["run"], c["id"]) for c in saved["cells"]]
         if len(identities) != len(set(identities)):
@@ -376,14 +425,35 @@ class Campaign:
                 ["git", "-C", str(repo), *arguments], text=True
             ).strip()
 
+        source_ref = self.args.source_ref or git("rev-parse", "HEAD")
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "diff",
+                "--exit-code",
+                source_ref,
+                "--",
+                "Cargo.toml",
+                "Cargo.lock",
+                "hymeko_graph/src",
+                "hymeko_graph/tests",
+            ],
+            check=True,
+            capture_output=True,
+        )
         result = {
             "schema_version": 1,
             "suite": self.args.suite,
             "runs": self.args.runs,
             "smoke": self.args.smoke,
+            "phases": self.args.phases,
             "platform": self.args.platform,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "source_commit": git("rev-parse", "HEAD"),
+            "source_commit": git("rev-parse", source_ref),
+            "driver_commit": git("rev-parse", "HEAD"),
+            "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             "dirty_paths": git("status", "--porcelain"),
             "host": platform.node(),
             "os": platform.platform(),
@@ -434,18 +504,17 @@ class Campaign:
                 {"suite": suite, "log": log.name, **observation}
             )
             self.save_checkpoint(result)
-        cells = Cell.matrix(self.args.suite)
+        cells = Cell.matrix(self.args.suite, self.args.phases)
         if self.args.smoke:
             cells = (
                 [
                     c
                     for c in cells
-                    if (c.workload, c.subject)
-                    in {
-                        ("map512", "compile"),
-                        ("random1e6", "compile"),
-                        ("grid5", "parse_ast"),
-                    }
+                    if (
+                        c.workload in {"map512", "random1e6"}
+                        and c.subject in (self.args.phases or ["compile"])
+                    )
+                    or (c.workload, c.subject) == ("grid5", "parse_ast")
                 ]
                 if self.args.suite == "parsing"
                 else [cells[0], cells[-1]]
@@ -525,7 +594,12 @@ class CampaignSummary:
         self.source_commits.add(campaign["source_commit"])
         if len(self.source_commits) != 1:
             raise ValueError("platforms measured different source revisions")
-        expected = {cell.key for cell in Cell.matrix(campaign.get("suite", "graph"))}
+        expected = {
+            cell.key
+            for cell in Cell.matrix(
+                campaign.get("suite", "graph"), campaign.get("phases")
+            )
+        }
         if len(campaign["cells"]) != 3 * len(expected):
             raise ValueError("campaign process count does not match declared matrix")
         groups = {}
@@ -600,6 +674,13 @@ class CampaignSummary:
                     "benchmark": key,
                     "workload": cell["workload"],
                     "algorithm": cell["subject"],
+                    "phase": next(
+                        (p[1] for p in PHASES if p[0] == cell["subject"]), "execution"
+                    ),
+                    "measurement_scope": next(
+                        (p[2] for p in PHASES if p[0] == cell["subject"]),
+                        "See original graph benchmark contract",
+                    ),
                     "threads": cell.get("threads", "1"),
                     "samples": 27,
                     "median_ns": samples[13] * 1000,
@@ -630,15 +711,18 @@ class CampaignSummary:
             }
         )
 
-    def write(self) -> None:
-        for platform_name in ("windows", "native", "arm64"):
-            self.accept(
-                json.loads(
-                    (self.root / platform_name / "campaign.json").read_text(
-                        encoding="utf8"
-                    )
-                )
+    def write(
+        self, platforms: tuple[str, ...] = ("windows", "native", "arm64")
+    ) -> None:
+        campaigns = []
+        for platform_name in platforms:
+            campaign = json.loads(
+                (self.root / platform_name / "campaign.json").read_text(encoding="utf8")
             )
+            if campaign["platform"] != platform_name:
+                raise ValueError("campaign platform/path mismatch")
+            campaigns.append(campaign)
+            self.accept(campaign)
         for filename, rows in (
             ("platform-summary.csv", self.rows),
             ("process-resources.csv", self.resources),
@@ -675,14 +759,24 @@ class CampaignSummary:
                 (w, f"parsing_parsing_cell-{w}-parse_ast-t1")
                 for w in ("map32", "map128", "map512")
             ]
-        platforms = ["windows", "native", "arm64"]
+        if self.rows[0]["algorithm"] in {
+            "generate_ir",
+            "emit_source",
+            "read_source",
+            "dijkstra_prepared",
+            "file_to_dijkstra",
+        }:
+            selections = [
+                (w, f"parsing_parsing_cell-{w}-file_to_dijkstra-t1")
+                for w in ("map32", "map128", "map512")
+            ]
         indexed = {(row["platform"], row["benchmark"]): row for row in self.rows}
         plotted = [
             (label, [indexed[p, key]["median_ns"] / 1000 for p in platforms])
             for label, key in selections
         ]
         bar_svg(
-            "Selected parsing medians (ARM64 is QEMU)"
+            "Selected pipeline medians (ARM64, where present, is QEMU)"
             if self.rows[0]["source_bytes"]
             else "Selected graph search medians (ARM64 is QEMU)",
             plotted,
@@ -692,12 +786,48 @@ class CampaignSummary:
             "microseconds / operation",
             self.root / "search-platforms.svg",
         )
+        provenance = {
+            "source_commit": next(iter(self.source_commits)),
+            "measurement_contract": "Separate measured phases; totals measured directly, never summed. Generation constructs fixture IR. File phases use warm OS cache. Final returned-object destruction excluded. RSS includes fixture construction and validation.",
+            "external_map_import": "not measured; current inputs are deterministic graph fixtures",
+            "phases": [{"algorithm": a, "phase": p, "scope": s} for a, p, s in PHASES],
+            "platforms": [
+                {k: v for k, v in c.items() if k not in {"cells", "correctness"}}
+                for c in campaigns
+            ],
+        }
+        (self.root / "source-provenance.json").write_text(
+            json.dumps(provenance, indent=2) + "\n", encoding="utf8"
+        )
+        manifest = {
+            str(p.relative_to(self.root)).replace("\\", "/"): hashlib.sha256(
+                p.read_bytes()
+            ).hexdigest()
+            for p in sorted(self.root.rglob("*"))
+            if p.is_file() and p.name != "artifacts-manifest.json"
+        }
+        (self.root / "artifacts-manifest.json").write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf8"
+        )
         print(json.dumps(receipt), flush=True)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "--summarize":
-        CampaignSummary(Path(sys.argv[2]).resolve()).write()
+    if len(sys.argv) >= 3 and sys.argv[1] == "--summarize":
+        summary_parser = argparse.ArgumentParser()
+        summary_parser.add_argument("--summarize", required=True)
+        summary_parser.add_argument(
+            "--platforms",
+            nargs="+",
+            choices=("windows", "native", "arm64"),
+            default=["windows", "native", "arm64"],
+        )
+        summary_args = summary_parser.parse_args()
+        if len(set(summary_args.platforms)) != len(summary_args.platforms):
+            summary_parser.error("duplicate platforms")
+        CampaignSummary(Path(summary_args.summarize).resolve()).write(
+            tuple(summary_args.platforms)
+        )
         raise SystemExit(0)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -706,6 +836,15 @@ if __name__ == "__main__":
     parser.add_argument("--informed", required=True)
     parser.add_argument("--algorithm")
     parser.add_argument("--suite", choices=("graph", "parsing"), default="graph")
+    parser.add_argument(
+        "--phases",
+        nargs="+",
+        choices=tuple(p[0] for p in PHASES),
+    )
+    parser.add_argument(
+        "--source-ref",
+        help="timed Rust revision; accepted only when its source and manifests are unchanged",
+    )
     parser.add_argument("--output", required=True)
     parser.add_argument("--qemu")
     parser.add_argument(
@@ -717,6 +856,11 @@ if __name__ == "__main__":
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--resume", action="store_true")
     arguments = parser.parse_args()
+    if arguments.phases and (
+        arguments.suite != "parsing"
+        or len(set(arguments.phases)) != len(arguments.phases)
+    ):
+        parser.error("unique --phases are supported only for the parsing suite")
     if arguments.suite == "graph" and not arguments.algorithm:
         parser.error("--algorithm is required for the graph suite")
     if arguments.runs < 1 or (arguments.platform == "arm64" and not arguments.qemu):

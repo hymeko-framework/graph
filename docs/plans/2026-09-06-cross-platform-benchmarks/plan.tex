@@ -72,4 +72,59 @@ representations; serialized IR has edge declarations absent from the synthetic
 IR and this overhead is reported. QEMU is emulation, not native ARM hardware.
 This adds measurements, not a SOTA superiority claim.
 
+
+\section*{Resource-bounded platform matrix, updated 18:07 +02:00}
+The ARM64 map512 full-compilation smoke hit the declared 180-second process
+budget (peak about 3.24GiB). It produced no accepted timing row. Do not expand
+that optional full-frontend campaign into hours of emulation. The requested
+parse timing remains mandatory on all 16 workloads and all three platforms.
+Retain all five phases on Windows and native Amaterasu; run the parse\_ast phase
+on ARM64, with the same source validation and unchanged Rust measurement binary.
+Declared total: 240 Windows + 240 native + 48 ARM64 processes, 176 pooled rows.
+Five-stage ARM64 coverage is explicitly incomplete, and the timed-out smoke is
+retained as resource evidence, not converted to a latency value. Run the largest
+parser-only ARM64 smoke before its full matrix. Driver phase selection is explicit
+in provenance. A source-ref option is permitted only after Git proves the entire
+Rust client, production Graph source and manifests/lock unchanged against that
+reference; record the driver's separate revision and byte hash. Expected remaining
+wall 20--35 minutes, revised after the parser-only ARM64 smoke. The existing
+16GiB RSS and 180-second process budgets remain enforced.
+
+The user's ongoing functional scope is Core, Graph, Transformation and Tensor,
+with thin bindings in hymeko\_python where needed. Cross-repo capability discovery
+is read-only while the pinned measurements complete. Preserve Transformation's
+existing uncommitted geometry work. Tensor already owns seven Python numerical
+bindings; do not duplicate them while planning a coherent Python surface.
+
+\section*{Explicit phase breakdown, updated 2026-09-06 18:37 +02:00}
+The user requests separate generation, graph construction, preparation, execution
+and complete pipeline measurements, followed by publication to the existing website.
+Extend the existing private SourceFixture and campaign, without production or
+dependency changes. Existing generators construct IR directly: label this combined
+operation generate\_ir, never claim a separately measured topology-only generation.
+Add emit\_source (IR to text), read\_source (local UTF-8 file, warm OS cache),
+dijkstra\_prepared (compiled IR and incidence index ready, fresh query workspace),
+and file\_to\_dijkstra (read, compile, index, query). Keep existing five phases
+and their evidence immutable. Temporary source-file writes and fixture validation
+are outside all timed regions. File-to-result is measured directly, not summed.
+No external-map importer is introduced in this benchmark-only change; import of
+external road formats remains unmeasured. Test file read failure, byte equality,
+generated IR equivalence, query result equivalence and each phase's nine samples.
+Use 3 independent processes, 2 warmups and 9 samples. Windows measures only the
+5 new phases; native measures the original and added phases in separate campaigns.
+ARM64 retains all 16 parser-only cases; its full-compile timeout stays explicit.
+Separate revision sets for old/new campaigns; no pooling across revisions.
+Budget: 16GiB, 180 seconds per process. Smoke map512 and random1e6 first.
+ETA 45--65 minutes: measured native original matrix about 15 minutes, added
+phases about 15 minutes per native host, ARM64 parser-only about 15 minutes,
+plus tests and website verification, with Windows independent of remote work.
+Extend existing report, diagrams, campaign.py/test\_campaign.py and parsing.rs;
+publish exact-byte CSV/JSON/SVG manifests under the existing evidence family.
+Website is local-only Git at /srv/apps/benchmark (no remote configured); extend
+its existing metric adapter, filters, table and tests to show stage and boundaries.
+Run existing production build/tests and verify deployed API plus browser.
+Graph f6bd760 is synchronized with its task upstream and contains current main.
+Core checkout diverges from main but is read-only; Cargo.lock pins fc3eda9b.
+Parser 284c490d is current. Preserve all other workers' files and prior evidence.
+Rollback: scoped benchmark and website changes; retain original campaigns.
 \end{document}

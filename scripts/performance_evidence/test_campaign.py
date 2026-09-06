@@ -4,10 +4,29 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from campaign import Campaign, CampaignSummary, Cell, Evidence
+from campaign import PHASES, Campaign, CampaignSummary, Cell, Evidence
 
 
 class EvidenceContract(unittest.TestCase):
+    def test_phase_breakdown_is_explicit_and_file_boundaries_are_required(self):
+        phases = [p[0] for p in PHASES]
+        self.assertEqual(len(phases), 10)
+        self.assertEqual(len(Cell.matrix("parsing", phases)), 160)
+        with self.assertRaises(ValueError):
+            Cell.matrix("parsing", ["unknown"])
+        source = self.fixture().replace(
+            "EVIDENCE_CELL\t",
+            "EVIDENCE_CELL\tsection=parsing\tsubject=file_to_dijkstra\t",
+        )
+        source += "\nEVIDENCE_SOURCE\tbytes=100\tfnv1a64=123\tprojection=graph_fixture_v1\tfile_io=true\tfile_cache=warm"
+        self.assertEqual(Evidence.parse(source)["SOURCE"][0]["file_cache"], "warm")
+        for changed in (
+            source.replace("file_io=true", "file_io=false"),
+            source.replace("file_cache=warm", "file_cache=cold"),
+        ):
+            with self.assertRaises(ValueError):
+                Evidence.parse(changed)
+
     def test_checkpoint_is_atomic_and_rejects_changed_provenance(self):
         current = {
             "source_commit": "a" * 40,
@@ -90,6 +109,22 @@ class EvidenceContract(unittest.TestCase):
         }
         self.assertEqual({c.workload for c in matrix}, originals)
         self.assertEqual(len(matrix), 5 * len(originals))
+        selected = Cell.matrix("parsing", ["parse_ast"])
+        self.assertEqual({c.workload for c in selected}, originals)
+        self.assertTrue(all(c.subject == "parse_ast" for c in selected))
+        changed = {
+            "source_commit": "a",
+            "binaries": {},
+            "suite": "parsing",
+            "platform": "arm64",
+            "runtime": {},
+            "runs": 3,
+            "smoke": False,
+            "phases": ["parse_ast"],
+            "cells": [],
+        }
+        with self.assertRaises(ValueError):
+            Campaign.resume_checkpoint(changed, {**changed, "phases": ["compile"]})
         self.assertTrue(all(":" not in c.key for c in matrix))
         with self.assertRaises(ValueError):
             Cell.matrix("unknown")
