@@ -177,3 +177,8 @@ pub use traversal_heuristic::{
     enumerate_cycles_ordered, enumerate_cycles_ordered_noprune,
 };
 pub use vertex_filter::{AndFilter, DegreeFilter, NoFilter, TriangleFilter, VertexFilter};
+
+/// Canonical G-SPHF reading of the Core IR.
+pub mod sphf;
+/// IR-owned octree subdivision.
+pub mod octree;
