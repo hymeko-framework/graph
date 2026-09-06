@@ -584,3 +584,69 @@ Full command logs are retained in the canonical Core's existing `.git/worktree-c
 The source merge is committed normally after verification, and published to the existing Graph audit branch. Graph main and other branch refs are not rewritten or deleted. Rollback, if later requested, is a normal first-parent revert of this merge after checking user work; both original parent refs remain available. Core integration details and the nine-branch disposition are in `../core/reports/2026-09-06-worktree-consolidation.md`.
 
 DISCOVERY: existing direct_ir remains the graph navigation owner; matroid is imported from its audited Graph branch rather than recreated; Core owns canonical incidence, and the provider ecosystem map supersedes the retired Core workspace registry. Extend this existing independent audit report to record the integration and verification.
+
+
+## 24. Graph single-branch consolidation, 2026-09-06
+
+The user subsequently requested consolidating Graph into one branch. This supersedes section 23's audit-only publication boundary. The sole active target is `main` in the existing canonical Graph checkout, published through an ordinary fast-forward update. All current local and remote non-main Graph branch tips are checked as ancestors before their names are retired. Existing history and every commit remain reachable from main; no new worktree, branch, clone, tag or source backup is created.
+
+Seven of the nine listed branch tips were already included by `978c39ea`. The remaining `31930875` contributes only a deferred PGraph topology-ownership design, and `e710e84b` contributes the existing P1.4 axiom/AND-OR timing harness and report. Both are integrated by normal Git merge. The design remains unimplemented; Core's newer PreparedIr changes its historical lifetime assumptions, as the imported report now notes. Historical timings are not relabeled as current measurements. The harness's misleading claim of an asserted cross-revision A/B comparison is corrected: it prints observations, and does not make that assertion.
+
+Production source, manifests, Core/Parser pins, both lockfiles and the separate benchmark workspace are byte-identical in Git to the previously verified `978c39ea` integration. Core stays at `92383b38`, Parser at `284c490d`. Changes in this step are the imported test/design/evidence plus consolidation notes. The earlier separate benchmark compilation therefore remains applicable. Full workspace verification includes the new timing harness; its successful execution is not an independent performance proof.
+
+### Branch names and exact pre-retirement tips
+
+The nine requested branches and older fully integrated Graph branches are consolidated into main. `-` means that the name existed only on the other side. These exact refs permit reconstruction with `git branch <name> <tip>` and a normal push if later requested; no extra archival branch is needed.
+
+<!-- graph-branch-tips:start -->
+| Branch | Local tip | Remote tip |
+|---|---|---|
+| `audit/platform-2026-09-05` | `978c39eae94132cf02d1eae1a4040d608ef12d73` | `978c39eae94132cf02d1eae1a4040d608ef12d73` |
+| `chore/canonical-graph-governance` | `-` | `610d1eb1d30c9b22d4daa2758e54473cf64e191a` |
+| `chore/graph-clippy` | `-` | `61185f0b5d57e27cea155045ab65b31f2c143777` |
+| `chore/graph-fmt` | `-` | `a2a13cd28461526830904c1bf3ce242d8e5766d9` |
+| `feat/canonical-owner-hyper-operator` | `-` | `250115cf1115f3bd0b65e65d79b08b23802dfcc6` |
+| `feat/canonical-owner-signed-tuples` | `-` | `ec58a3d998999f8f86f0162bbc00ad6ca5129c76` |
+| `feat/canonical-owner-spine-extension` | `-` | `5e9bd957e6fa14e335a6a72c2fd7ca42a25ef5d4` |
+| `feat/codex-p34-independent-audit` | `-` | `83774b8bdb170ace87506a02c0655397f806a0b8` |
+| `feat/direct-ir-informed-berge-search` | `d4086a04aeb9f31db42147642324e78a2b4d1499` | `d4086a04aeb9f31db42147642324e78a2b4d1499` |
+| `feat/graph-direct-ir-algorithms` | `98c6a93212613dd4053a3b3a04c36eee8b5d48ad` | `98c6a93212613dd4053a3b3a04c36eee8b5d48ad` |
+| `feat/graph-matroid-navigation-p33` | `cead2c8e50b6fbc5b006d9bb5f25dff267515923` | `cead2c8e50b6fbc5b006d9bb5f25dff267515923` |
+| `feat/graph-matroid-navigation-p34` | `ce841343b428ba1cfa274e225ae5646606eb8a50` | `ce841343b428ba1cfa274e225ae5646606eb8a50` |
+| `feat/graph-navigation-performance-p31` | `3bcab17a5171a9efcb5b18fc6a6017c4b90be088` | `3bcab17a5171a9efcb5b18fc6a6017c4b90be088` |
+| `feat/graph-navigation-performance-p32` | `1c6d568dfa3d16ba3eb245440a0d8b8efe008cd2` | `1c6d568dfa3d16ba3eb245440a0d8b8efe008cd2` |
+| `feat/graph-performance-survey` | `cbaadd438b313b9ec2abfaec05d590082a301c06` | `cbaadd438b313b9ec2abfaec05d590082a301c06` |
+| `feat/graph-query-performance-matrix` | `e710e84b13911c46e4b9d792f54d9b52321fc2ab` | `e710e84b13911c46e4b9d792f54d9b52321fc2ab` |
+| `feat/graph-steiner-mycielski-navigation-bench` | `cc5b895c83bed1e4cc3cf8b4941cdd16b6f8e9d2` | `cc5b895c83bed1e4cc3cf8b4941cdd16b6f8e9d2` |
+| `feat/p1-lint-cleanup` | `c35b9f29e81f4dd63c9f56835ba951fd7648c465` | `c35b9f29e81f4dd63c9f56835ba951fd7648c465` |
+| `feat/pgraph-adjacency-delegation` | `b234c4871807dc255854cc4b50d1458547dca7d3` | `b234c4871807dc255854cc4b50d1458547dca7d3` |
+| `feat/pgraph-direct-ir-and-or-algebra` | `9655f07755e271c0f2ee4361a526b14e0205af8c` | `9655f07755e271c0f2ee4361a526b14e0205af8c` |
+| `feat/pgraph-lowered-borrows-canonical-ir` | `31930875bc2cfdd75f743b87e7d963a87c764af6` | `31930875bc2cfdd75f743b87e7d963a87c764af6` |
+<!-- graph-branch-tips:end -->
+
+Deletion is conditional on all tips being ancestors of the committed and remotely verified main. Remote deletions are atomic and guarded by each exact expected tip, so a concurrent branch advance stops the operation. Local deletion uses Git's merged-branch check. The original remote main base is `b234c487`; existing local main has been safely advanced to the tested integration before the two remaining branches are merged.
+
+### Discovery
+
+```text
+DISCOVERY LEDGER ? Graph ?gak egyes?t?se
+  find:    rg --files -> megl?v? auditterv ?s jelent?s
+  grep:    median_us / chain / fanout / fanin -> megl?v? AND/OR m?r?tesztek
+  symbols: SYMBOLS.md -> AxiomBundle, AndOrWorkspace, PGraphView
+  read:    a k?t hi?nyz? ?g teljes diffje ?s a jelenlegi auditterv
+  verdict: EXTEND az audittervet ?s jelent?st; a r?gi m?r?tesztet beemelem,
+           mert az axi?maellen?rz?s ?s az AND/OR-z?r?s k?l?n m?r?s?t tartalmazza.
+```
+
+The older timing harness has some fixture/timing duplication already acknowledged by its original report. It is retained as historical experiment evidence with its production calls intact, without starting an unrelated test-framework refactor during branch consolidation. This phase adds no production duplicate.
+
+
+### Final main verification
+
+- Complete Graph workspace: **557 passed / 0 failed / 21 ignored**, including doctests and the imported `perf_matrix` harness; `cargo test --workspace --release --all-features --locked --offline --no-fail-fast -j 4 -- --test-threads=4`. This adds one historical measurement harness execution to the previous 556-test inventory.
+- `cargo clippy --workspace --all-features --all-targets --release --locked --offline -j 4 -- -D warnings`: **PASS**, 3.86 s.
+- `cargo fmt --all --check`, symbol index check, diff whitespace checks: **PASS**. Production source/manifests/locks have no diff from the tested 978c39ea.
+- Duplication measurement after the imported harness: **512 clone groups / 12201 cloned lines / 150 files**, versus **512 / 12124 / 149** before it. The 77-line growth is recorded; no Graph duplication baseline is invented or changed.
+- Provider preflight checks the six imported files; overlap candidates are resolved by the DISCOVERY disposition rather than claimed absent. The normal Git merge commit records that disposition. Graph still has no installed hook, so explicit checks are the evidence.
+
+Full local command logs are in this checkout's `.git/graph-main-consolidation-tests.log`, `.git/graph-main-consolidation-clippy.log`, and `.git/graph-main-consolidation-preflight.log`. The authoritative source is the normal merge commit, published on main. Publication and exact-tip branch retirement are verified against the server after the commit.

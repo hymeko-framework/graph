@@ -85,3 +85,17 @@ automatically deleted.
 each later evidence, regression-test and optional correction phase is a separate commit.
 Rollback is commit-level revert. No dependency change is planned. Production source
 remains unchanged unless the evidence gate above is satisfied.
+
+
+## Graph single-branch consolidation, 2026-09-06
+
+Created-at: 2026-09-06T04:10:37+02:00
+ETA: 5-10 minutes. The user's new instruction is to consolidate Graph branches into one branch; this supersedes the earlier audit-only publication boundary. Work solely in the existing canonical Graph checkout. No new worktree, branch, clone, production capability or dependency change.
+
+Freshly fetched remote main is b234c487; the verified integration is 978c39ea. Seven listed incoming tips are already ancestors of the integration. Two are not: 31930875 contributes a design-only PGraph topology-ownership plan/report; e710e84b contributes the existing P1.4 query benchmark and report. Merge both normally into existing main after advancing it to the tested integration. Keep deferred design claims explicitly deferred and historical timings dated. The full main source/manifests/locks must remain identical to 978c39ea; the added test must compile and run with the current Core pin.
+
+Acceptance: every local and remote Graph branch tip becomes an ancestor of main; complete workspace tests, all-feature/all-target Clippy, symbols, formatting and reviewed preflight; ordinary main push; delete only fully integrated branch refs after remote-main verification, using exact expected remote tips so concurrent branch advances are never deleted. Main remains the sole Graph branch locally and remotely. No recursive directory cleanup, tags, or changes to other repositories. Retired names and exact tips are recorded in the existing report; all commits remain reachable from main.
+
+Reuse the just-completed 556-test production validation and separate benchmark compile evidence. The final workspace test includes the newly imported P1.4 harness; no historical A/B campaign is repeated or claimed. Four build jobs and test threads, existing target, serial test and lint runs. Existing report/plan are extended; the imported design bundle keeps its original explicit plan.pdf waiver. This Git integration does not execute the deferred PGraph production refactor.
+
+Rollback: a first-parent revert of the new merge preserves the preceding tested integration. Branch names can be recreated from the exact tip table in the report; remote deletion never discards unique commits. Retain existing source history, not extra checkouts or archives.
