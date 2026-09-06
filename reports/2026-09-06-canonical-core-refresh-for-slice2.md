@@ -47,3 +47,14 @@ this report. The historical P2-C nine-repetition campaign was not launched.
 After commit and verified push, Nagare must move both Graph declarations
 together to this Graph tip, certify exactly one Core and one Graph instance,
 and only then implement signed HSiKAN `Ir -> ExecutionPlan -> CPU/WGPU`.
+
+## Source-identity addendum
+
+The first Nagare consumer gate rejected the exact-revision form even though it
+resolved the same commit: Cargo treats `rev=fc3eda9...` and
+`branch=main#fc3eda9...` as distinct sources and therefore instantiated Core
+twice. The Graph dependency is consequently expressed as `branch = "main"`,
+the same workspace convention used by Nagare and WGPU. Core `main` was fetched
+again immediately before this repair and still resolved `fc3eda9b`. This
+addendum supersedes only the source-selector wording above; the tested Core
+bytes and all behavioural results are unchanged.
