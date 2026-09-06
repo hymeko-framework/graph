@@ -17,6 +17,8 @@ use hymeko_graph::direct_ir::{
     dijkstra_berge_path, enumerate_berge_cycles, enumerate_berge_paths,
 };
 
+#[path = "informed_common/parsing.rs"]
+mod parsing;
 #[allow(dead_code)]
 #[path = "performance_evidence/statistics.rs"]
 mod statistics;
@@ -24,8 +26,6 @@ mod statistics;
 mod telemetry;
 #[path = "informed_common/mod.rs"]
 mod workloads;
-#[path = "informed_common/parsing.rs"]
-mod parsing;
 
 use statistics::{Measurement, measure_calibrated_verified};
 

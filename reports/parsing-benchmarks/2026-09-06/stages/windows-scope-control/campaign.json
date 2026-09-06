@@ -1,0 +1,772 @@
+{
+  "schema_version": 1,
+  "suite": "parsing",
+  "runs": 1,
+  "smoke": true,
+  "phases": [
+    "source_to_dijkstra",
+    "file_to_dijkstra"
+  ],
+  "platform": "windows",
+  "created_at": "2026-09-06T19:07:35+0200",
+  "source_commit": "5fcfb5f2e52bd4584a08aa2fd2f97620085dbc6a",
+  "driver_commit": "febea3e56134ab1c01080f874851271f6946ebfa",
+  "driver_sha256": "4005a7c2ee20dbaf208e1b01f995364f28b964cefb0832f78dd27ce3618065dd",
+  "dirty_paths": "M scripts/performance_evidence/campaign.py\n M scripts/performance_evidence/test_campaign.py\n?? reports/parsing-benchmarks/2026-09-06/artifacts-manifest.json\n?? reports/parsing-benchmarks/2026-09-06/platform-summary.csv\n?? reports/parsing-benchmarks/2026-09-06/process-resources.csv\n?? reports/parsing-benchmarks/2026-09-06/search-platforms.svg\n?? reports/parsing-benchmarks/2026-09-06/source-provenance.json\n?? reports/parsing-benchmarks/2026-09-06/stages/\n?? reports/parsing-benchmarks/2026-09-06/verification.json\n?? reports/parsing-benchmarks/2026-09-06/windows-driver.log\n?? reports/parsing-benchmarks/2026-09-06/windows-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/windows-driver.stderr.log\n?? reports/parsing-benchmarks/2026-09-06/windows-interrupted/\n?? reports/parsing-benchmarks/2026-09-06/windows/",
+  "host": "KyberSaman",
+  "os": "Windows-11-10.0.26200-SP0",
+  "cpu_count": 24,
+  "python": "3.12.13",
+  "metric_scope": "iteration batch means, not request tails",
+  "runtime": {
+    "image": null,
+    "emulated": false
+  },
+  "binaries": {
+    "informed": {
+      "path": "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+      "sha256": "6265ec9293594ca8aec5a3af26c972895b49b7fd0121599483f54b8a26b200d3"
+    }
+  },
+  "cells": [
+    {
+      "id": "parsing_parsing_cell-map512-source_to_dijkstra-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "phase": "source_validated",
+            "working_set_b": "279707648",
+            "self_peak_b": "2038444032"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "phase": "complete",
+            "working_set_b": "339546112",
+            "self_peak_b": "3168141312"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "4384601.700",
+            "cpu_us": "4359375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "4323077.200",
+            "cpu_us": "4250000.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "4229763.800",
+            "cpu_us": "4218750.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "4304543.900",
+            "cpu_us": "4312500.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "4278618.100",
+            "cpu_us": "4250000.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "4371790.800",
+            "cpu_us": "4375000.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "4357978.300",
+            "cpu_us": "4359375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "4482048.300",
+            "cpu_us": "4468750.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "4328534.200",
+            "cpu_us": "4265625.000",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "source_to_dijkstra",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "4328534.200",
+            "wall_q1_us": "4304543.900",
+            "wall_q3_us": "4371790.800",
+            "wall_worst_us": "4482048.300",
+            "cpu_median_us": "4312500.000",
+            "cpu_q1_us": "4250000.000",
+            "cpu_q3_us": "4359375.000",
+            "cpu_worst_us": "4468750.000",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 58.171999999991385,
+        "peak_rss_bytes": 3168141312,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-map512-file_to_dijkstra-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "phase": "source_validated",
+            "working_set_b": "279625728",
+            "self_peak_b": "2038341632"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "phase": "complete",
+            "working_set_b": "338718720",
+            "self_peak_b": "3229798400"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "4172479.500",
+            "cpu_us": "4125000.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "4128907.000",
+            "cpu_us": "4046875.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "4041218.300",
+            "cpu_us": "4031250.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "4203122.400",
+            "cpu_us": "3968750.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "4072474.000",
+            "cpu_us": "4046875.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "4164345.600",
+            "cpu_us": "4156250.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "4135174.000",
+            "cpu_us": "4109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "4546241.500",
+            "cpu_us": "4484375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "4155614.400",
+            "cpu_us": "4140625.000",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "4155614.400",
+            "wall_q1_us": "4128907.000",
+            "wall_q3_us": "4172479.500",
+            "wall_worst_us": "4546241.500",
+            "cpu_median_us": "4109375.000",
+            "cpu_q1_us": "4046875.000",
+            "cpu_q3_us": "4140625.000",
+            "cpu_worst_us": "4484375.000",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 56.921999999991385,
+        "peak_rss_bytes": 3229798400,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "phase": "process_baseline",
+            "working_set_b": "5013504",
+            "self_peak_b": "5013504"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "phase": "source_validated",
+            "working_set_b": "181239808",
+            "self_peak_b": "1203818496"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "phase": "complete",
+            "working_set_b": "218370048",
+            "self_peak_b": "1800957952"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "2611107.500",
+            "cpu_us": "2625000.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "2543731.100",
+            "cpu_us": "2531250.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "2552864.700",
+            "cpu_us": "2546875.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "2508364.300",
+            "cpu_us": "2484375.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "2558559.600",
+            "cpu_us": "2484375.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "2552312.500",
+            "cpu_us": "2531250.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "2564321.400",
+            "cpu_us": "2500000.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "2505349.400",
+            "cpu_us": "2500000.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "2555805.400",
+            "cpu_us": "2531250.000",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "source_to_dijkstra",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "2552864.700",
+            "wall_q1_us": "2543731.100",
+            "wall_q3_us": "2558559.600",
+            "wall_worst_us": "2611107.500",
+            "cpu_median_us": "2531250.000",
+            "cpu_q1_us": "2500000.000",
+            "cpu_q3_us": "2531250.000",
+            "cpu_worst_us": "2625000.000",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 32.921000000002095,
+        "peak_rss_bytes": 1800957952,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "phase": "process_baseline",
+            "working_set_b": "5013504",
+            "self_peak_b": "5013504"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "phase": "source_validated",
+            "working_set_b": "180830208",
+            "self_peak_b": "1203294208"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "phase": "complete",
+            "working_set_b": "217153536",
+            "self_peak_b": "1833193472"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "2674692.100",
+            "cpu_us": "2656250.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "2531475.900",
+            "cpu_us": "2515625.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "2526479.500",
+            "cpu_us": "2515625.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "2485148.900",
+            "cpu_us": "2468750.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "2534069.700",
+            "cpu_us": "2500000.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "2533000.200",
+            "cpu_us": "2500000.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "2535190.800",
+            "cpu_us": "2531250.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "2566456.900",
+            "cpu_us": "2562500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "2531061.800",
+            "cpu_us": "2515625.000",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "2533000.200",
+            "wall_q1_us": "2531061.800",
+            "wall_q3_us": "2535190.800",
+            "wall_worst_us": "2674692.100",
+            "cpu_median_us": "2515625.000",
+            "cpu_q1_us": "2500000.000",
+            "cpu_q3_us": "2531250.000",
+            "cpu_worst_us": "2656250.000",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 33.14100000000326,
+        "peak_rss_bytes": 1833193472,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    }
+  ],
+  "correctness": [
+    {
+      "suite": "informed",
+      "log": "correctness-informed.log",
+      "wall_seconds": 0.07800000000861473,
+      "peak_rss_bytes": 6762496,
+      "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+      "command": [
+        "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "complete": true
+}

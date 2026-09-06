@@ -1,6 +1,6 @@
 # Parsing and graph ingestion benchmarks
 
-Created-at: 2026-09-06 17:43 +02:00. Updated 19:06 +02:00. Status: Windows phase breakdown measured and verified; website deployment in progress. Remote publication awaits the user's host-condition decision.
+Created-at: 2026-09-06 17:43 +02:00. Updated 19:16 +02:00. Status: Windows phase breakdown measured, verified and live at http://192.168.1.228:3106. Remote completion/publication awaits the user's host-condition decision.
 
 ## Current delivery and measurement conditions
 
@@ -26,6 +26,12 @@ For map512 (30,032,345 source bytes), Windows pooled medians are:
 | Local file to query result, warm OS cache | 4326.479 |
 
 These operations overlap and are not additive components of one captured execution. The full distributions, source identities and timing boundaries are in the CSV/JSON evidence. Process memory includes fixture generation, validation and retained sampler objects; it is not a per-stage memory delta. No external road-map importer was added.
+
+Final verification: complete workspace release tests and complete workspace/all-targets release clippy passed; nine Python tests passed. The full formatter identified the previously added parsing-module declaration order in `informed_berge_evidence.rs`; that ordering was fixed after measurement. It is a formatting-only change, and the timed revisions remain the original explicit SHAs, not the later formatting commit. Authored-source Git whitespace checks pass; raw log EOF blank lines and CRLF evidence are intentionally preserved under the existing `-text` attributes and SHA256 manifests.
+
+Same-binary control (one process and nine samples per case, diagnostic only): map512 resident-source-to-query median 4328.534 ms and file-to-query 4155.614 ms; random1e6 2552.865 and 2533.000 ms. These observations do not establish an I/O speedup or a negative input cost. Keep separately measured total distributions separate rather than subtracting medians; no optimizer or production change was introduced.
+
+Website acceptance: 11 adapter/Git tests, strict TypeScript, parser-based structure gate and production build passed. Twelve real browser checks passed, including stage filtering, exact published counts, download SHA256, mobile fit, refresh and error states. API contains 160 new Windows rows across ten phases with zero source issues. The two new source artifacts are from Graph publication 871db7348557b20888708003504ac77b7eac3eaf (later report-only publication may update the displayed artifact commit). The website's own full verification and runtime evidence live at `/srv/apps/benchmark/reports/2026-09-06-benchmark-explorer.md`. The 16-workload Windows stage matrix is delivered; native supplementary and the full ARM64 parser matrix remain explicitly incomplete.
 
 ## Explicit phase breakdown
 
