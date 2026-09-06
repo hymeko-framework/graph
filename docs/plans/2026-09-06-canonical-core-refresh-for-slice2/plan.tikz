@@ -1,0 +1,10 @@
+\begin{tikzpicture}[node distance=12mm,>=stealth]
+  \tikzstyle{box}=[draw,rounded corners,align=center,minimum width=30mm,minimum height=8mm]
+  \node[box] (core) {Core\\\texttt{fc3eda9b}};
+  \node[box,right=of core] (graph) {Graph\\\texttt{2b619a39}};
+  \node[box,right=of graph] (gate) {locked gates\\single instance};
+  \node[box,right=of gate] (nagare) {Nagare\\Slice 2};
+  \draw[->] (core) -- (graph);
+  \draw[->] (graph) -- (gate);
+  \draw[->] (gate) -- (nagare);
+\end{tikzpicture}

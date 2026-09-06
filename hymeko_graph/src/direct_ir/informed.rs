@@ -858,11 +858,13 @@ mod tests {
                         target: DeclId::new(a),
                         anno: AnnoR::default(),
                         weights: None,
+                        direction: Default::default(),
                     }),
                     SignedRefR::Plus(RefAtomR {
                         target: DeclId::new(b),
                         anno: AnnoR::default(),
                         weights: None,
+                        direction: Default::default(),
                     }),
                 ],
             });
@@ -946,11 +948,13 @@ mod tests {
                         target: DeclId::new(a),
                         anno: AnnoR::default(),
                         weights: None,
+                        direction: Default::default(),
                     }),
                     SignedRefR::Plus(RefAtomR {
                         target: DeclId::new(b),
                         anno: AnnoR::default(),
                         weights: None,
+                        direction: Default::default(),
                     }),
                 ],
             });

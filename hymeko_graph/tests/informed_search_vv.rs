@@ -399,6 +399,7 @@ fn boundary_singleton_and_self_incidence() {
             target: DeclId::new(0),
             anno: AnnoR::default(),
             weights: None,
+            direction: Default::default(),
         })],
     });
     for (a, b) in [(0usize, 1usize), (1, 2)] {
@@ -410,11 +411,13 @@ fn boundary_singleton_and_self_incidence() {
                     target: DeclId::new(a),
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 }),
                 SignedRefR::Plus(RefAtomR {
                     target: DeclId::new(b),
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 }),
             ],
         });
@@ -643,6 +646,7 @@ fn consistent_astar_preserves_cheapest_entry_to_shared_arc() {
                     target: DeclId::new(node),
                     anno: AnnoR::default(),
                     weights: Some(vec![ValueR::Num(weight)]),
+                    direction: Default::default(),
                 })
             })
             .collect(),

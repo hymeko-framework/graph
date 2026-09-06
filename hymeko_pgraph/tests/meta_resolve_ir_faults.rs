@@ -223,6 +223,7 @@ impl Pg {
                 value: None,
             },
             weights: None,
+            direction: Default::default(),
         })
     }
 
@@ -253,6 +254,7 @@ impl Pg {
                     target,
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 };
                 match sign {
                     s if s < 0 => SignedRefR::Minus(atom),
@@ -431,6 +433,7 @@ fn dangling_incidence_target_is_typed() {
         target: DeclId::new(600),
         anno: AnnoR::default(),
         weights: None,
+        direction: Default::default(),
     })];
     assert_eq!(
         pg.ir_err(),
@@ -525,11 +528,13 @@ fn swapping_signs_swaps_input_and_output() {
             target: MAT_A,
             anno: AnnoR::default(),
             weights: None,
+            direction: Default::default(),
         }),
         SignedRefR::Minus(RefAtomR {
             target: MAT_P,
             anno: AnnoR::default(),
             weights: None,
+            direction: Default::default(),
         }),
     ];
     let g = pg.lower().expect("valid");
@@ -652,6 +657,7 @@ fn non_material_incidence_is_a_domain_error_not_a_storage_fault() {
         target: PROCESS,
         anno: AnnoR::default(),
         weights: None,
+        direction: Default::default(),
     })];
     match pg.lower() {
         Err(MetaResolveError::NonMaterialIo { unit, target }) => {
@@ -670,6 +676,7 @@ fn neutral_reference_is_rejected() {
         target: MAT_A,
         anno: AnnoR::default(),
         weights: None,
+        direction: Default::default(),
     })];
     match pg.lower() {
         Err(MetaResolveError::NeutralRef { unit }) => assert_eq!(unit, "u"),
@@ -716,6 +723,7 @@ fn a_base_without_the_isa_tag_is_skipped() {
             target: RAW,
             anno: AnnoR::default(),
             weights: None,
+            direction: Default::default(),
         }));
     let g = pg.lower().expect("valid");
     // A no longer classifies as a material (its base is not <isa>).

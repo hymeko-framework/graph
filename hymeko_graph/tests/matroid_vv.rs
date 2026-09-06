@@ -157,6 +157,7 @@ fn plus_ref(target: DeclId, weight: Option<f64>) -> SignedRefR {
         target,
         anno: AnnoR::default(),
         weights: weight.map(|w| vec![ValueR::Num(w)]),
+        direction: Default::default(),
     })
 }
 

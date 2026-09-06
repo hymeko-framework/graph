@@ -73,6 +73,7 @@ fn build_window_ir(m: usize, k: usize) -> Ir {
                     target: DeclId::new(j),
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 })
             })
             .collect();
