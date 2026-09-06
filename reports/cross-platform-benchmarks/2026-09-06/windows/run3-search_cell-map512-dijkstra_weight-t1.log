@@ -1,0 +1,23 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-search_cell-map512-dijkstra_weight-t1	workload=map512	subject=dijkstra_weight	phase=process_baseline	working_set_b=5005312	self_peak_b=5005312
+EVIDENCE_PHASE	run=run3-search_cell-map512-dijkstra_weight-t1	workload=map512	subject=dijkstra_weight	phase=canonical_ir	working_set_b=233607168	self_peak_b=233607168
+EVIDENCE_PHASE	run=run3-search_cell-map512-dijkstra_weight-t1	workload=map512	subject=dijkstra_weight	phase=incidence_index	working_set_b=247185408	self_peak_b=248238080
+EVIDENCE_PHASE	run=run3-search_cell-map512-dijkstra_weight-t1	workload=map512	subject=dijkstra_weight	phase=prepared	working_set_b=254599168	self_peak_b=254599168
+EVIDENCE_SAMPLE	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	ordinal=0	repetitions=4	wall_us=83350.400	cpu_us=82031.250	checksum=4101191712615687307
+EVIDENCE_SAMPLE	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	ordinal=1	repetitions=4	wall_us=76578.050	cpu_us=78125.000	checksum=4101191712615687307
+EVIDENCE_SAMPLE	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	ordinal=2	repetitions=4	wall_us=76724.475	cpu_us=74218.750	checksum=4101191712615687307
+EVIDENCE_SAMPLE	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	ordinal=3	repetitions=4	wall_us=77300.050	cpu_us=78125.000	checksum=4101191712615687307
+EVIDENCE_SAMPLE	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	ordinal=4	repetitions=4	wall_us=78054.075	cpu_us=78125.000	checksum=4101191712615687307
+EVIDENCE_SAMPLE	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	ordinal=5	repetitions=4	wall_us=80034.425	cpu_us=74218.750	checksum=4101191712615687307
+EVIDENCE_SAMPLE	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	ordinal=6	repetitions=4	wall_us=76213.325	cpu_us=74218.750	checksum=4101191712615687307
+EVIDENCE_SAMPLE	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	ordinal=7	repetitions=4	wall_us=76110.600	cpu_us=74218.750	checksum=4101191712615687307
+EVIDENCE_SAMPLE	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	ordinal=8	repetitions=4	wall_us=78734.050	cpu_us=82031.250	checksum=4101191712615687307
+EVIDENCE_CELL	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	status=OK	nodes=262144	arcs=521632	incidences=1043264	warmups=2	samples=9	repetitions=4	wall_median_us=77300.050	wall_q1_us=76578.050	wall_q3_us=78734.050	wall_worst_us=83350.400	cpu_median_us=78125.000	cpu_q1_us=74218.750	cpu_q3_us=78125.000	cpu_worst_us=82031.250	checksum=4101191712615687307
+EVIDENCE_WORK	run=run3-search_cell-map512-dijkstra_weight-t1	workload=map512	subject=dijkstra_weight	expanded_nodes=261736	expanded_arcs=521632	resolved_incidences=521632	pushes=261838	pops=261838	stale_pops=102	heuristic_evals=261837	reopened=0
+EVIDENCE_RESULT	run=run3-search_cell-map512-dijkstra_weight-t1	section=informed_search	workload=map512	subject=dijkstra_weight	reachable=true	cost_micros=1024500000	hops=1022	path_hash=4101191712615687307	items=NA	bound=NA	max_depth=NA	max_results=NA	max_expansions=NA
+EVIDENCE_PHASE	run=run3-search_cell-map512-dijkstra_weight-t1	workload=map512	subject=dijkstra_weight	phase=measured	working_set_b=247537664	self_peak_b=270585856
+test search_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 4.70s
+

@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**7 package(s), 482 public symbol(s).**
+**7 package(s), 487 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -566,6 +566,14 @@ _No public symbols._
 - **Root:** `scripts`
 - **Manifest:** none -- inferred from sources
 - **Charter:** <no charter>
+
+### classes
+
+- `Campaign` — `scripts/performance_evidence/campaign.py`
+- `CampaignSummary` — `scripts/performance_evidence/campaign.py`
+- `Cell` — `scripts/performance_evidence/campaign.py`
+- `Evidence` — `scripts/performance_evidence/campaign.py`
+- `ProcessRunner` — `scripts/performance_evidence/campaign.py`
 
 ### functions
 

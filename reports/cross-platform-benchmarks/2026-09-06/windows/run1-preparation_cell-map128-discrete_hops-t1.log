@@ -1,0 +1,21 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-preparation_cell-map128-discrete_hops-t1	workload=map128	subject=discrete_hops	phase=process_baseline	working_set_b=5005312	self_peak_b=5005312
+EVIDENCE_PHASE	run=run1-preparation_cell-map128-discrete_hops-t1	workload=map128	subject=discrete_hops	phase=canonical_ir	working_set_b=19623936	self_peak_b=19623936
+EVIDENCE_PHASE	run=run1-preparation_cell-map128-discrete_hops-t1	workload=map128	subject=discrete_hops	phase=incidence_index	working_set_b=20529152	self_peak_b=20529152
+EVIDENCE_SAMPLE	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	ordinal=0	repetitions=176	wall_us=959.799	cpu_us=887.784	checksum=1855953354656622971
+EVIDENCE_SAMPLE	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	ordinal=1	repetitions=176	wall_us=947.530	cpu_us=976.562	checksum=1855953354656622971
+EVIDENCE_SAMPLE	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	ordinal=2	repetitions=176	wall_us=969.125	cpu_us=976.562	checksum=1855953354656622971
+EVIDENCE_SAMPLE	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	ordinal=3	repetitions=176	wall_us=927.156	cpu_us=976.562	checksum=1855953354656622971
+EVIDENCE_SAMPLE	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	ordinal=4	repetitions=176	wall_us=906.656	cpu_us=887.784	checksum=1855953354656622971
+EVIDENCE_SAMPLE	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	ordinal=5	repetitions=176	wall_us=992.340	cpu_us=976.562	checksum=1855953354656622971
+EVIDENCE_SAMPLE	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	ordinal=6	repetitions=176	wall_us=892.605	cpu_us=887.784	checksum=1855953354656622971
+EVIDENCE_SAMPLE	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	ordinal=7	repetitions=176	wall_us=873.295	cpu_us=887.784	checksum=1855953354656622971
+EVIDENCE_SAMPLE	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	ordinal=8	repetitions=176	wall_us=881.164	cpu_us=799.006	checksum=1855953354656622971
+EVIDENCE_CELL	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	status=OK	nodes=16384	arcs=32108	incidences=64216	warmups=2	samples=9	repetitions=176	wall_median_us=927.156	wall_q1_us=892.605	wall_q3_us=959.799	wall_worst_us=992.340	cpu_median_us=887.784	cpu_q1_us=887.784	cpu_q3_us=976.562	cpu_worst_us=976.562	checksum=1855953354656622971
+EVIDENCE_RESULT	run=run1-preparation_cell-map128-discrete_hops-t1	section=heuristic_preparation	workload=map128	subject=discrete_hops	reachable=NA	cost_micros=NA	hops=NA	path_hash=1855953354656622971	items=16384	bound=none	max_depth=NA	max_results=NA	max_expansions=NA
+EVIDENCE_PHASE	run=run1-preparation_cell-map128-discrete_hops-t1	workload=map128	subject=discrete_hops	phase=measured	working_set_b=20574208	self_peak_b=20574208
+test preparation_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1.90s
+

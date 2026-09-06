@@ -1,0 +1,1 @@
+{"measurement_driver_sha256": "149102ae492496d84623a902332dbddd3f93bd7e957803e4c2a86d22c4334783", "note": "Original driver used by all three campaigns; final delivery adds stricter validation, summary generation and formatting. Rust timing clients remain unchanged."}

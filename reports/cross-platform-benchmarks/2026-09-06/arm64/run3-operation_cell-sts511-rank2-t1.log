@@ -1,0 +1,11 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-operation_cell-sts511-rank2-t1	workload=sts511	subject=rank2	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run3-operation_cell-sts511-rank2-t1	workload=sts511	subject=rank2	phase=canonical_ir	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run3-operation_cell-sts511-rank2-t1	workload=sts511	subject=rank2	phase=incidence_index	working_set_b=NA	self_peak_b=NA
+EVIDENCE_CELL	run=run3-operation_cell-sts511-rank2-t1	section=operation	workload=sts511	subject=rank2	status=NA	threads=1	nodes=511	arcs=43435	incidences=130305	warmups=0	samples=0	repetitions=0	wall_median_us=NA	wall_q1_us=NA	wall_q3_us=NA	wall_worst_us=NA	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=NA	reason=operation_not_applicable
+EVIDENCE_PHASE	run=run3-operation_cell-sts511-rank2-t1	workload=sts511	subject=rank2	phase=measured	working_set_b=NA	self_peak_b=NA
+test operation_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.07s
+

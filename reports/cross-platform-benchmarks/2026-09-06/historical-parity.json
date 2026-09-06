@@ -1,0 +1,10 @@
+{
+  "reference": "reports/informed-berge-evidence/2026-09-04-repro-KYBERSAMAN/data/results.tsv",
+  "checked_rows": 432,
+  "platforms": [
+    "windows",
+    "native",
+    "arm64"
+  ],
+  "match": true
+}

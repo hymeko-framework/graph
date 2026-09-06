@@ -1,0 +1,22 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-enumeration_cell-layered10-paths_goal-t1	workload=layered10	subject=paths_goal	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-enumeration_cell-layered10-paths_goal-t1	workload=layered10	subject=paths_goal	phase=canonical_ir	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-enumeration_cell-layered10-paths_goal-t1	workload=layered10	subject=paths_goal	phase=incidence_index	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-enumeration_cell-layered10-paths_goal-t1	workload=layered10	subject=paths_goal	phase=prepared	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	ordinal=0	repetitions=538	wall_us=478.030	cpu_us=NA	checksum=14280805995869469653
+EVIDENCE_SAMPLE	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	ordinal=1	repetitions=538	wall_us=470.483	cpu_us=NA	checksum=14280805995869469653
+EVIDENCE_SAMPLE	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	ordinal=2	repetitions=538	wall_us=473.025	cpu_us=NA	checksum=14280805995869469653
+EVIDENCE_SAMPLE	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	ordinal=3	repetitions=538	wall_us=473.396	cpu_us=NA	checksum=14280805995869469653
+EVIDENCE_SAMPLE	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	ordinal=4	repetitions=538	wall_us=470.579	cpu_us=NA	checksum=14280805995869469653
+EVIDENCE_SAMPLE	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	ordinal=5	repetitions=538	wall_us=465.485	cpu_us=NA	checksum=14280805995869469653
+EVIDENCE_SAMPLE	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	ordinal=6	repetitions=538	wall_us=468.004	cpu_us=NA	checksum=14280805995869469653
+EVIDENCE_SAMPLE	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	ordinal=7	repetitions=538	wall_us=473.620	cpu_us=NA	checksum=14280805995869469653
+EVIDENCE_SAMPLE	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	ordinal=8	repetitions=538	wall_us=475.519	cpu_us=NA	checksum=14280805995869469653
+EVIDENCE_CELL	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	status=OK	nodes=22	arcs=40	incidences=80	warmups=2	samples=9	repetitions=538	wall_median_us=473.025	wall_q1_us=470.483	wall_q3_us=473.620	wall_worst_us=478.030	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=14280805995869469653
+EVIDENCE_RESULT	run=run2-enumeration_cell-layered10-paths_goal-t1	section=berge_enumeration	workload=layered10	subject=paths_goal	reachable=NA	cost_micros=NA	hops=NA	path_hash=14280805995869469653	items=1024	bound=depth	max_depth=11	max_results=2048	max_expansions=2000000
+EVIDENCE_PHASE	run=run2-enumeration_cell-layered10-paths_goal-t1	workload=layered10	subject=paths_goal	phase=measured	working_set_b=NA	self_peak_b=NA
+test enumeration_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.80s
+

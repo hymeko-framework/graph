@@ -1,0 +1,22 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-cycles-t1	workload=sts31	subject=cycles	phase=process_baseline	working_set_b=5005312	self_peak_b=5005312
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-cycles-t1	workload=sts31	subject=cycles	phase=canonical_ir	working_set_b=5103616	self_peak_b=5103616
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-cycles-t1	workload=sts31	subject=cycles	phase=incidence_index	working_set_b=5111808	self_peak_b=5111808
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-cycles-t1	workload=sts31	subject=cycles	phase=prepared	working_set_b=5111808	self_peak_b=5111808
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	ordinal=0	repetitions=82	wall_us=3085.461	cpu_us=3048.780	checksum=7240621373046163038
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	ordinal=1	repetitions=82	wall_us=3060.211	cpu_us=3048.780	checksum=7240621373046163038
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	ordinal=2	repetitions=82	wall_us=2868.473	cpu_us=2858.232	checksum=7240621373046163038
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	ordinal=3	repetitions=82	wall_us=2756.354	cpu_us=2667.683	checksum=7240621373046163038
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	ordinal=4	repetitions=82	wall_us=2733.912	cpu_us=2858.232	checksum=7240621373046163038
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	ordinal=5	repetitions=82	wall_us=2787.248	cpu_us=2667.683	checksum=7240621373046163038
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	ordinal=6	repetitions=82	wall_us=2712.170	cpu_us=2667.683	checksum=7240621373046163038
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	ordinal=7	repetitions=82	wall_us=2710.441	cpu_us=2667.683	checksum=7240621373046163038
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	ordinal=8	repetitions=82	wall_us=2704.301	cpu_us=2667.683	checksum=7240621373046163038
+EVIDENCE_CELL	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	status=OK	nodes=31	arcs=155	incidences=465	warmups=2	samples=9	repetitions=82	wall_median_us=2756.354	wall_q1_us=2712.170	wall_q3_us=2868.473	wall_worst_us=3085.461	cpu_median_us=2667.683	cpu_q1_us=2667.683	cpu_q3_us=2858.232	cpu_worst_us=3048.780	checksum=7240621373046163038
+EVIDENCE_RESULT	run=run1-enumeration_cell-sts31-cycles-t1	section=berge_enumeration	workload=sts31	subject=cycles	reachable=NA	cost_micros=NA	hops=NA	path_hash=7240621373046163038	items=4096	bound=results	max_depth=4	max_results=4096	max_expansions=500000
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-cycles-t1	workload=sts31	subject=cycles	phase=measured	working_set_b=6746112	self_peak_b=6746112
+test enumeration_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.64s
+

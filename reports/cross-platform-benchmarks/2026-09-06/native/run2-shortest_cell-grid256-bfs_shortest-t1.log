@@ -1,0 +1,22 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-bfs_shortest-t1	workload=grid256	subject=bfs_shortest	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-bfs_shortest-t1	workload=grid256	subject=bfs_shortest	phase=canonical_ir	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-bfs_shortest-t1	workload=grid256	subject=bfs_shortest	phase=incidence_index	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-bfs_shortest-t1	workload=grid256	subject=bfs_shortest	phase=prepared	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	ordinal=0	repetitions=19	wall_us=14383.508	cpu_us=NA	checksum=4712052969934657307
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	ordinal=1	repetitions=19	wall_us=14625.843	cpu_us=NA	checksum=4712052969934657307
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	ordinal=2	repetitions=19	wall_us=14325.109	cpu_us=NA	checksum=4712052969934657307
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	ordinal=3	repetitions=19	wall_us=14369.643	cpu_us=NA	checksum=4712052969934657307
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	ordinal=4	repetitions=19	wall_us=14525.979	cpu_us=NA	checksum=4712052969934657307
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	ordinal=5	repetitions=19	wall_us=14981.672	cpu_us=NA	checksum=4712052969934657307
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	ordinal=6	repetitions=19	wall_us=14955.126	cpu_us=NA	checksum=4712052969934657307
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	ordinal=7	repetitions=19	wall_us=14873.077	cpu_us=NA	checksum=4712052969934657307
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	ordinal=8	repetitions=19	wall_us=14964.680	cpu_us=NA	checksum=4712052969934657307
+EVIDENCE_CELL	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	status=OK	nodes=65536	arcs=130560	incidences=261120	warmups=2	samples=9	repetitions=19	wall_median_us=14625.843	wall_q1_us=14383.508	wall_q3_us=14955.126	wall_worst_us=14981.672	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=4712052969934657307
+EVIDENCE_RESULT	run=run2-shortest_cell-grid256-bfs_shortest-t1	section=berge_shortest	workload=grid256	subject=bfs_shortest	reachable=true	cost_micros=NA	hops=510	path_hash=4712052969934657307	items=NA	bound=NA	max_depth=NA	max_results=NA	max_expansions=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-bfs_shortest-t1	workload=grid256	subject=bfs_shortest	phase=measured	working_set_b=NA	self_peak_b=NA
+test shortest_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.29s
+

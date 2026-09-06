@@ -1,0 +1,21 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-operation_cell-sts511-independent_query_batch-t1	workload=sts511	subject=independent_query_batch	phase=process_baseline	working_set_b=5001216	self_peak_b=5001216
+EVIDENCE_PHASE	run=run3-operation_cell-sts511-independent_query_batch-t1	workload=sts511	subject=independent_query_batch	phase=canonical_ir	working_set_b=20840448	self_peak_b=20840448
+EVIDENCE_PHASE	run=run3-operation_cell-sts511-independent_query_batch-t1	workload=sts511	subject=independent_query_batch	phase=incidence_index	working_set_b=22405120	self_peak_b=22405120
+EVIDENCE_PHASE	run=run3-operation_cell-sts511-independent_query_batch-t1	workload=sts511	subject=independent_query_batch	phase=prepared	working_set_b=22712320	self_peak_b=22712320
+EVIDENCE_SAMPLE	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	threads=1	ordinal=0	repetitions=7	wall_us=26750.543	cpu_us=26785.714	checksum=32704
+EVIDENCE_SAMPLE	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	threads=1	ordinal=1	repetitions=7	wall_us=26967.343	cpu_us=26785.714	checksum=32704
+EVIDENCE_SAMPLE	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	threads=1	ordinal=2	repetitions=7	wall_us=26822.957	cpu_us=26785.714	checksum=32704
+EVIDENCE_SAMPLE	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	threads=1	ordinal=3	repetitions=7	wall_us=30459.629	cpu_us=29017.857	checksum=32704
+EVIDENCE_SAMPLE	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	threads=1	ordinal=4	repetitions=7	wall_us=26671.700	cpu_us=26785.714	checksum=32704
+EVIDENCE_SAMPLE	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	threads=1	ordinal=5	repetitions=7	wall_us=32171.457	cpu_us=33482.143	checksum=32704
+EVIDENCE_SAMPLE	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	threads=1	ordinal=6	repetitions=7	wall_us=27196.129	cpu_us=26785.714	checksum=32704
+EVIDENCE_SAMPLE	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	threads=1	ordinal=7	repetitions=7	wall_us=26716.457	cpu_us=26785.714	checksum=32704
+EVIDENCE_SAMPLE	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	threads=1	ordinal=8	repetitions=7	wall_us=27516.443	cpu_us=26785.714	checksum=32704
+EVIDENCE_CELL	run=run3-operation_cell-sts511-independent_query_batch-t1	section=operation	workload=sts511	subject=independent_query_batch	status=OK	threads=1	nodes=511	arcs=43435	incidences=130305	warmups=2	samples=9	repetitions=7	wall_median_us=26967.343	wall_q1_us=26750.543	wall_q3_us=27516.443	wall_worst_us=32171.457	cpu_median_us=26785.714	cpu_q1_us=26785.714	cpu_q3_us=26785.714	cpu_worst_us=33482.143	checksum=32704
+EVIDENCE_PHASE	run=run3-operation_cell-sts511-independent_query_batch-t1	workload=sts511	subject=independent_query_batch	phase=measured	working_set_b=22790144	self_peak_b=22802432
+test operation_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.24s
+

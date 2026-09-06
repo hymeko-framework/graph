@@ -1,0 +1,22 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-enumeration_cell-parallel16-cycles-t1	workload=parallel16	subject=cycles	phase=process_baseline	working_set_b=5001216	self_peak_b=5001216
+EVIDENCE_PHASE	run=run1-enumeration_cell-parallel16-cycles-t1	workload=parallel16	subject=cycles	phase=canonical_ir	working_set_b=5029888	self_peak_b=5029888
+EVIDENCE_PHASE	run=run1-enumeration_cell-parallel16-cycles-t1	workload=parallel16	subject=cycles	phase=incidence_index	working_set_b=5038080	self_peak_b=5038080
+EVIDENCE_PHASE	run=run1-enumeration_cell-parallel16-cycles-t1	workload=parallel16	subject=cycles	phase=prepared	working_set_b=5038080	self_peak_b=5038080
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	ordinal=0	repetitions=4140	wall_us=58.883	cpu_us=60.386	checksum=3985848954211388400
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	ordinal=1	repetitions=4140	wall_us=61.027	cpu_us=60.386	checksum=3985848954211388400
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	ordinal=2	repetitions=4140	wall_us=58.666	cpu_us=56.612	checksum=3985848954211388400
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	ordinal=3	repetitions=4140	wall_us=58.625	cpu_us=56.612	checksum=3985848954211388400
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	ordinal=4	repetitions=4140	wall_us=58.801	cpu_us=60.386	checksum=3985848954211388400
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	ordinal=5	repetitions=4140	wall_us=59.962	cpu_us=60.386	checksum=3985848954211388400
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	ordinal=6	repetitions=4140	wall_us=58.211	cpu_us=56.612	checksum=3985848954211388400
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	ordinal=7	repetitions=4140	wall_us=60.171	cpu_us=60.386	checksum=3985848954211388400
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	ordinal=8	repetitions=4140	wall_us=58.761	cpu_us=56.612	checksum=3985848954211388400
+EVIDENCE_CELL	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	status=OK	nodes=2	arcs=16	incidences=32	warmups=2	samples=9	repetitions=4140	wall_median_us=58.801	wall_q1_us=58.666	wall_q3_us=59.962	wall_worst_us=61.027	cpu_median_us=60.386	cpu_q1_us=56.612	cpu_q3_us=60.386	cpu_worst_us=60.386	checksum=3985848954211388400
+EVIDENCE_RESULT	run=run1-enumeration_cell-parallel16-cycles-t1	section=berge_enumeration	workload=parallel16	subject=cycles	reachable=NA	cost_micros=NA	hops=NA	path_hash=3985848954211388400	items=120	bound=none	max_depth=2	max_results=1000	max_expansions=100000
+EVIDENCE_PHASE	run=run1-enumeration_cell-parallel16-cycles-t1	workload=parallel16	subject=cycles	phase=measured	working_set_b=5361664	self_peak_b=5361664
+test enumeration_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.69s
+

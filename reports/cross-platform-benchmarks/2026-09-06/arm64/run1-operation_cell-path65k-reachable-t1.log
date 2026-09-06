@@ -1,0 +1,21 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-operation_cell-path65k-reachable-t1	workload=path65k	subject=reachable	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run1-operation_cell-path65k-reachable-t1	workload=path65k	subject=reachable	phase=canonical_ir	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run1-operation_cell-path65k-reachable-t1	workload=path65k	subject=reachable	phase=incidence_index	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run1-operation_cell-path65k-reachable-t1	workload=path65k	subject=reachable	phase=prepared	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	threads=1	ordinal=0	repetitions=27	wall_us=9054.115	cpu_us=NA	checksum=65536
+EVIDENCE_SAMPLE	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	threads=1	ordinal=1	repetitions=27	wall_us=9371.356	cpu_us=NA	checksum=65536
+EVIDENCE_SAMPLE	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	threads=1	ordinal=2	repetitions=27	wall_us=9108.366	cpu_us=NA	checksum=65536
+EVIDENCE_SAMPLE	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	threads=1	ordinal=3	repetitions=27	wall_us=8789.713	cpu_us=NA	checksum=65536
+EVIDENCE_SAMPLE	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	threads=1	ordinal=4	repetitions=27	wall_us=8774.349	cpu_us=NA	checksum=65536
+EVIDENCE_SAMPLE	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	threads=1	ordinal=5	repetitions=27	wall_us=8878.895	cpu_us=NA	checksum=65536
+EVIDENCE_SAMPLE	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	threads=1	ordinal=6	repetitions=27	wall_us=8940.559	cpu_us=NA	checksum=65536
+EVIDENCE_SAMPLE	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	threads=1	ordinal=7	repetitions=27	wall_us=8712.303	cpu_us=NA	checksum=65536
+EVIDENCE_SAMPLE	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	threads=1	ordinal=8	repetitions=27	wall_us=8685.781	cpu_us=NA	checksum=65536
+EVIDENCE_CELL	run=run1-operation_cell-path65k-reachable-t1	section=operation	workload=path65k	subject=reachable	status=OK	threads=1	nodes=65536	arcs=65535	incidences=131070	warmups=2	samples=9	repetitions=27	wall_median_us=8878.895	wall_q1_us=8774.349	wall_q3_us=9054.115	wall_worst_us=9371.356	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=65536
+EVIDENCE_PHASE	run=run1-operation_cell-path65k-reachable-t1	workload=path65k	subject=reachable	phase=measured	working_set_b=NA	self_peak_b=NA
+test operation_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.86s
+

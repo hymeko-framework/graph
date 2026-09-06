@@ -1,0 +1,23 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	workload=grid200_d80	subject=dijkstra_unit	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	workload=grid200_d80	subject=dijkstra_unit	phase=canonical_ir	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	workload=grid200_d80	subject=dijkstra_unit	phase=incidence_index	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	workload=grid200_d80	subject=dijkstra_unit	phase=prepared	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	ordinal=0	repetitions=23	wall_us=11145.471	cpu_us=NA	checksum=2805446496716032806
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	ordinal=1	repetitions=23	wall_us=11398.677	cpu_us=NA	checksum=2805446496716032806
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	ordinal=2	repetitions=23	wall_us=11158.567	cpu_us=NA	checksum=2805446496716032806
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	ordinal=3	repetitions=23	wall_us=11198.819	cpu_us=NA	checksum=2805446496716032806
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	ordinal=4	repetitions=23	wall_us=10961.394	cpu_us=NA	checksum=2805446496716032806
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	ordinal=5	repetitions=23	wall_us=11013.281	cpu_us=NA	checksum=2805446496716032806
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	ordinal=6	repetitions=23	wall_us=11033.778	cpu_us=NA	checksum=2805446496716032806
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	ordinal=7	repetitions=23	wall_us=11493.058	cpu_us=NA	checksum=2805446496716032806
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	ordinal=8	repetitions=23	wall_us=10619.465	cpu_us=NA	checksum=2805446496716032806
+EVIDENCE_CELL	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	status=OK	nodes=40000	arcs=79600	incidences=159200	warmups=2	samples=9	repetitions=23	wall_median_us=11145.471	wall_q1_us=11013.281	wall_q3_us=11198.819	wall_worst_us=11493.058	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=2805446496716032806
+EVIDENCE_WORK	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	workload=grid200_d80	subject=dijkstra_unit	expanded_nodes=11931	expanded_arcs=24090	resolved_incidences=24090	pushes=12192	pops=11931	stale_pops=0	heuristic_evals=12191	reopened=0
+EVIDENCE_RESULT	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	section=informed_search	workload=grid200_d80	subject=dijkstra_unit	reachable=true	cost_micros=80000000	hops=80	path_hash=2805446496716032806	items=NA	bound=NA	max_depth=NA	max_results=NA	max_expansions=NA
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d80-dijkstra_unit-t1	workload=grid200_d80	subject=dijkstra_unit	phase=measured	working_set_b=NA	self_peak_b=NA
+test search_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.08s
+

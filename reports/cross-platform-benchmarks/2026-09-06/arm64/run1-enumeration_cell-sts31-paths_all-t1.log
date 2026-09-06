@@ -1,0 +1,22 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-paths_all-t1	workload=sts31	subject=paths_all	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-paths_all-t1	workload=sts31	subject=paths_all	phase=canonical_ir	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-paths_all-t1	workload=sts31	subject=paths_all	phase=incidence_index	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-paths_all-t1	workload=sts31	subject=paths_all	phase=prepared	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	ordinal=0	repetitions=57	wall_us=3718.696	cpu_us=NA	checksum=15311496758797346758
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	ordinal=1	repetitions=57	wall_us=3706.595	cpu_us=NA	checksum=15311496758797346758
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	ordinal=2	repetitions=57	wall_us=3726.369	cpu_us=NA	checksum=15311496758797346758
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	ordinal=3	repetitions=57	wall_us=3696.509	cpu_us=NA	checksum=15311496758797346758
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	ordinal=4	repetitions=57	wall_us=3681.613	cpu_us=NA	checksum=15311496758797346758
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	ordinal=5	repetitions=57	wall_us=3664.961	cpu_us=NA	checksum=15311496758797346758
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	ordinal=6	repetitions=57	wall_us=3673.699	cpu_us=NA	checksum=15311496758797346758
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	ordinal=7	repetitions=57	wall_us=3682.691	cpu_us=NA	checksum=15311496758797346758
+EVIDENCE_SAMPLE	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	ordinal=8	repetitions=57	wall_us=3714.559	cpu_us=NA	checksum=15311496758797346758
+EVIDENCE_CELL	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	status=OK	nodes=31	arcs=155	incidences=465	warmups=2	samples=9	repetitions=57	wall_median_us=3696.509	wall_q1_us=3681.613	wall_q3_us=3714.559	wall_worst_us=3726.369	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=15311496758797346758
+EVIDENCE_RESULT	run=run1-enumeration_cell-sts31-paths_all-t1	section=berge_enumeration	workload=sts31	subject=paths_all	reachable=NA	cost_micros=NA	hops=NA	path_hash=15311496758797346758	items=4096	bound=results	max_depth=4	max_results=4096	max_expansions=500000
+EVIDENCE_PHASE	run=run1-enumeration_cell-sts31-paths_all-t1	workload=sts31	subject=paths_all	phase=measured	working_set_b=NA	self_peak_b=NA
+test enumeration_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.39s
+

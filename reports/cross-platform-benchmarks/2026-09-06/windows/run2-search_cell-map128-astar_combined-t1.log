@@ -1,0 +1,23 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-search_cell-map128-astar_combined-t1	workload=map128	subject=astar_combined	phase=process_baseline	working_set_b=5013504	self_peak_b=5013504
+EVIDENCE_PHASE	run=run2-search_cell-map128-astar_combined-t1	workload=map128	subject=astar_combined	phase=canonical_ir	working_set_b=19447808	self_peak_b=19447808
+EVIDENCE_PHASE	run=run2-search_cell-map128-astar_combined-t1	workload=map128	subject=astar_combined	phase=incidence_index	working_set_b=20348928	self_peak_b=20348928
+EVIDENCE_PHASE	run=run2-search_cell-map128-astar_combined-t1	workload=map128	subject=astar_combined	phase=prepared	working_set_b=20766720	self_peak_b=20766720
+EVIDENCE_SAMPLE	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	ordinal=0	repetitions=82	wall_us=3225.749	cpu_us=2858.232	checksum=16960736844007732100
+EVIDENCE_SAMPLE	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	ordinal=1	repetitions=82	wall_us=2900.538	cpu_us=3048.780	checksum=16960736844007732100
+EVIDENCE_SAMPLE	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	ordinal=2	repetitions=82	wall_us=2971.170	cpu_us=2858.232	checksum=16960736844007732100
+EVIDENCE_SAMPLE	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	ordinal=3	repetitions=82	wall_us=2909.256	cpu_us=2858.232	checksum=16960736844007732100
+EVIDENCE_SAMPLE	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	ordinal=4	repetitions=82	wall_us=2957.650	cpu_us=3048.780	checksum=16960736844007732100
+EVIDENCE_SAMPLE	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	ordinal=5	repetitions=82	wall_us=2921.757	cpu_us=2858.232	checksum=16960736844007732100
+EVIDENCE_SAMPLE	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	ordinal=6	repetitions=82	wall_us=3250.927	cpu_us=3239.329	checksum=16960736844007732100
+EVIDENCE_SAMPLE	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	ordinal=7	repetitions=82	wall_us=3458.237	cpu_us=3429.878	checksum=16960736844007732100
+EVIDENCE_SAMPLE	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	ordinal=8	repetitions=82	wall_us=3032.427	cpu_us=3048.780	checksum=16960736844007732100
+EVIDENCE_CELL	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	status=OK	nodes=16384	arcs=32108	incidences=64216	warmups=2	samples=9	repetitions=82	wall_median_us=2971.170	wall_q1_us=2921.757	wall_q3_us=3225.749	wall_worst_us=3458.237	cpu_median_us=3048.780	cpu_q1_us=2858.232	cpu_q3_us=3048.780	cpu_worst_us=3429.878	checksum=16960736844007732100
+EVIDENCE_WORK	run=run2-search_cell-map128-astar_combined-t1	workload=map128	subject=astar_combined	expanded_nodes=16283	expanded_arcs=34044	resolved_incidences=34044	pushes=19328	pops=19328	stale_pops=3045	heuristic_evals=19327	reopened=0
+EVIDENCE_RESULT	run=run2-search_cell-map128-astar_combined-t1	section=informed_search	workload=map128	subject=astar_combined	reachable=true	cost_micros=256500000	hops=254	path_hash=16960736844007732100	items=NA	bound=NA	max_depth=NA	max_results=NA	max_expansions=NA
+EVIDENCE_PHASE	run=run2-search_cell-map128-astar_combined-t1	workload=map128	subject=astar_combined	phase=measured	working_set_b=20504576	self_peak_b=22577152
+test search_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.81s
+

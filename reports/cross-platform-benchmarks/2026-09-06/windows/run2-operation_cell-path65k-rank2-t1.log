@@ -1,0 +1,21 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-operation_cell-path65k-rank2-t1	workload=path65k	subject=rank2	phase=process_baseline	working_set_b=5005312	self_peak_b=5005312
+EVIDENCE_PHASE	run=run2-operation_cell-path65k-rank2-t1	workload=path65k	subject=rank2	phase=canonical_ir	working_set_b=36356096	self_peak_b=36356096
+EVIDENCE_PHASE	run=run2-operation_cell-path65k-rank2-t1	workload=path65k	subject=rank2	phase=incidence_index	working_set_b=38461440	self_peak_b=38461440
+EVIDENCE_PHASE	run=run2-operation_cell-path65k-rank2-t1	workload=path65k	subject=rank2	phase=prepared	working_set_b=39956480	self_peak_b=39956480
+EVIDENCE_SAMPLE	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	threads=1	ordinal=0	repetitions=429	wall_us=640.941	cpu_us=655.594	checksum=65535
+EVIDENCE_SAMPLE	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	threads=1	ordinal=1	repetitions=429	wall_us=682.488	cpu_us=692.016	checksum=65535
+EVIDENCE_SAMPLE	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	threads=1	ordinal=2	repetitions=429	wall_us=675.815	cpu_us=655.594	checksum=65535
+EVIDENCE_SAMPLE	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	threads=1	ordinal=3	repetitions=429	wall_us=689.005	cpu_us=655.594	checksum=65535
+EVIDENCE_SAMPLE	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	threads=1	ordinal=4	repetitions=429	wall_us=631.915	cpu_us=619.172	checksum=65535
+EVIDENCE_SAMPLE	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	threads=1	ordinal=5	repetitions=429	wall_us=612.453	cpu_us=619.172	checksum=65535
+EVIDENCE_SAMPLE	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	threads=1	ordinal=6	repetitions=429	wall_us=638.725	cpu_us=655.594	checksum=65535
+EVIDENCE_SAMPLE	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	threads=1	ordinal=7	repetitions=429	wall_us=674.346	cpu_us=655.594	checksum=65535
+EVIDENCE_SAMPLE	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	threads=1	ordinal=8	repetitions=429	wall_us=664.020	cpu_us=692.016	checksum=65535
+EVIDENCE_CELL	run=run2-operation_cell-path65k-rank2-t1	section=operation	workload=path65k	subject=rank2	status=OK	threads=1	nodes=65536	arcs=65535	incidences=131070	warmups=2	samples=9	repetitions=429	wall_median_us=664.020	wall_q1_us=638.725	wall_q3_us=675.815	wall_worst_us=689.005	cpu_median_us=655.594	cpu_q1_us=655.594	cpu_q3_us=655.594	cpu_worst_us=692.016	checksum=65535
+EVIDENCE_PHASE	run=run2-operation_cell-path65k-rank2-t1	workload=path65k	subject=rank2	phase=measured	working_set_b=38293504	self_peak_b=39976960
+test operation_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.11s
+

@@ -1,0 +1,13 @@
+
+running 8 tests
+test enumeration_cell ... ignored, fresh-process bounded-enumeration evidence; driven by scripts/informed_berge_evidence/run.ps1
+test enumeration_evidence_fixtures_pin_counts_and_hashes ... ok
+test informed_search_evidence_subjects_agree ... ok
+test preparation_cell ... ignored, fresh-process heuristic-preparation evidence; driven by scripts/informed_berge_evidence/run.ps1
+test search_cell ... ignored, fresh-process informed-search evidence; driven by scripts/informed_berge_evidence/run.ps1
+test shortest_cell ... ignored, fresh-process Berge-shortest evidence; driven by scripts/informed_berge_evidence/run.ps1
+test statistics::tests::summary_is_ordered_and_uses_every_sample ... ok
+test statistics::tests::summary_rejects_single_shot_evidence - should panic ... ok
+
+test result: ok. 4 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

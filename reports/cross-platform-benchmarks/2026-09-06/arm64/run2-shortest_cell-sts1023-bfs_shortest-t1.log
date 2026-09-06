@@ -1,0 +1,22 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	workload=sts1023	subject=bfs_shortest	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	workload=sts1023	subject=bfs_shortest	phase=canonical_ir	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	workload=sts1023	subject=bfs_shortest	phase=incidence_index	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	workload=sts1023	subject=bfs_shortest	phase=prepared	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	ordinal=0	repetitions=1796	wall_us=43.510	cpu_us=NA	checksum=18216386991389141995
+EVIDENCE_SAMPLE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	ordinal=1	repetitions=1796	wall_us=42.562	cpu_us=NA	checksum=18216386991389141995
+EVIDENCE_SAMPLE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	ordinal=2	repetitions=1796	wall_us=42.062	cpu_us=NA	checksum=18216386991389141995
+EVIDENCE_SAMPLE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	ordinal=3	repetitions=1796	wall_us=40.606	cpu_us=NA	checksum=18216386991389141995
+EVIDENCE_SAMPLE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	ordinal=4	repetitions=1796	wall_us=40.028	cpu_us=NA	checksum=18216386991389141995
+EVIDENCE_SAMPLE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	ordinal=5	repetitions=1796	wall_us=40.147	cpu_us=NA	checksum=18216386991389141995
+EVIDENCE_SAMPLE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	ordinal=6	repetitions=1796	wall_us=40.640	cpu_us=NA	checksum=18216386991389141995
+EVIDENCE_SAMPLE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	ordinal=7	repetitions=1796	wall_us=41.323	cpu_us=NA	checksum=18216386991389141995
+EVIDENCE_SAMPLE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	ordinal=8	repetitions=1796	wall_us=40.621	cpu_us=NA	checksum=18216386991389141995
+EVIDENCE_CELL	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	status=OK	nodes=1023	arcs=174251	incidences=522753	warmups=2	samples=9	repetitions=1796	wall_median_us=40.640	wall_q1_us=40.606	wall_q3_us=42.062	wall_worst_us=43.510	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=18216386991389141995
+EVIDENCE_RESULT	run=run2-shortest_cell-sts1023-bfs_shortest-t1	section=berge_shortest	workload=sts1023	subject=bfs_shortest	reachable=true	cost_micros=NA	hops=1	path_hash=18216386991389141995	items=NA	bound=NA	max_depth=NA	max_results=NA	max_expansions=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-sts1023-bfs_shortest-t1	workload=sts1023	subject=bfs_shortest	phase=measured	working_set_b=NA	self_peak_b=NA
+test shortest_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1.06s
+

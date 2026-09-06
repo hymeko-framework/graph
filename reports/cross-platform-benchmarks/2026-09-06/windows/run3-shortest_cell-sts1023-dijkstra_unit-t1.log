@@ -1,0 +1,23 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	workload=sts1023	subject=dijkstra_unit	phase=process_baseline	working_set_b=5001216	self_peak_b=5001216
+EVIDENCE_PHASE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	workload=sts1023	subject=dijkstra_unit	phase=canonical_ir	working_set_b=67112960	self_peak_b=67112960
+EVIDENCE_PHASE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	workload=sts1023	subject=dijkstra_unit	phase=incidence_index	working_set_b=73396224	self_peak_b=73396224
+EVIDENCE_PHASE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	workload=sts1023	subject=dijkstra_unit	phase=prepared	working_set_b=73400320	self_peak_b=73400320
+EVIDENCE_SAMPLE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	ordinal=0	repetitions=28	wall_us=8655.004	cpu_us=8370.536	checksum=17406405963664569814
+EVIDENCE_SAMPLE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	ordinal=1	repetitions=28	wall_us=8563.961	cpu_us=8370.536	checksum=17406405963664569814
+EVIDENCE_SAMPLE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	ordinal=2	repetitions=28	wall_us=8743.500	cpu_us=8370.536	checksum=17406405963664569814
+EVIDENCE_SAMPLE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	ordinal=3	repetitions=28	wall_us=8682.646	cpu_us=8370.536	checksum=17406405963664569814
+EVIDENCE_SAMPLE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	ordinal=4	repetitions=28	wall_us=8877.793	cpu_us=8928.571	checksum=17406405963664569814
+EVIDENCE_SAMPLE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	ordinal=5	repetitions=28	wall_us=8685.525	cpu_us=8928.571	checksum=17406405963664569814
+EVIDENCE_SAMPLE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	ordinal=6	repetitions=28	wall_us=8580.339	cpu_us=8928.571	checksum=17406405963664569814
+EVIDENCE_SAMPLE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	ordinal=7	repetitions=28	wall_us=8631.811	cpu_us=8928.571	checksum=17406405963664569814
+EVIDENCE_SAMPLE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	ordinal=8	repetitions=28	wall_us=8560.896	cpu_us=8370.536	checksum=17406405963664569814
+EVIDENCE_CELL	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	status=OK	nodes=1023	arcs=174251	incidences=522753	warmups=2	samples=9	repetitions=28	wall_median_us=8655.004	wall_q1_us=8580.339	wall_q3_us=8685.525	wall_worst_us=8877.793	cpu_median_us=8370.536	cpu_q1_us=8370.536	cpu_q3_us=8928.571	cpu_worst_us=8928.571	checksum=17406405963664569814
+EVIDENCE_WORK	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	workload=sts1023	subject=dijkstra_unit	expanded_nodes=1023	expanded_arcs=174251	resolved_incidences=348502	pushes=1023	pops=1023	stale_pops=0	heuristic_evals=1022	reopened=0
+EVIDENCE_RESULT	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	section=berge_shortest	workload=sts1023	subject=dijkstra_unit	reachable=true	cost_micros=1000000	hops=1	path_hash=17406405963664569814	items=NA	bound=NA	max_depth=NA	max_results=NA	max_expansions=NA
+EVIDENCE_PHASE	run=run3-shortest_cell-sts1023-dijkstra_unit-t1	workload=sts1023	subject=dijkstra_unit	phase=measured	working_set_b=74203136	self_peak_b=75583488
+test shortest_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.82s
+

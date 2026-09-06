@@ -1,0 +1,23 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d20-astar_l1-t1	workload=grid200_d20	subject=astar_l1	phase=process_baseline	working_set_b=5009408	self_peak_b=5009408
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d20-astar_l1-t1	workload=grid200_d20	subject=astar_l1	phase=canonical_ir	working_set_b=32759808	self_peak_b=34156544
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d20-astar_l1-t1	workload=grid200_d20	subject=astar_l1	phase=incidence_index	working_set_b=34992128	self_peak_b=34992128
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d20-astar_l1-t1	workload=grid200_d20	subject=astar_l1	phase=prepared	working_set_b=36454400	self_peak_b=36454400
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	ordinal=0	repetitions=56819	wall_us=1.677	cpu_us=1.650	checksum=14542930952080973210
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	ordinal=1	repetitions=56819	wall_us=1.622	cpu_us=1.650	checksum=14542930952080973210
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	ordinal=2	repetitions=56819	wall_us=1.586	cpu_us=1.650	checksum=14542930952080973210
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	ordinal=3	repetitions=56819	wall_us=1.592	cpu_us=1.650	checksum=14542930952080973210
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	ordinal=4	repetitions=56819	wall_us=1.599	cpu_us=1.375	checksum=14542930952080973210
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	ordinal=5	repetitions=56819	wall_us=1.585	cpu_us=1.650	checksum=14542930952080973210
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	ordinal=6	repetitions=56819	wall_us=1.594	cpu_us=1.650	checksum=14542930952080973210
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	ordinal=7	repetitions=56819	wall_us=1.638	cpu_us=1.650	checksum=14542930952080973210
+EVIDENCE_SAMPLE	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	ordinal=8	repetitions=56819	wall_us=1.745	cpu_us=1.650	checksum=14542930952080973210
+EVIDENCE_CELL	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	status=OK	nodes=40000	arcs=79600	incidences=159200	warmups=2	samples=9	repetitions=56819	wall_median_us=1.599	wall_q1_us=1.592	wall_q3_us=1.638	wall_worst_us=1.745	cpu_median_us=1.650	cpu_q1_us=1.650	cpu_q3_us=1.650	cpu_worst_us=1.650	checksum=14542930952080973210
+EVIDENCE_WORK	run=run1-search_cell-grid200_d20-astar_l1-t1	workload=grid200_d20	subject=astar_l1	expanded_nodes=21	expanded_arcs=61	resolved_incidences=61	pushes=62	pops=21	stale_pops=0	heuristic_evals=61	reopened=0
+EVIDENCE_RESULT	run=run1-search_cell-grid200_d20-astar_l1-t1	section=informed_search	workload=grid200_d20	subject=astar_l1	reachable=true	cost_micros=20000000	hops=20	path_hash=14542930952080973210	items=NA	bound=NA	max_depth=NA	max_results=NA	max_expansions=NA
+EVIDENCE_PHASE	run=run1-search_cell-grid200_d20-astar_l1-t1	workload=grid200_d20	subject=astar_l1	phase=measured	working_set_b=34635776	self_peak_b=38408192
+test search_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1.04s
+

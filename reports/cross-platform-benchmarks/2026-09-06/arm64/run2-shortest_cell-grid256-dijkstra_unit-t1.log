@@ -1,0 +1,23 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	workload=grid256	subject=dijkstra_unit	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	workload=grid256	subject=dijkstra_unit	phase=canonical_ir	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	workload=grid256	subject=dijkstra_unit	phase=incidence_index	working_set_b=NA	self_peak_b=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	workload=grid256	subject=dijkstra_unit	phase=prepared	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	ordinal=0	repetitions=4	wall_us=65888.788	cpu_us=NA	checksum=5712235411825969600
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	ordinal=1	repetitions=4	wall_us=64638.547	cpu_us=NA	checksum=5712235411825969600
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	ordinal=2	repetitions=4	wall_us=64143.250	cpu_us=NA	checksum=5712235411825969600
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	ordinal=3	repetitions=4	wall_us=63751.131	cpu_us=NA	checksum=5712235411825969600
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	ordinal=4	repetitions=4	wall_us=64605.439	cpu_us=NA	checksum=5712235411825969600
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	ordinal=5	repetitions=4	wall_us=65293.115	cpu_us=NA	checksum=5712235411825969600
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	ordinal=6	repetitions=4	wall_us=64168.178	cpu_us=NA	checksum=5712235411825969600
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	ordinal=7	repetitions=4	wall_us=64184.080	cpu_us=NA	checksum=5712235411825969600
+EVIDENCE_SAMPLE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	ordinal=8	repetitions=4	wall_us=63833.867	cpu_us=NA	checksum=5712235411825969600
+EVIDENCE_CELL	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	status=OK	nodes=65536	arcs=130560	incidences=261120	warmups=2	samples=9	repetitions=4	wall_median_us=64184.080	wall_q1_us=64143.250	wall_q3_us=64638.547	wall_worst_us=65888.788	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=5712235411825969600
+EVIDENCE_WORK	run=run2-shortest_cell-grid256-dijkstra_unit-t1	workload=grid256	subject=dijkstra_unit	expanded_nodes=65536	expanded_arcs=130560	resolved_incidences=130560	pushes=65536	pops=65536	stale_pops=0	heuristic_evals=65535	reopened=0
+EVIDENCE_RESULT	run=run2-shortest_cell-grid256-dijkstra_unit-t1	section=berge_shortest	workload=grid256	subject=dijkstra_unit	reachable=true	cost_micros=510000000	hops=510	path_hash=5712235411825969600	items=NA	bound=NA	max_depth=NA	max_results=NA	max_expansions=NA
+EVIDENCE_PHASE	run=run2-shortest_cell-grid256-dijkstra_unit-t1	workload=grid256	subject=dijkstra_unit	phase=measured	working_set_b=NA	self_peak_b=NA
+test shortest_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.79s
+
