@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	workload=path65k	subject=file_to_dijkstra	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=3363412	fnv1a64=10637487605907946325	projection=graph_fixture_v1	file_io=true	final_drop=false	file_cache=warm
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	workload=path65k	subject=file_to_dijkstra	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	ordinal=0	repetitions=1	wall_us=460775.405	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	ordinal=1	repetitions=1	wall_us=555604.674	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	ordinal=2	repetitions=1	wall_us=454467.700	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	ordinal=3	repetitions=1	wall_us=465685.585	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	ordinal=4	repetitions=1	wall_us=461378.245	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	ordinal=5	repetitions=1	wall_us=459439.417	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	ordinal=6	repetitions=1	wall_us=463142.960	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	ordinal=7	repetitions=1	wall_us=461972.579	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	ordinal=8	repetitions=1	wall_us=462874.176	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	section=parsing	workload=path65k	subject=file_to_dijkstra	status=OK	nodes=65536	arcs=65535	incidences=131070	warmups=2	samples=9	repetitions=1	wall_median_us=461972.579	wall_q1_us=460775.405	wall_q3_us=463142.960	wall_worst_us=555604.674	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=10637487605907946325
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-path65k-file_to_dijkstra-t1	workload=path65k	subject=file_to_dijkstra	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 6.43s
+

@@ -1,0 +1,26 @@
+correctness informed
+arm64 run 1/1 1/3 parsing_parsing_cell-map512-parse_ast-t1
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 10.0s, peak 479.5 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 20.0s, peak 1158.4 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 30.0s, peak 1895.8 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 40.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 50.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 60.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 70.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 80.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 90.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 100.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 110.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 120.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 130.0s, peak 2042.9 MiB
+  running run1-parsing_parsing_cell-map512-parse_ast-t1.log: 140.0s, peak 2042.9 MiB
+arm64 run 1/1 2/3 parsing_parsing_cell-random1e6-parse_ast-t1
+  running run1-parsing_parsing_cell-random1e6-parse_ast-t1.log: 10.0s, peak 830.5 MiB
+  running run1-parsing_parsing_cell-random1e6-parse_ast-t1.log: 20.0s, peak 1247.2 MiB
+  running run1-parsing_parsing_cell-random1e6-parse_ast-t1.log: 30.0s, peak 1247.2 MiB
+  running run1-parsing_parsing_cell-random1e6-parse_ast-t1.log: 40.0s, peak 1247.2 MiB
+  running run1-parsing_parsing_cell-random1e6-parse_ast-t1.log: 50.0s, peak 1247.2 MiB
+  running run1-parsing_parsing_cell-random1e6-parse_ast-t1.log: 60.1s, peak 1247.2 MiB
+  running run1-parsing_parsing_cell-random1e6-parse_ast-t1.log: 70.0s, peak 1247.2 MiB
+arm64 run 1/1 3/3 parsing_parsing_cell-grid5-parse_ast-t1
+PASS: 3 fresh processes; /home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke/campaign.json

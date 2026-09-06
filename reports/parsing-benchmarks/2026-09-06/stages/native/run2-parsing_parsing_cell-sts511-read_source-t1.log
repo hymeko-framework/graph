@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-sts511-read_source-t1	workload=sts511	subject=read_source	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=1484041	fnv1a64=10029015251857879260	projection=graph_fixture_v1	file_io=true	final_drop=false	file_cache=warm
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-sts511-read_source-t1	workload=sts511	subject=read_source	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	ordinal=0	repetitions=1	wall_us=198.013	cpu_us=NA	checksum=10029015251857879260
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	ordinal=1	repetitions=1	wall_us=225.214	cpu_us=NA	checksum=10029015251857879260
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	ordinal=2	repetitions=1	wall_us=193.815	cpu_us=NA	checksum=10029015251857879260
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	ordinal=3	repetitions=1	wall_us=176.052	cpu_us=NA	checksum=10029015251857879260
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	ordinal=4	repetitions=1	wall_us=196.270	cpu_us=NA	checksum=10029015251857879260
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	ordinal=5	repetitions=1	wall_us=175.540	cpu_us=NA	checksum=10029015251857879260
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	ordinal=6	repetitions=1	wall_us=197.832	cpu_us=NA	checksum=10029015251857879260
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	ordinal=7	repetitions=1	wall_us=176.081	cpu_us=NA	checksum=10029015251857879260
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	ordinal=8	repetitions=1	wall_us=191.311	cpu_us=NA	checksum=10029015251857879260
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-sts511-read_source-t1	section=parsing	workload=sts511	subject=read_source	status=OK	nodes=511	arcs=43435	incidences=130305	warmups=2	samples=9	repetitions=1	wall_median_us=193.815	wall_q1_us=176.081	wall_q3_us=197.832	wall_worst_us=225.214	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=10029015251857879260
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-sts511-read_source-t1	workload=sts511	subject=read_source	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.32s
+

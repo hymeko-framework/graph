@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-path65k-compile-t1	workload=path65k	subject=compile	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=3363412	fnv1a64=10637487605907946325	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-path65k-compile-t1	workload=path65k	subject=compile	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	ordinal=0	repetitions=1	wall_us=470071.694	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	ordinal=1	repetitions=1	wall_us=537103.780	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	ordinal=2	repetitions=1	wall_us=451071.322	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	ordinal=3	repetitions=1	wall_us=456436.513	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	ordinal=4	repetitions=1	wall_us=456636.370	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	ordinal=5	repetitions=1	wall_us=452055.459	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	ordinal=6	repetitions=1	wall_us=449496.912	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	ordinal=7	repetitions=1	wall_us=448625.689	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	ordinal=8	repetitions=1	wall_us=448767.306	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_CELL	run=run3-parsing_parsing_cell-path65k-compile-t1	section=parsing	workload=path65k	subject=compile	status=OK	nodes=65536	arcs=65535	incidences=131070	warmups=2	samples=9	repetitions=1	wall_median_us=452055.459	wall_q1_us=449496.912	wall_q3_us=456636.370	wall_worst_us=537103.780	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=10637487605907946325
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-path65k-compile-t1	workload=path65k	subject=compile	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 6.32s
+

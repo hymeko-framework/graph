@@ -1,9 +1,9 @@
 {
   "source_commit": "5fcfb5f2e52bd4584a08aa2fd2f97620085dbc6a",
-  "platforms": 1,
-  "processes": 240,
-  "metric_rows": 80,
-  "raw_samples": 2160,
+  "platforms": 2,
+  "processes": 480,
+  "metric_rows": 160,
+  "raw_samples": 4320,
   "semantic_and_work_counter_parity": true,
   "bfs_dijkstra_and_astar_optimal_cost_checks": false,
   "parsed_fixture_equivalence_checks": true,

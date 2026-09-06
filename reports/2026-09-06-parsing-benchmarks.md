@@ -1,37 +1,47 @@
 # Parsing and graph ingestion benchmarks
 
-Created-at: 2026-09-06 17:43 +02:00. Updated 19:16 +02:00. Status: Windows phase breakdown measured, verified and live at http://192.168.1.228:3106. Remote completion/publication awaits the user's host-condition decision.
+Created-at: 2026-09-06 17:43 +02:00. Updated: 2026-09-06 20:55 +0200.
 
-## Current delivery and measurement conditions
+## Accepted quiet-host delivery
 
-Windows: the original five phases and five additional phases are complete on all 16 inputs, each with three fresh processes and 27 retained samples. Published tables contain 80 + 80 rows, 480 processes and 4320 samples. Additional stages took 633.4 seconds of process wall time. Largest observed process peak in the added matrix: 3080.4 MiB, below 16 GiB. Nine Python verification tests passed, including stage labels, exact artifact hashes and independent nested-campaign manifests. The web application's 11 tests, AST structure gate, strict TypeScript check and production build passed.
+All measurements in the resource-bounded plan are complete and verified. Windows and native Amaterasu each cover 16 deterministic inputs and all 10 phases; ARM64/QEMU on Amaterasu covers parse_ast on all 16 inputs. Every accepted row pools three fresh processes and 27 retained samples after warmup. The original-phase table has 176 rows / 528 processes / 4752 samples; the supplementary table has 160 rows / 480 processes / 4320 samples. Total: 336 rows, 1008 processes, 9072 samples. The directly measured totals are not calculated by summing stages.
 
-The new data retain two measured source revisions: original stages f6bd760de9552325525dfa03e5e5c96dac9f010c, added stages 5fcfb5f2e52bd4584a08aa2fd2f97620085dbc6a. The Graph production sources, dependencies and fixture topology are unchanged. The original and additional Windows campaigns ran in different time windows, so their overlapping totals must not be subtracted to infer I/O cost or an optimization. A same-binary paired source/file-to-query smoke is recorded separately under `stages/windows-scope-control`; it is a diagnostic control, not pooled into the three-process table.
+At 19:58 the user explicitly authorized stopping Gazebo/ROS. The ROS launch, simulator, clock bridge, state publisher and associated camera/motion helpers exited after SIGINT/SIGTERM: PIDs 1240607, 1240629, 1240633, 1240634, 1240635, 1235050, 1236550, 1241047. Aggregate CPU activity was 0.26% over five seconds after shutdown and 0.21% over three seconds after all campaigns. A two-second observation during native measurement found the benchmark at 100.4% of one CPU and other processes at most 1%. ROS/Gazebo did not respawn at the subsequent check. Exact hardware, schedutil governor, OS, observations and shutdown authorization are recorded in `parsing-benchmarks/2026-09-06/host-quiet.json`.
 
-Amaterasu: the original native five-stage matrix finished 240/240 processes. These results are retained on the remote checkout but excluded from the new published tables pending the user's reply. An actual two-second `/proc` CPU probe at 18:54:44 found existing Ruby/Gazebo at 142.9% CPU, Python at 14.3%, parameter_bridge at 12.3% and robot_state_publisher at 9.9%, with affinity spanning all 16 logical CPUs. This is not a quiet measurement host. The user was asked whether clearly labelled observations under this background load are acceptable or a quiet rerun is required. No other application's processes were changed. The agent's own supervising shell was stopped before ARM64 launch and removed after native completion; no benchmark coordinator is left paused. ARM64 full parse matrix and native supplementary stages remain pending. Existing ARM64 smoke results are not promoted to full-campaign results.
+The earlier 240-process native run with Gazebo/ROS contention is preserved under `native-background-load/` and is excluded from both accepted summaries. Smokes and the Windows source/file diagnostic control are also excluded from pooled results. Quiet native original phases took 1221.85 seconds of summed process wall time; ARM64 parse took 1000.00 seconds; added native phases took 691.40 seconds. No native/QEMU measurements or builds overlapped. Their final logs are `native-quiet-driver.log`, `arm64-driver.log` and `stages/native-driver.log`. The added native production-scale smoke passed all 10 cases, with a maximum process wall of 60.0 seconds, before its full matrix started.
 
-For map512 (30,032,345 source bytes), Windows pooled medians are:
+Largest accepted process peak: 3365203968 bytes (3209.31 MiB), below the 16 GiB cap. Every accepted process stayed within 180 seconds. ARM64 full compilation of map512 previously exceeded that cap: it has no accepted latency result. Full frontend and added stages on ARM64 remain explicitly unmeasured under the amended plan; QEMU results are emulation observations, not native ARM hardware claims.
 
-| Measured operation | Median (ms) |
-|---|---:|
-| Generator including direct IR construction | 112.309 |
-| Existing IR to source text | 272.503 |
-| Local file read, warm OS cache | 10.602 |
-| Resident text to AST | 810.570 |
-| Existing AST to IR | 1577.792 |
-| Full resident-source compilation | 4618.918 |
-| Incidence index | 23.637 |
-| Dijkstra on ready index, fresh workspace | 112.072 |
-| Resident source to query result | 4882.580 |
-| Local file to query result, warm OS cache | 4326.479 |
+## Timing boundaries and example
 
-These operations overlap and are not additive components of one captured execution. The full distributions, source identities and timing boundaries are in the CSV/JSON evidence. Process memory includes fixture generation, validation and retained sampler objects; it is not a per-stage memory delta. No external road-map importer was added.
+For map512, a synthetic 512-by-512 weighted map fixture with 30,032,345 source bytes, pooled medians are:
 
-Final verification: complete workspace release tests and complete workspace/all-targets release clippy passed; nine Python tests passed. The full formatter identified the previously added parsing-module declaration order in `informed_berge_evidence.rs`; that ordering was fixed after measurement. It is a formatting-only change, and the timed revisions remain the original explicit SHAs, not the later formatting commit. Authored-source Git whitespace checks pass; raw log EOF blank lines and CRLF evidence are intentionally preserved under the existing `-text` attributes and SHA256 manifests.
+| Measured operation | Windows ms | Native Amaterasu ms | ARM64/QEMU ms |
+|---|---:|---:|---:|
+| Generator including direct IR construction | 112.309 | 52.214 | unmeasured |
+| Existing IR to source text | 272.503 | 330.994 | unmeasured |
+| Local file read, warm OS cache | 10.602 | 6.803 | unmeasured |
+| Resident text to AST | 810.570 | 1008.729 | 7812.697 |
+| Existing AST to IR | 1577.792 | 1254.538 | unmeasured |
+| Full resident-source compilation | 4618.918 | 4035.273 | unmeasured |
+| Incidence index | 23.637 | 30.283 | unmeasured |
+| Dijkstra on ready index, fresh workspace | 112.072 | 114.429 | unmeasured |
+| Resident source to query result | 4882.580 | 4299.413 | unmeasured |
+| Local file to query result, warm OS cache | 4326.479 | 4340.011 | unmeasured |
 
-Same-binary control (one process and nine samples per case, diagnostic only): map512 resident-source-to-query median 4328.534 ms and file-to-query 4155.614 ms; random1e6 2552.865 and 2533.000 ms. These observations do not establish an I/O speedup or a negative input cost. Keep separately measured total distributions separate rather than subtracting medians; no optimizer or production change was introduced.
+These operations overlap and are not additive partitions of one captured execution. Existing fixture generation constructs IR directly, so that stage includes both generation and direct IR construction. AST-to-IR uses the separate text-ingestion path. File reads use warm OS cache; file creation/sync are outside the timer. Prepared Dijkstra has the IR and incidence index ready but starts with a fresh query workspace. Full source/file-to-query costs are directly timed. Final returned-object destruction is excluded; intermediate destruction remains included. Process RSS includes generation, validation and retained objects, not a per-stage allocation delta. No external road-map importer was added or measured.
 
-Website acceptance: 11 adapter/Git tests, strict TypeScript, parser-based structure gate and production build passed. Twelve real browser checks passed, including stage filtering, exact published counts, download SHA256, mobile fit, refresh and error states. API contains 160 new Windows rows across ten phases with zero source issues. The two new source artifacts are from Graph publication 871db7348557b20888708003504ac77b7eac3eaf (later report-only publication may update the displayed artifact commit). The website's own full verification and runtime evidence live at `/srv/apps/benchmark/reports/2026-09-06-benchmark-explorer.md`. The 16-workload Windows stage matrix is delivered; native supplementary and the full ARM64 parser matrix remain explicitly incomplete.
+The original and supplementary Windows campaigns ran at different times and their overlapping totals must not be subtracted to infer I/O cost or an optimization. A one-process/nine-sample same-binary control remains under `stages/windows-scope-control/`; it is diagnostic only. Cross-platform numbers characterize the named hosts and versions; no optimization or speedup claim is made.
+
+## Provenance, verification and publication
+
+Original timed Rust revision: f6bd760de9552325525dfa03e5e5c96dac9f010c. Supplementary revision: 5fcfb5f2e52bd4584a08aa2fd2f97620085dbc6a. The full Graph production source, tests and Cargo manifests/lock were checked against each declared source-ref before launch. Dependency pins remain Core fc3eda9b73e4f171aada5c79751af481759c068e and parser 284c490d68232973a006bcba974279fed6f89ce8. Binary and driver SHA256, source bytes/FNV identities, signed incidences, weights, positions and query parity accompany every campaign. Native supplementary build command/output are retained under `stages/native-build*`; its binary SHA256 is 332140a614761620b3d204e371323e66ba1b5fe5003e3c0fc262858c6fac3691.
+
+Both summary validators passed exact coverage, three-process counts, sample counts, semantic/work-counter parity, revision identity and raw-log checks. SHA256 manifests cover the published tables, provenance and selected raw evidence. The supplementary native client passed nine Rust tests; the driver passed nine Python tests. Full release workspace tests, doctests, clippy, formatting, symbols and unchanged duplication counts passed during implementation at the stated measured source revisions. No production source or dependency was changed for this publication.
+
+The live website at http://192.168.1.228:3106 reads the committed tables through its existing stage adapter; no application rebuild is needed for these additional platform rows. Its final browser verification is recorded in `/srv/apps/benchmark/reports/2026-09-06-benchmark-explorer.md`. Publication uses the existing remote Graph checkout and the dedicated `feat/graph-cross-platform-benchmarks` branch. The local checkout was switched by another worker to `feat/kawamirai-authoring-2026-09-06`; that branch and its Cargo.lock change are preserved. Remote benchmark staging was saved in Git stash before switching to the freshly fetched publication branch. Reusable build caches and binaries remain available; the temporary build container was removed. No new clone or worktree was created.
+
+The following dated implementation notes are historical; current acceptance and coverage are stated above.
 
 ## Explicit phase breakdown
 

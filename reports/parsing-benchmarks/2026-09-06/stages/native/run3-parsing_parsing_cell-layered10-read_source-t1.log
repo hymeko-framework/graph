@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-layered10-read_source-t1	workload=layered10	subject=read_source	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=1474	fnv1a64=4158836526590324076	projection=graph_fixture_v1	file_io=true	final_drop=false	file_cache=warm
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-layered10-read_source-t1	workload=layered10	subject=read_source	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	ordinal=0	repetitions=1	wall_us=8.366	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	ordinal=1	repetitions=1	wall_us=8.305	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	ordinal=2	repetitions=1	wall_us=8.295	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	ordinal=3	repetitions=1	wall_us=8.205	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	ordinal=4	repetitions=1	wall_us=8.196	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	ordinal=5	repetitions=1	wall_us=8.195	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	ordinal=6	repetitions=1	wall_us=8.185	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	ordinal=7	repetitions=1	wall_us=8.196	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	ordinal=8	repetitions=1	wall_us=8.195	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_CELL	run=run3-parsing_parsing_cell-layered10-read_source-t1	section=parsing	workload=layered10	subject=read_source	status=OK	nodes=22	arcs=40	incidences=80	warmups=2	samples=9	repetitions=1	wall_median_us=8.196	wall_q1_us=8.195	wall_q3_us=8.295	wall_worst_us=8.366	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=4158836526590324076
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-layered10-read_source-t1	workload=layered10	subject=read_source	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+

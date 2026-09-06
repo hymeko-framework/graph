@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	workload=corridor128	subject=file_to_dijkstra	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=1025108	fnv1a64=13765175987231083798	projection=graph_fixture_v1	file_io=true	final_drop=false	file_cache=warm
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	workload=corridor128	subject=file_to_dijkstra	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	ordinal=0	repetitions=1	wall_us=107986.694	cpu_us=NA	checksum=13765175987231083798
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	ordinal=1	repetitions=1	wall_us=134422.369	cpu_us=NA	checksum=13765175987231083798
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	ordinal=2	repetitions=1	wall_us=107169.646	cpu_us=NA	checksum=13765175987231083798
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	ordinal=3	repetitions=1	wall_us=109330.574	cpu_us=NA	checksum=13765175987231083798
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	ordinal=4	repetitions=1	wall_us=107151.030	cpu_us=NA	checksum=13765175987231083798
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	ordinal=5	repetitions=1	wall_us=107624.212	cpu_us=NA	checksum=13765175987231083798
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	ordinal=6	repetitions=1	wall_us=108126.137	cpu_us=NA	checksum=13765175987231083798
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	ordinal=7	repetitions=1	wall_us=107537.419	cpu_us=NA	checksum=13765175987231083798
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	ordinal=8	repetitions=1	wall_us=108489.391	cpu_us=NA	checksum=13765175987231083798
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	section=parsing	workload=corridor128	subject=file_to_dijkstra	status=OK	nodes=16384	arcs=16383	incidences=32766	warmups=2	samples=9	repetitions=1	wall_median_us=107986.694	wall_q1_us=107537.419	wall_q3_us=108489.391	wall_worst_us=134422.369	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=13765175987231083798
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-corridor128-file_to_dijkstra-t1	workload=corridor128	subject=file_to_dijkstra	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 1.53s
+

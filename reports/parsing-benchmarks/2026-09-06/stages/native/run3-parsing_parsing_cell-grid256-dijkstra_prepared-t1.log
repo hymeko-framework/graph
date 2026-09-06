@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	workload=grid256	subject=dijkstra_prepared	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=4666838	fnv1a64=1028608474074712194	projection=graph_fixture_v1	file_io=false	final_drop=false	file_cache=NA
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	workload=grid256	subject=dijkstra_prepared	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	ordinal=0	repetitions=1	wall_us=24817.929	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	ordinal=1	repetitions=1	wall_us=24886.508	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	ordinal=2	repetitions=1	wall_us=24818.520	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	ordinal=3	repetitions=1	wall_us=24767.493	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	ordinal=4	repetitions=1	wall_us=24775.328	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	ordinal=5	repetitions=1	wall_us=24841.503	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	ordinal=6	repetitions=1	wall_us=24752.946	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	ordinal=7	repetitions=1	wall_us=24786.840	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	ordinal=8	repetitions=1	wall_us=24762.986	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_CELL	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	section=parsing	workload=grid256	subject=dijkstra_prepared	status=OK	nodes=65536	arcs=130560	incidences=261120	warmups=2	samples=9	repetitions=1	wall_median_us=24786.840	wall_q1_us=24767.493	wall_q3_us=24818.520	wall_worst_us=24886.508	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=1028608474074712194
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-grid256-dijkstra_prepared-t1	workload=grid256	subject=dijkstra_prepared	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 2.07s
+

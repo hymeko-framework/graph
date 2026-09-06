@@ -1,0 +1,680 @@
+{
+  "schema_version": 1,
+  "suite": "parsing",
+  "runs": 1,
+  "smoke": true,
+  "phases": [
+    "parse_ast"
+  ],
+  "platform": "arm64",
+  "created_at": "2026-09-06T18:09:43+0200",
+  "source_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+  "driver_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+  "driver_sha256": "0eb69eb9292abbc606ae0f75bdba24ce499be1062bc71626a59ff503b159d4cf",
+  "dirty_paths": "M docs/plans/2026-09-06-cross-platform-benchmarks/plan.pdf\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.tex\n M scripts/performance_evidence/campaign.py\n M scripts/performance_evidence/test_campaign.py\n?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.aux\n?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke/\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/native-smoke/",
+  "host": "Amaterasu",
+  "os": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
+  "cpu_count": 16,
+  "python": "3.12.3",
+  "metric_scope": "iteration batch means, not request tails",
+  "runtime": {
+    "image": "sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9",
+    "emulated": true
+  },
+  "binaries": {
+    "informed": {
+      "path": "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/arm64-informed",
+      "sha256": "86ea398ba85dae10e463873750b0a8776626dd0916312100a03d480b7ae032b4"
+    }
+  },
+  "cells": [
+    {
+      "id": "parsing_parsing_cell-map512-parse_ast-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-parse_ast-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "7984494.921",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "7928936.410",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "8099104.292",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "8037931.365",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "8089850.180",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "7997101.271",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "8200457.956",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "8150383.035",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "8011346.344",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-parse_ast-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "parse_ast",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "8037931.365",
+            "wall_q1_us": "7997101.271",
+            "wall_q3_us": "8099104.292",
+            "wall_worst_us": "8200457.956",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 141.01449413900264,
+        "peak_rss_bytes": 2142121984,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "docker",
+          "run",
+          "--name",
+          "hymeko-graph-cell-1976466",
+          "--network=none",
+          "--platform=linux/arm64",
+          "--memory=16g",
+          "--memory-swap=16g",
+          "--cpus=4",
+          "--read-only",
+          "-v",
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/arm64-informed:/bench:ro",
+          "-v",
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/qemu-aarch64-static:/qemu:ro",
+          "-e",
+          "INFORMED_BERGE_RUN=run1-parsing_parsing_cell-map512-parse_ast-t1",
+          "-e",
+          "INFORMED_BERGE_WORKLOAD=map512",
+          "-e",
+          "RAYON_NUM_THREADS=4",
+          "-e",
+          "INFORMED_BERGE_SUBJECT=parse_ast",
+          "--entrypoint",
+          "/qemu",
+          "sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9",
+          "/bench",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-parse_ast-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-parse_ast-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "4616804.229",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "4617267.461",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "4704712.560",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "4691719.589",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "4700725.499",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "4692293.587",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "4701882.276",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "4694115.770",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "4705453.467",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "parse_ast",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "4694115.770",
+            "wall_q1_us": "4691719.589",
+            "wall_q3_us": "4701882.276",
+            "wall_worst_us": "4705453.467",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 79.5781293110922,
+        "peak_rss_bytes": 1307799552,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "docker",
+          "run",
+          "--name",
+          "hymeko-graph-cell-1976466",
+          "--network=none",
+          "--platform=linux/arm64",
+          "--memory=16g",
+          "--memory-swap=16g",
+          "--cpus=4",
+          "--read-only",
+          "-v",
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/arm64-informed:/bench:ro",
+          "-v",
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/qemu-aarch64-static:/qemu:ro",
+          "-e",
+          "INFORMED_BERGE_RUN=run1-parsing_parsing_cell-random1e6-parse_ast-t1",
+          "-e",
+          "INFORMED_BERGE_WORKLOAD=random1e6",
+          "-e",
+          "RAYON_NUM_THREADS=4",
+          "-e",
+          "INFORMED_BERGE_SUBJECT=parse_ast",
+          "--entrypoint",
+          "/qemu",
+          "sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9",
+          "/bench",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-grid5-parse_ast-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-grid5-parse_ast-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "1014",
+            "fnv1a64": "3884989137393796687",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "531.812",
+            "cpu_us": "NA",
+            "checksum": "3884989137393796687"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "438.046",
+            "cpu_us": "NA",
+            "checksum": "3884989137393796687"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "412.007",
+            "cpu_us": "NA",
+            "checksum": "3884989137393796687"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "409.833",
+            "cpu_us": "NA",
+            "checksum": "3884989137393796687"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "411.486",
+            "cpu_us": "NA",
+            "checksum": "3884989137393796687"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "416.396",
+            "cpu_us": "NA",
+            "checksum": "3884989137393796687"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "417.708",
+            "cpu_us": "NA",
+            "checksum": "3884989137393796687"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "410.624",
+            "cpu_us": "NA",
+            "checksum": "3884989137393796687"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "414.171",
+            "cpu_us": "NA",
+            "checksum": "3884989137393796687"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-grid5-parse_ast-t1",
+            "section": "parsing",
+            "workload": "grid5",
+            "subject": "parse_ast",
+            "status": "OK",
+            "nodes": "25",
+            "arcs": "40",
+            "incidences": "80",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "414.171",
+            "wall_q1_us": "411.486",
+            "wall_q3_us": "417.708",
+            "wall_worst_us": "531.812",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "3884989137393796687"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 0.3010724170599133,
+        "peak_rss_bytes": 19484672,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "docker",
+          "run",
+          "--name",
+          "hymeko-graph-cell-1976466",
+          "--network=none",
+          "--platform=linux/arm64",
+          "--memory=16g",
+          "--memory-swap=16g",
+          "--cpus=4",
+          "--read-only",
+          "-v",
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/arm64-informed:/bench:ro",
+          "-v",
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/qemu-aarch64-static:/qemu:ro",
+          "-e",
+          "INFORMED_BERGE_RUN=run1-parsing_parsing_cell-grid5-parse_ast-t1",
+          "-e",
+          "INFORMED_BERGE_WORKLOAD=grid5",
+          "-e",
+          "RAYON_NUM_THREADS=4",
+          "-e",
+          "INFORMED_BERGE_SUBJECT=parse_ast",
+          "--entrypoint",
+          "/qemu",
+          "sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9",
+          "/bench",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    }
+  ],
+  "correctness": [
+    {
+      "suite": "informed",
+      "log": "correctness-informed.log",
+      "wall_seconds": 0.35495164105668664,
+      "peak_rss_bytes": 21082112,
+      "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+      "command": [
+        "docker",
+        "run",
+        "--name",
+        "hymeko-graph-cell-1976466",
+        "--network=none",
+        "--platform=linux/arm64",
+        "--memory=16g",
+        "--memory-swap=16g",
+        "--cpus=4",
+        "--read-only",
+        "-v",
+        "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/arm64-informed:/bench:ro",
+        "-v",
+        "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/qemu-aarch64-static:/qemu:ro",
+        "-e",
+        "RAYON_NUM_THREADS=4",
+        "--entrypoint",
+        "/qemu",
+        "sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9",
+        "/bench",
+        "--test-threads=1"
+      ],
+      "exit_code": 0
+    }
+  ]
+}

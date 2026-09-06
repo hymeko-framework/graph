@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	workload=grid256	subject=generate_ir	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=4666838	fnv1a64=1028608474074712194	projection=graph_fixture_v1	file_io=false	final_drop=false	file_cache=NA
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	workload=grid256	subject=generate_ir	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	ordinal=0	repetitions=1	wall_us=5764.464	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	ordinal=1	repetitions=1	wall_us=7019.227	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	ordinal=2	repetitions=1	wall_us=5807.666	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	ordinal=3	repetitions=1	wall_us=5759.254	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	ordinal=4	repetitions=1	wall_us=5794.020	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	ordinal=5	repetitions=1	wall_us=5464.419	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	ordinal=6	repetitions=1	wall_us=5818.456	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	ordinal=7	repetitions=1	wall_us=5493.144	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	ordinal=8	repetitions=1	wall_us=5770.886	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	section=parsing	workload=grid256	subject=generate_ir	status=OK	nodes=65536	arcs=130560	incidences=261120	warmups=2	samples=9	repetitions=1	wall_median_us=5770.886	wall_q1_us=5759.254	wall_q3_us=5807.666	wall_worst_us=7019.227	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=1028608474074712194
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-grid256-generate_ir-t1	workload=grid256	subject=generate_ir	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 1.18s
+

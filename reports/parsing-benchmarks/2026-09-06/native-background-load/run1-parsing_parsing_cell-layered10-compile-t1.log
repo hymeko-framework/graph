@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-layered10-compile-t1	workload=layered10	subject=compile	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=1474	fnv1a64=4158836526590324076	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-layered10-compile-t1	workload=layered10	subject=compile	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	ordinal=0	repetitions=1	wall_us=216.699	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	ordinal=1	repetitions=1	wall_us=267.945	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	ordinal=2	repetitions=1	wall_us=208.613	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	ordinal=3	repetitions=1	wall_us=210.818	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	ordinal=4	repetitions=1	wall_us=215.126	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	ordinal=5	repetitions=1	wall_us=205.257	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	ordinal=6	repetitions=1	wall_us=204.396	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	ordinal=7	repetitions=1	wall_us=217.571	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	ordinal=8	repetitions=1	wall_us=203.283	cpu_us=NA	checksum=4158836526590324076
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-layered10-compile-t1	section=parsing	workload=layered10	subject=compile	status=OK	nodes=22	arcs=40	incidences=80	warmups=2	samples=9	repetitions=1	wall_median_us=210.818	wall_q1_us=205.257	wall_q3_us=216.699	wall_worst_us=267.945	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=4158836526590324076
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-layered10-compile-t1	workload=layered10	subject=compile	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+

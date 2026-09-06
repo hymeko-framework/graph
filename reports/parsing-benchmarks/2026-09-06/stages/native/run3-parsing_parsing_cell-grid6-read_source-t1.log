@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-grid6-read_source-t1	workload=grid6	subject=read_source	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=1529	fnv1a64=16763265845343142648	projection=graph_fixture_v1	file_io=true	final_drop=false	file_cache=warm
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-grid6-read_source-t1	workload=grid6	subject=read_source	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	ordinal=0	repetitions=1	wall_us=5.551	cpu_us=NA	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	ordinal=1	repetitions=1	wall_us=5.540	cpu_us=NA	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	ordinal=2	repetitions=1	wall_us=5.491	cpu_us=NA	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	ordinal=3	repetitions=1	wall_us=5.440	cpu_us=NA	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	ordinal=4	repetitions=1	wall_us=5.431	cpu_us=NA	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	ordinal=5	repetitions=1	wall_us=5.440	cpu_us=NA	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	ordinal=6	repetitions=1	wall_us=5.430	cpu_us=NA	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	ordinal=7	repetitions=1	wall_us=5.431	cpu_us=NA	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	ordinal=8	repetitions=1	wall_us=5.430	cpu_us=NA	checksum=16763265845343142648
+EVIDENCE_CELL	run=run3-parsing_parsing_cell-grid6-read_source-t1	section=parsing	workload=grid6	subject=read_source	status=OK	nodes=36	arcs=60	incidences=120	warmups=2	samples=9	repetitions=1	wall_median_us=5.440	wall_q1_us=5.431	wall_q3_us=5.491	wall_worst_us=5.551	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=16763265845343142648
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-grid6-read_source-t1	workload=grid6	subject=read_source	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+

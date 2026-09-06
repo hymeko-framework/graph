@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	workload=grid200_d80	subject=incidence_index	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=2801182	fnv1a64=9727528773937826764	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	workload=grid200_d80	subject=incidence_index	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	ordinal=0	repetitions=1	wall_us=3797.920	cpu_us=NA	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	ordinal=1	repetitions=1	wall_us=3953.243	cpu_us=NA	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	ordinal=2	repetitions=1	wall_us=3918.978	cpu_us=NA	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	ordinal=3	repetitions=1	wall_us=3833.217	cpu_us=NA	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	ordinal=4	repetitions=1	wall_us=3784.916	cpu_us=NA	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	ordinal=5	repetitions=1	wall_us=3857.393	cpu_us=NA	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	ordinal=6	repetitions=1	wall_us=3855.208	cpu_us=NA	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	ordinal=7	repetitions=1	wall_us=3832.716	cpu_us=NA	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	ordinal=8	repetitions=1	wall_us=4138.683	cpu_us=NA	checksum=9727528773937826764
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	section=parsing	workload=grid200_d80	subject=incidence_index	status=OK	nodes=40000	arcs=79600	incidences=159200	warmups=2	samples=9	repetitions=1	wall_median_us=3855.208	wall_q1_us=3832.716	wall_q3_us=3918.978	wall_worst_us=4138.683	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=9727528773937826764
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-grid200_d80-incidence_index-t1	workload=grid200_d80	subject=incidence_index	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 1.21s
+

@@ -1,0 +1,6 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-map512-compile-t1	workload=map512	subject=compile	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=30032345	fnv1a64=7563304331229731996	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-map512-compile-t1	workload=map512	subject=compile	phase=source_validated	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell has been running for over 60 seconds

@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	workload=map32	subject=generate_ir	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=90976	fnv1a64=11311328683075702535	projection=graph_fixture_v1	file_io=false	final_drop=false	file_cache=NA
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	workload=map32	subject=generate_ir	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	ordinal=0	repetitions=1	wall_us=168.989	cpu_us=NA	checksum=11311328683075702535
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	ordinal=1	repetitions=1	wall_us=171.904	cpu_us=NA	checksum=11311328683075702535
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	ordinal=2	repetitions=1	wall_us=170.441	cpu_us=NA	checksum=11311328683075702535
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	ordinal=3	repetitions=1	wall_us=201.660	cpu_us=NA	checksum=11311328683075702535
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	ordinal=4	repetitions=1	wall_us=168.047	cpu_us=NA	checksum=11311328683075702535
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	ordinal=5	repetitions=1	wall_us=168.328	cpu_us=NA	checksum=11311328683075702535
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	ordinal=6	repetitions=1	wall_us=172.716	cpu_us=NA	checksum=11311328683075702535
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	ordinal=7	repetitions=1	wall_us=170.250	cpu_us=NA	checksum=11311328683075702535
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	ordinal=8	repetitions=1	wall_us=168.116	cpu_us=NA	checksum=11311328683075702535
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-map32-generate_ir-t1	section=parsing	workload=map32	subject=generate_ir	status=OK	nodes=1024	arcs=1888	incidences=3776	warmups=2	samples=9	repetitions=1	wall_median_us=170.250	wall_q1_us=168.328	wall_q3_us=171.904	wall_worst_us=201.660	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=11311328683075702535
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map32-generate_ir-t1	workload=map32	subject=generate_ir	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.02s
+

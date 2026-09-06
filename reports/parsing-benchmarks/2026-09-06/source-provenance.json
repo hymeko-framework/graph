@@ -80,6 +80,66 @@
         }
       },
       "complete": true
+    },
+    {
+      "schema_version": 1,
+      "suite": "parsing",
+      "runs": 3,
+      "smoke": false,
+      "phases": null,
+      "platform": "native",
+      "created_at": "2026-09-06T20:00:08+0200",
+      "source_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+      "driver_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+      "driver_sha256": "0eb69eb9292abbc606ae0f75bdba24ce499be1062bc71626a59ff503b159d4cf",
+      "dirty_paths": "M docs/plans/2026-09-06-cross-platform-benchmarks/plan.mmd\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.pdf\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.tex\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.tikz\n M scripts/performance_evidence/campaign.py\n M scripts/performance_evidence/test_campaign.py\n?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.aux\n?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke/\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke/\n?? reports/parsing-benchmarks/2026-09-06/host-quiet.json\n?? reports/parsing-benchmarks/2026-09-06/native-background-load-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-background-load/\n?? reports/parsing-benchmarks/2026-09-06/native-quiet-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/native-smoke/",
+      "host": "Amaterasu",
+      "os": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
+      "cpu_count": 16,
+      "python": "3.12.3",
+      "metric_scope": "iteration batch means, not request tails",
+      "runtime": {
+        "image": null,
+        "emulated": false
+      },
+      "binaries": {
+        "informed": {
+          "path": "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed",
+          "sha256": "016ed0c4ac4038b2c47cb86c439c352d46af6e923f6a40381cbebd0461104b1b"
+        }
+      },
+      "complete": true
+    },
+    {
+      "schema_version": 1,
+      "suite": "parsing",
+      "runs": 3,
+      "smoke": false,
+      "phases": [
+        "parse_ast"
+      ],
+      "platform": "arm64",
+      "created_at": "2026-09-06T20:20:36+0200",
+      "source_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+      "driver_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+      "driver_sha256": "0eb69eb9292abbc606ae0f75bdba24ce499be1062bc71626a59ff503b159d4cf",
+      "dirty_paths": "M docs/plans/2026-09-06-cross-platform-benchmarks/plan.mmd\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.pdf\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.tex\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.tikz\n M scripts/performance_evidence/campaign.py\n M scripts/performance_evidence/test_campaign.py\n?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.aux\n?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke/\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke/\n?? reports/parsing-benchmarks/2026-09-06/host-quiet.json\n?? reports/parsing-benchmarks/2026-09-06/native-background-load-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-background-load/\n?? reports/parsing-benchmarks/2026-09-06/native-quiet-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/native-smoke/\n?? reports/parsing-benchmarks/2026-09-06/native/",
+      "host": "Amaterasu",
+      "os": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
+      "cpu_count": 16,
+      "python": "3.12.3",
+      "metric_scope": "iteration batch means, not request tails",
+      "runtime": {
+        "image": "sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9",
+        "emulated": true
+      },
+      "binaries": {
+        "informed": {
+          "path": "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/arm64-informed",
+          "sha256": "86ea398ba85dae10e463873750b0a8776626dd0916312100a03d480b7ae032b4"
+        }
+      },
+      "complete": true
     }
   ]
 }

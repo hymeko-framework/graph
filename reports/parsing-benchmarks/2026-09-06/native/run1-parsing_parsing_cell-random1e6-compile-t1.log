@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-random1e6-compile-t1	workload=random1e6	subject=compile	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=16022102	fnv1a64=9661416703183500483	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-random1e6-compile-t1	workload=random1e6	subject=compile	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	ordinal=0	repetitions=1	wall_us=2743226.267	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	ordinal=1	repetitions=1	wall_us=2975070.849	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	ordinal=2	repetitions=1	wall_us=2765851.862	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	ordinal=3	repetitions=1	wall_us=2831013.051	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	ordinal=4	repetitions=1	wall_us=2752744.375	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	ordinal=5	repetitions=1	wall_us=2790684.836	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	ordinal=6	repetitions=1	wall_us=2787908.802	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	ordinal=7	repetitions=1	wall_us=2771047.046	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	ordinal=8	repetitions=1	wall_us=2770615.586	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-random1e6-compile-t1	section=parsing	workload=random1e6	subject=compile	status=OK	nodes=200000	arcs=333333	incidences=999999	warmups=2	samples=9	repetitions=1	wall_median_us=2771047.046	wall_q1_us=2765851.862	wall_q3_us=2790684.836	wall_worst_us=2975070.849	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=9661416703183500483
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-random1e6-compile-t1	workload=random1e6	subject=compile	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 36.82s
+

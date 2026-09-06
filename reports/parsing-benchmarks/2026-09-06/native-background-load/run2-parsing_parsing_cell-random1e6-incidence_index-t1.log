@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	workload=random1e6	subject=incidence_index	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=16022102	fnv1a64=9661416703183500483	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	workload=random1e6	subject=incidence_index	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	ordinal=0	repetitions=1	wall_us=30907.242	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	ordinal=1	repetitions=1	wall_us=28099.188	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	ordinal=2	repetitions=1	wall_us=29639.292	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	ordinal=3	repetitions=1	wall_us=27640.694	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	ordinal=4	repetitions=1	wall_us=29895.194	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	ordinal=5	repetitions=1	wall_us=29015.155	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	ordinal=6	repetitions=1	wall_us=28044.234	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	ordinal=7	repetitions=1	wall_us=28713.226	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	ordinal=8	repetitions=1	wall_us=26876.182	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	section=parsing	workload=random1e6	subject=incidence_index	status=OK	nodes=200000	arcs=333333	incidences=999999	warmups=2	samples=9	repetitions=1	wall_median_us=28713.226	wall_q1_us=28044.234	wall_q3_us=29639.292	wall_worst_us=30907.242	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=9661416703183500483
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-random1e6-incidence_index-t1	workload=random1e6	subject=incidence_index	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 7.84s
+

@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	workload=random1e6	subject=source_to_dijkstra	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=16022102	fnv1a64=9661416703183500483	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	workload=random1e6	subject=source_to_dijkstra	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	ordinal=0	repetitions=1	wall_us=2835140.691	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	ordinal=1	repetitions=1	wall_us=3097933.533	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	ordinal=2	repetitions=1	wall_us=2900986.402	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	ordinal=3	repetitions=1	wall_us=2940672.585	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	ordinal=4	repetitions=1	wall_us=2917030.666	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	ordinal=5	repetitions=1	wall_us=2912134.761	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	ordinal=6	repetitions=1	wall_us=2873494.090	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	ordinal=7	repetitions=1	wall_us=2899053.846	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	ordinal=8	repetitions=1	wall_us=2902567.771	cpu_us=NA	checksum=9661416703183500483
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	section=parsing	workload=random1e6	subject=source_to_dijkstra	status=OK	nodes=200000	arcs=333333	incidences=999999	warmups=2	samples=9	repetitions=1	wall_median_us=2902567.771	wall_q1_us=2899053.846	wall_q3_us=2917030.666	wall_worst_us=3097933.533	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=9661416703183500483
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-random1e6-source_to_dijkstra-t1	workload=random1e6	subject=source_to_dijkstra	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 37.97s
+

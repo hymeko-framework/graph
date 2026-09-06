@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-grid256-compile-t1	workload=grid256	subject=compile	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=4666838	fnv1a64=1028608474074712194	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-grid256-compile-t1	workload=grid256	subject=compile	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	ordinal=0	repetitions=1	wall_us=661161.171	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	ordinal=1	repetitions=1	wall_us=741633.357	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	ordinal=2	repetitions=1	wall_us=668264.776	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	ordinal=3	repetitions=1	wall_us=654705.855	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	ordinal=4	repetitions=1	wall_us=687536.275	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	ordinal=5	repetitions=1	wall_us=651255.020	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	ordinal=6	repetitions=1	wall_us=661419.472	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	ordinal=7	repetitions=1	wall_us=645738.196	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	ordinal=8	repetitions=1	wall_us=643207.207	cpu_us=NA	checksum=1028608474074712194
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-grid256-compile-t1	section=parsing	workload=grid256	subject=compile	status=OK	nodes=65536	arcs=130560	incidences=261120	warmups=2	samples=9	repetitions=1	wall_median_us=661161.171	wall_q1_us=651255.020	wall_q3_us=668264.776	wall_worst_us=741633.357	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=1028608474074712194
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-grid256-compile-t1	workload=grid256	subject=compile	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 8.90s
+

@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-sts31-compile-t1	workload=sts31	subject=compile	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=4555	fnv1a64=17684314030900720808	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-sts31-compile-t1	workload=sts31	subject=compile	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	ordinal=0	repetitions=1	wall_us=648.173	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	ordinal=1	repetitions=1	wall_us=778.750	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	ordinal=2	repetitions=1	wall_us=648.915	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	ordinal=3	repetitions=1	wall_us=649.495	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	ordinal=4	repetitions=1	wall_us=636.942	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	ordinal=5	repetitions=1	wall_us=654.906	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	ordinal=6	repetitions=1	wall_us=648.083	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	ordinal=7	repetitions=1	wall_us=649.195	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	ordinal=8	repetitions=1	wall_us=652.141	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-sts31-compile-t1	section=parsing	workload=sts31	subject=compile	status=OK	nodes=31	arcs=155	incidences=465	warmups=2	samples=9	repetitions=1	wall_median_us=649.195	wall_q1_us=648.173	wall_q3_us=652.141	wall_worst_us=778.750	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=17684314030900720808
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-sts31-compile-t1	workload=sts31	subject=compile	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s
+

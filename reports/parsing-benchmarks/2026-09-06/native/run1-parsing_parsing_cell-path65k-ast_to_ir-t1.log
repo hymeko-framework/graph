@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	workload=path65k	subject=ast_to_ir	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=3363412	fnv1a64=10637487605907946325	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	workload=path65k	subject=ast_to_ir	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	ordinal=0	repetitions=1	wall_us=127510.804	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	ordinal=1	repetitions=1	wall_us=173816.113	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	ordinal=2	repetitions=1	wall_us=127440.202	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	ordinal=3	repetitions=1	wall_us=124764.315	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	ordinal=4	repetitions=1	wall_us=126583.115	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	ordinal=5	repetitions=1	wall_us=125885.719	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	ordinal=6	repetitions=1	wall_us=126084.945	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	ordinal=7	repetitions=1	wall_us=126211.664	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	ordinal=8	repetitions=1	wall_us=126403.175	cpu_us=NA	checksum=10637487605907946325
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	section=parsing	workload=path65k	subject=ast_to_ir	status=OK	nodes=65536	arcs=65535	incidences=131070	warmups=2	samples=9	repetitions=1	wall_median_us=126403.175	wall_q1_us=126084.945	wall_q3_us=127440.202	wall_worst_us=173816.113	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=10637487605907946325
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-path65k-ast_to_ir-t1	workload=path65k	subject=ast_to_ir	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 2.55s
+

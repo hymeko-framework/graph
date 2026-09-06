@@ -1,0 +1,1860 @@
+{
+  "schema_version": 1,
+  "suite": "parsing",
+  "runs": 1,
+  "smoke": true,
+  "phases": [
+    "generate_ir",
+    "emit_source",
+    "read_source",
+    "dijkstra_prepared",
+    "file_to_dijkstra"
+  ],
+  "platform": "native",
+  "created_at": "2026-09-06T20:38:13+0200",
+  "source_commit": "5fcfb5f2e52bd4584a08aa2fd2f97620085dbc6a",
+  "driver_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+  "driver_sha256": "4005a7c2ee20dbaf208e1b01f995364f28b964cefb0832f78dd27ce3618065dd",
+  "dirty_paths": "M docs/plans/2026-09-06-cross-platform-benchmarks/plan.mmd\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.pdf\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.tex\n M docs/plans/2026-09-06-cross-platform-benchmarks/plan.tikz\n M hymeko_graph/tests/informed_common/parsing.rs\n M scripts/performance_evidence/campaign.py\n M scripts/performance_evidence/test_campaign.py\n?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.aux\n?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/arm64-parsing-smoke/\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke/\n?? reports/parsing-benchmarks/2026-09-06/arm64/\n?? reports/parsing-benchmarks/2026-09-06/host-quiet.json\n?? reports/parsing-benchmarks/2026-09-06/native-background-load-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-background-load/\n?? reports/parsing-benchmarks/2026-09-06/native-quiet-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/native-smoke/\n?? reports/parsing-benchmarks/2026-09-06/native/\n?? reports/parsing-benchmarks/2026-09-06/stages/",
+  "host": "Amaterasu",
+  "os": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
+  "cpu_count": 16,
+  "python": "3.12.3",
+  "metric_scope": "iteration batch means, not request tails",
+  "runtime": {
+    "image": null,
+    "emulated": false
+  },
+  "binaries": {
+    "informed": {
+      "path": "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+      "sha256": "332140a614761620b3d204e371323e66ba1b5fe5003e3c0fc262858c6fac3691"
+    }
+  },
+  "cells": [
+    {
+      "id": "parsing_parsing_cell-map512-generate_ir-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-generate_ir-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "51714.270",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "51541.486",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "51655.681",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "51851.168",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "51759.656",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "53399.070",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "49886.864",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "51854.846",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "51657.485",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "51714.270",
+            "wall_q1_us": "51655.681",
+            "wall_q3_us": "51851.168",
+            "wall_worst_us": "53399.070",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 7.637629595119506,
+        "peak_rss_bytes": 2099875840,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-map512-emit_source-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-emit_source-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "workload": "map512",
+            "subject": "emit_source",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "workload": "map512",
+            "subject": "emit_source",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "workload": "map512",
+            "subject": "emit_source",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "335093.146",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "335372.493",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "336802.573",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "335053.645",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "337617.648",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "334886.703",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "335224.468",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "335526.759",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "335732.908",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "335372.493",
+            "wall_q1_us": "335093.146",
+            "wall_q3_us": "335732.908",
+            "wall_worst_us": "337617.648",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 10.29973000800237,
+        "peak_rss_bytes": 2099834880,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-map512-read_source-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-read_source-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "workload": "map512",
+            "subject": "read_source",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "workload": "map512",
+            "subject": "read_source",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "workload": "map512",
+            "subject": "read_source",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "6880.041",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "6936.096",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "6953.980",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "6885.862",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "6935.535",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "6916.339",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "6914.105",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "6911.750",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "6907.803",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "6914.105",
+            "wall_q1_us": "6907.803",
+            "wall_q3_us": "6935.535",
+            "wall_worst_us": "6953.980",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 6.635100941872224,
+        "peak_rss_bytes": 2099851264,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-map512-dijkstra_prepared-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "114206.702",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "114175.985",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "114182.496",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "114236.328",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "114129.317",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "114153.854",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "114141.571",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "114225.339",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "114880.371",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "114182.496",
+            "wall_q1_us": "114153.854",
+            "wall_q3_us": "114225.339",
+            "wall_worst_us": "114880.371",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 12.695207779994234,
+        "peak_rss_bytes": 2148864000,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-map512-file_to_dijkstra-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "4404076.035",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "4947558.198",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "4289983.746",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "4385593.511",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "4370097.971",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "4341673.975",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "4356545.249",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "4329621.387",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "4330920.984",
+            "cpu_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "4356545.249",
+            "wall_q1_us": "4330920.984",
+            "wall_q3_us": "4385593.511",
+            "wall_worst_us": "4947558.198",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 60.04651116998866,
+        "peak_rss_bytes": 3365167104,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-generate_ir-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-generate_ir-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "29107.036",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "29757.419",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "27040.177",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "28349.751",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "27149.052",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "26501.444",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "27130.427",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "26728.140",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "27123.274",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "27130.427",
+            "wall_q1_us": "27040.177",
+            "wall_q3_us": "28349.751",
+            "wall_worst_us": "29757.419",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 4.575683997012675,
+        "peak_rss_bytes": 1261371392,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-emit_source-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-emit_source-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "101327.013",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "101423.266",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "101296.206",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "101666.293",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "101547.409",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "101995.032",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "102137.660",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "101635.675",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "102764.159",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "101635.675",
+            "wall_q1_us": "101423.266",
+            "wall_q3_us": "101995.032",
+            "wall_worst_us": "102764.159",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 5.240098695969209,
+        "peak_rss_bytes": 1261543424,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-read_source-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-read_source-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "2907.271",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "3588.833",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "3432.859",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "3557.073",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "3419.464",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "3547.665",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "3416.789",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "3555.650",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "3416.218",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "3432.859",
+            "wall_q1_us": "3416.789",
+            "wall_q3_us": "3555.650",
+            "wall_worst_us": "3588.833",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 4.119438975118101,
+        "peak_rss_bytes": 1261416448,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "116835.305",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "117408.814",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "116855.723",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "117156.279",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "116871.613",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "117742.873",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "118165.159",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "117199.781",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "116921.197",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "117156.279",
+            "wall_q1_us": "116871.613",
+            "wall_q3_us": "117408.814",
+            "wall_worst_us": "118165.159",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 8.544926368864253,
+        "peak_rss_bytes": 1301598208,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "phase": "process_baseline",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "phase": "source_validated",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "phase": "complete",
+            "working_set_b": "NA",
+            "self_peak_b": "NA"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "2873386.445",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "3160957.924",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "2931090.481",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "2954563.358",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "2928568.104",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "2910282.607",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "2901112.623",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "2891874.529",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "2879313.220",
+            "cpu_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "2910282.607",
+            "wall_q1_us": "2891874.529",
+            "wall_q3_us": "2931090.481",
+            "wall_worst_us": "3160957.924",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 38.451421048957855,
+        "peak_rss_bytes": 2026160128,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    }
+  ],
+  "correctness": [
+    {
+      "suite": "informed",
+      "log": "correctness-informed.log",
+      "wall_seconds": 0.050454377895221114,
+      "peak_rss_bytes": 86016,
+      "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+      "command": [
+        "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/native-informed-stages",
+        "--test-threads=1"
+      ],
+      "exit_code": 0
+    }
+  ]
+}

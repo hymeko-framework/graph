@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "suite": "parsing",
+  "runs": 1,
+  "smoke": true,
+  "platform": "arm64",
+  "created_at": "2026-09-06T18:01:04+0200",
+  "source_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+  "dirty_paths": "?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/arm64-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.log\n?? reports/parsing-benchmarks/2026-09-06/native-smoke-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/native-smoke/",
+  "host": "Amaterasu",
+  "os": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
+  "cpu_count": 16,
+  "python": "3.12.3",
+  "metric_scope": "iteration batch means, not request tails",
+  "runtime": {
+    "image": "sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9",
+    "emulated": true
+  },
+  "binaries": {
+    "informed": {
+      "path": "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/arm64-informed",
+      "sha256": "86ea398ba85dae10e463873750b0a8776626dd0916312100a03d480b7ae032b4"
+    }
+  },
+  "cells": [],
+  "correctness": [
+    {
+      "suite": "informed",
+      "log": "correctness-informed.log",
+      "wall_seconds": 0.3528279510792345,
+      "peak_rss_bytes": 21413888,
+      "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+      "command": [
+        "docker",
+        "run",
+        "--name",
+        "hymeko-graph-cell-1974430",
+        "--network=none",
+        "--platform=linux/arm64",
+        "--memory=16g",
+        "--memory-swap=16g",
+        "--cpus=4",
+        "--read-only",
+        "-v",
+        "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/arm64-informed:/bench:ro",
+        "-v",
+        "/home/kyberszittya/hymeko-distributed-admission-fix-20260905/dependency-refresh/consumers/graph/target/cross-platform-bench/qemu-aarch64-static:/qemu:ro",
+        "-e",
+        "RAYON_NUM_THREADS=4",
+        "--entrypoint",
+        "/qemu",
+        "sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9",
+        "/bench",
+        "--test-threads=1"
+      ],
+      "exit_code": 0
+    }
+  ]
+}

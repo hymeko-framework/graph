@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	workload=map128	subject=ast_to_ir	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=1695870	fnv1a64=7081903807066336403	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	workload=map128	subject=ast_to_ir	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	ordinal=0	repetitions=1	wall_us=54094.410	cpu_us=NA	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	ordinal=1	repetitions=1	wall_us=69872.855	cpu_us=NA	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	ordinal=2	repetitions=1	wall_us=46162.967	cpu_us=NA	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	ordinal=3	repetitions=1	wall_us=45531.325	cpu_us=NA	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	ordinal=4	repetitions=1	wall_us=45200.542	cpu_us=NA	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	ordinal=5	repetitions=1	wall_us=45633.649	cpu_us=NA	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	ordinal=6	repetitions=1	wall_us=45410.357	cpu_us=NA	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	ordinal=7	repetitions=1	wall_us=60816.842	cpu_us=NA	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	ordinal=8	repetitions=1	wall_us=45703.109	cpu_us=NA	checksum=7081903807066336403
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	section=parsing	workload=map128	subject=ast_to_ir	status=OK	nodes=16384	arcs=32108	incidences=64216	warmups=2	samples=9	repetitions=1	wall_median_us=45703.109	wall_q1_us=45531.325	wall_q3_us=54094.410	wall_worst_us=69872.855	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=7081903807066336403
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map128-ast_to_ir-t1	workload=map128	subject=ast_to_ir	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 1.07s
+

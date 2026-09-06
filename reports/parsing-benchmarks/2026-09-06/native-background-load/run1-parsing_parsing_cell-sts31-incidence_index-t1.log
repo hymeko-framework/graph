@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	workload=sts31	subject=incidence_index	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=4555	fnv1a64=17684314030900720808	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	workload=sts31	subject=incidence_index	phase=source_validated	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	ordinal=0	repetitions=1	wall_us=1.463	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	ordinal=1	repetitions=1	wall_us=1.583	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	ordinal=2	repetitions=1	wall_us=1.553	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	ordinal=3	repetitions=1	wall_us=1.523	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	ordinal=4	repetitions=1	wall_us=1.452	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	ordinal=5	repetitions=1	wall_us=1.453	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	ordinal=6	repetitions=1	wall_us=1.473	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	ordinal=7	repetitions=1	wall_us=1.453	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	ordinal=8	repetitions=1	wall_us=1.443	cpu_us=NA	checksum=17684314030900720808
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	section=parsing	workload=sts31	subject=incidence_index	status=OK	nodes=31	arcs=155	incidences=465	warmups=2	samples=9	repetitions=1	wall_median_us=1.463	wall_q1_us=1.453	wall_q3_us=1.523	wall_worst_us=1.583	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=17684314030900720808
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-sts31-incidence_index-t1	workload=sts31	subject=incidence_index	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+

@@ -1,0 +1,21 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-map512-compile-t1	workload=map512	subject=compile	phase=process_baseline	working_set_b=NA	self_peak_b=NA
+EVIDENCE_SOURCE	bytes=30032345	fnv1a64=7563304331229731996	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-map512-compile-t1	workload=map512	subject=compile	phase=source_validated	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell has been running for over 60 seconds
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	ordinal=0	repetitions=1	wall_us=4302241.463	cpu_us=NA	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	ordinal=1	repetitions=1	wall_us=4938903.563	cpu_us=NA	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	ordinal=2	repetitions=1	wall_us=4301413.413	cpu_us=NA	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	ordinal=3	repetitions=1	wall_us=4338506.782	cpu_us=NA	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	ordinal=4	repetitions=1	wall_us=4280965.853	cpu_us=NA	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	ordinal=5	repetitions=1	wall_us=4222622.211	cpu_us=NA	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	ordinal=6	repetitions=1	wall_us=4247463.159	cpu_us=NA	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	ordinal=7	repetitions=1	wall_us=4219346.715	cpu_us=NA	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	ordinal=8	repetitions=1	wall_us=4264471.204	cpu_us=NA	checksum=7563304331229731996
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-map512-compile-t1	section=parsing	workload=map512	subject=compile	status=OK	nodes=262144	arcs=521632	incidences=1043264	warmups=2	samples=9	repetitions=1	wall_median_us=4280965.853	wall_q1_us=4247463.159	wall_q3_us=4302241.463	wall_worst_us=4938903.563	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=7563304331229731996
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-map512-compile-t1	workload=map512	subject=compile	phase=complete	working_set_b=NA	self_peak_b=NA
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 61.24s
+
