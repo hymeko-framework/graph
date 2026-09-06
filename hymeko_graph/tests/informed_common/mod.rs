@@ -282,6 +282,7 @@ pub fn plus_ref(target: DeclId, weight: Option<f64>) -> SignedRefR {
         target,
         anno: AnnoR::default(),
         weights: weight.map(|w| vec![ValueR::Num(w)]),
+        direction: Default::default(),
     })
 }
 
@@ -312,6 +313,7 @@ fn signed_ref(sign: SignMode, member_idx: usize, target: usize, weight: Option<f
         target: DeclId::new(target),
         anno: AnnoR::default(),
         weights: weight.map(|w| vec![ValueR::Num(w)]),
+        direction: Default::default(),
     };
     match sign {
         SignMode::AllPlus => SignedRefR::Plus(atom),
@@ -407,11 +409,13 @@ pub fn grid_ir(w: usize, h: usize) -> Ir {
                     target: DeclId::new(a),
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 }),
                 SignedRefR::Plus(RefAtomR {
                     target: DeclId::new(b),
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 }),
             ],
         });
@@ -470,6 +474,7 @@ pub fn steiner_sts_ir(m: u32) -> Ir {
                             target: DeclId::new(p - 1),
                             anno: AnnoR::default(),
                             weights: None,
+                            direction: Default::default(),
                         })
                     })
                     .collect();
@@ -535,11 +540,13 @@ fn ir_from_rank2(n: usize, edges: &[(usize, usize)]) -> Ir {
                     target: DeclId::new(a),
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 }),
                 SignedRefR::Plus(RefAtomR {
                     target: DeclId::new(b),
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 }),
             ],
         });
@@ -589,6 +596,7 @@ pub fn uniform_rank_k_ir(seed: u64, n: usize, m_edges: usize, k: usize) -> Ir {
                     target: DeclId::new(t),
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 })
             })
             .collect();
@@ -617,6 +625,7 @@ pub fn two_disjoint_sts_ir(m: u32) -> (Ir, usize) {
                     target: DeclId::new(r.target().raw() + off),
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 })
             })
             .collect();
@@ -686,6 +695,7 @@ fn weighted_edge(ir: &mut Ir, a: usize, b: usize, w: f64) {
             target: DeclId::new(t),
             anno: AnnoR::default(),
             weights: Some(vec![ValueR::Num(w)]),
+            direction: Default::default(),
         })
     };
     ir.arcs.push(ArcRec {
@@ -771,6 +781,7 @@ pub fn map_grid_with_transport_ir(
                 target: DeclId::new(s),
                 anno: AnnoR::default(),
                 weights: Some(vec![ValueR::Num(fare)]),
+                direction: Default::default(),
             })
         })
         .collect();

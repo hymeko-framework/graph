@@ -66,6 +66,7 @@ fn two_components(m: usize, k: usize) -> Ir {
                         target: DeclId::new(base + j),
                         anno: AnnoR::default(),
                         weights: None,
+                        direction: Default::default(),
                     })
                 })
                 .collect();

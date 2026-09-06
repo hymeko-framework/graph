@@ -34,6 +34,7 @@ fn plus(target: DeclId) -> SignedRefR {
         target,
         anno: AnnoR::default(),
         weights: None,
+        direction: Default::default(),
     })
 }
 

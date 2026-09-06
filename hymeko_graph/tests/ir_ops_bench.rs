@@ -70,11 +70,13 @@ fn build_path(n: usize) -> Ir {
                     target: decls[i - 1],
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 }),
                 SignedRefR::Plus(RefAtomR {
                     target: decls[i],
                     anno: AnnoR::default(),
                     weights: None,
+                    direction: Default::default(),
                 }),
             ],
         });
@@ -195,11 +197,13 @@ fn measure_ir_ops() {
                             target: decls[2 * i],
                             anno: AnnoR::default(),
                             weights: None,
+                            direction: Default::default(),
                         }),
                         SignedRefR::Plus(RefAtomR {
                             target: decls[2 * i + 1],
                             anno: AnnoR::default(),
                             weights: None,
+                            direction: Default::default(),
                         }),
                     ],
                 });
