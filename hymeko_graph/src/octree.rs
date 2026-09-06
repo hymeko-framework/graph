@@ -44,10 +44,118 @@ pub struct Octree {
     pub cells: Vec<Cell>,
     /// Unique root index.
     pub root: usize,
-    /// Only these cells carry independent physical state.
+    /// Active frontier: only these cells carry independent physical state.
     pub leaves: Vec<usize>,
 }
+
+/// A proposed active frontier and its conservative geometric transfer weights.
+pub struct Remesh {
+    /// Same authored cells and Core identities, with a different active frontier.
+    pub tree: Octree,
+    /// Old active index, new active index, intersection volume.
+    pub overlaps: Vec<(usize, usize, f64)>,
+}
 impl Octree {
+    /// Refine active cells or coarsen parents of eight active siblings.
+    /// Inputs are indexes into `cells`, not indexes into `leaves`.
+    /// Balancing may undo a coarsening request by refining its coarse side.
+    /// No undeclared cells are created. Invalid requests leave this tree untouched.
+    pub fn adapt(&self, refine: &[usize], coarsen: &[usize]) -> Result<Remesh, String> {
+        let mut active: HashSet<_> = self.leaves.iter().copied().collect();
+        let mut requested = HashSet::new();
+        for &i in refine {
+            if !requested.insert(i) || !active.contains(&i) || self.cells[i].children.len() != 8 {
+                return Err(
+                    "refinement requires distinct active cells with eight authored children".into(),
+                );
+            }
+        }
+        for &i in coarsen {
+            let c = self.cells.get(i).ok_or("unknown coarsening parent")?;
+            if !requested.insert(i)
+                || c.children.len() != 8
+                || c.children
+                    .iter()
+                    .any(|j| !active.contains(j) || refine.contains(j))
+            {
+                return Err(
+                    "coarsening requires eight active siblings without conflicting refinement"
+                        .into(),
+                );
+            }
+        }
+        for &i in coarsen {
+            for j in &self.cells[i].children {
+                active.remove(j);
+            }
+            active.insert(i);
+        }
+        for &i in refine {
+            active.remove(&i);
+            active.extend(&self.cells[i].children);
+        }
+        let mut tree = self.clone();
+        for _ in 0..=16 {
+            tree.set_frontier(&active)?;
+            let mut split = HashSet::new();
+            for (a, b, _, _) in tree.faces() {
+                let (a, b) = (tree.leaves[a], tree.leaves[b]);
+                if tree.cells[a].depth.abs_diff(tree.cells[b].depth) > 1 {
+                    split.insert(if tree.cells[a].depth < tree.cells[b].depth {
+                        a
+                    } else {
+                        b
+                    });
+                }
+            }
+            if split.is_empty() {
+                let mut overlaps = Vec::new();
+                for (a, &i) in self.leaves.iter().enumerate() {
+                    for (b, &j) in tree.leaves.iter().enumerate() {
+                        let (a_cell, b_cell) = (&self.cells[i], &tree.cells[j]);
+                        let v: f64 = (0..3)
+                            .map(|k| {
+                                (a_cell.hi[k].min(b_cell.hi[k]) - a_cell.lo[k].max(b_cell.lo[k]))
+                                    .max(0.0)
+                            })
+                            .product();
+                        if v > 0.0 {
+                            overlaps.push((a, b, v));
+                        }
+                    }
+                }
+                return Ok(Remesh { tree, overlaps });
+            }
+            for i in split {
+                if tree.cells[i].children.len() != 8 {
+                    return Err("2:1 closure needs undeclared children".into());
+                }
+                active.remove(&i);
+                active.extend(&tree.cells[i].children);
+            }
+        }
+        Err("2:1 closure exceeded the authored depth bound".into())
+    }
+
+    fn set_frontier(&mut self, active: &HashSet<usize>) -> Result<(), String> {
+        let mut leaves = Vec::new();
+        let mut stack = vec![self.root];
+        while let Some(i) = stack.pop() {
+            if active.contains(&i) {
+                leaves.push(i);
+            } else if self.cells[i].children.is_empty() {
+                return Err("active frontier does not cover the domain".into());
+            } else {
+                stack.extend(self.cells[i].children.iter().rev());
+            }
+        }
+        if leaves.len() != active.len() || leaves.len() > 1024 {
+            return Err("overlapping or oversized active frontier".into());
+        }
+        self.leaves = leaves;
+        Ok(())
+    }
+
     /// Read `lo`/`hi` cell bounds and `kind "subdivision"` signed hyperedges.
     /// A subdivision has one negative parent and exactly eight positive children.
     pub fn from_ir(ir: &Ir, it: &Interner, scope: DeclId) -> Result<Self, String> {
@@ -349,5 +457,109 @@ mod tests {
         ] {
             assert!(read(&invalid).is_err(), "invalid subdivision was accepted");
         }
+    }
+
+    #[test]
+    fn active_frontier_round_trip_preserves_identity_and_volume() {
+        let tree = read(&source(true)).unwrap();
+        let parent = tree
+            .cells
+            .iter()
+            .position(|c| c.depth == 1 && !c.children.is_empty())
+            .unwrap();
+        let coarse = tree.adapt(&[], &[parent]).unwrap();
+        assert_eq!(coarse.tree.leaves.len(), 8);
+        assert_eq!(coarse.overlaps.iter().map(|x| x.2).sum::<f64>(), 8.0);
+        let restored = coarse.tree.adapt(&[parent], &[]).unwrap();
+        assert_eq!(restored.tree.leaves, tree.leaves);
+        assert_eq!(
+            restored
+                .tree
+                .cells
+                .iter()
+                .map(|c| c.decl)
+                .collect::<Vec<_>>(),
+            tree.cells.iter().map(|c| c.decl).collect::<Vec<_>>()
+        );
+        assert!(tree.adapt(&[usize::MAX], &[]).is_err());
+        assert!(tree.adapt(&[], &[usize::MAX]).is_err());
+        assert!(tree.adapt(&[], &[parent, parent]).is_err());
+        assert!(coarse.tree.adapt(&[parent], &[tree.root]).is_err());
+        assert!(tree.adapt(&[tree.leaves[0]], &[]).is_err());
+        assert_eq!(tree.adapt(&[], &[]).unwrap().tree.leaves, tree.leaves);
+    }
+
+    #[test]
+    fn balancing_refines_the_coarse_neighbor_and_can_cancel_coarsening() {
+        fn cell(s: &mut String, path: &str, lo: [f64; 3], side: f64, depth: usize) {
+            s.push_str(&format!(
+                "{} {{ lo {:?}; hi {:?};",
+                path.rsplit('.').next().unwrap(),
+                lo,
+                lo.map(|v| v + side)
+            ));
+            if depth < 3 {
+                for i in 0..8 {
+                    let child_lo =
+                        std::array::from_fn(|k| lo[k] + (((i >> (2 - k)) & 1) as f64) * side * 0.5);
+                    cell(s, &format!("{path}.c{i}"), child_lo, side * 0.5, depth + 1);
+                }
+                s.push_str(&format!("@split {{ kind \"subdivision\"; (-{path}"));
+                for i in 0..8 {
+                    s.push_str(&format!(",+{path}.c{i}"));
+                }
+                s.push_str("); }");
+            }
+            s.push('}');
+        }
+        let mut text = "fixture {}\ndomain {".to_owned();
+        cell(&mut text, "domain.root", [0.0; 3], 2.0, 0);
+        text.push('}');
+        let mut tree = read(&text).unwrap();
+        assert_eq!(tree.leaves.len(), 512);
+        for depth in [2, 1] {
+            let coarsen: Vec<_> = tree
+                .cells
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| c.depth == depth)
+                .map(|(i, _)| i)
+                .collect();
+            tree = tree.adapt(&[], &coarsen).unwrap().tree;
+        }
+        assert_eq!(tree.leaves.len(), 8);
+        let corner = tree
+            .cells
+            .iter()
+            .position(|c| c.depth == 1 && c.lo == [0.0; 3])
+            .unwrap();
+        tree = tree.adapt(&[corner], &[]).unwrap().tree;
+        let boundary = tree
+            .cells
+            .iter()
+            .position(|c| c.depth == 2 && c.lo == [0.5, 0.0, 0.0])
+            .unwrap();
+        tree = tree.adapt(&[boundary], &[]).unwrap().tree;
+        assert_eq!(tree.leaves.len(), 29);
+        assert!(tree.faces().iter().all(|&(a, b, _, _)| {
+            tree.cells[tree.leaves[a]]
+                .depth
+                .abs_diff(tree.cells[tree.leaves[b]].depth)
+                <= 1
+        }));
+        assert_eq!(
+            tree.leaves
+                .iter()
+                .map(|&i| tree.cells[i].volume())
+                .sum::<f64>(),
+            8.0
+        );
+        let neighbor = tree
+            .cells
+            .iter()
+            .position(|c| c.depth == 1 && c.lo == [1.0, 0.0, 0.0])
+            .unwrap();
+        let balanced = tree.adapt(&[], &[neighbor]).unwrap();
+        assert_eq!(balanced.tree.leaves, tree.leaves);
     }
 }

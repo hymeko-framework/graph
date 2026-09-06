@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**7 package(s), 510 public symbol(s).**
+**7 package(s), 512 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -127,6 +127,7 @@ _No public symbols._
 - `PrunerStats` — `hymeko_graph/src/pruner.rs`
 - `QuadtreeAnchors` — `hymeko_graph/src/quadtree.rs`
 - `QuadtreeConfig` — `hymeko_graph/src/quadtree.rs`
+- `Remesh` — `hymeko_graph/src/octree.rs`
 - `SComponentLabeling` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `SamplerScratch` — `hymeko_graph/src/cycle_sampler.rs`
 - `SearchStats` — `hymeko_graph/src/direct_ir/informed.rs`
@@ -175,6 +176,7 @@ _No public symbols._
 
 - `accepted` — `hymeko_graph/src/matroid/levi.rs`
 - `accepted` — `hymeko_graph/src/matroid/rank2.rs`
+- `adapt` — `hymeko_graph/src/octree.rs`
 - `arcs` — `hymeko_graph/src/direct_ir/dual.rs`
 - `arcs` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `arity` — `hymeko_graph/src/hyper_operator.rs`
