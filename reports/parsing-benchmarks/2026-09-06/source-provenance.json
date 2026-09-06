@@ -1,0 +1,85 @@
+{
+  "source_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+  "measurement_contract": "Separate measured phases; totals measured directly, never summed. Generation constructs fixture IR. File phases use warm OS cache. Final returned-object destruction excluded. RSS includes fixture construction and validation.",
+  "external_map_import": "not measured; current inputs are deterministic graph fixtures",
+  "phases": [
+    {
+      "algorithm": "generate_ir",
+      "phase": "generation",
+      "scope": "Deterministic generator including direct IR construction"
+    },
+    {
+      "algorithm": "emit_source",
+      "phase": "serialization",
+      "scope": "Existing fixture IR to resident HyMeKo UTF-8 text"
+    },
+    {
+      "algorithm": "read_source",
+      "phase": "input",
+      "scope": "Local HyMeKo file to resident UTF-8 text; warm OS cache"
+    },
+    {
+      "algorithm": "parse_ast",
+      "phase": "parsing",
+      "scope": "Resident HyMeKo UTF-8 text to AST"
+    },
+    {
+      "algorithm": "ast_to_ir",
+      "phase": "graph_build",
+      "scope": "Existing AST through interning, resolution and IR lowering"
+    },
+    {
+      "algorithm": "compile",
+      "phase": "compilation",
+      "scope": "Resident text through fresh ModuleStore compilation, validation and hashes"
+    },
+    {
+      "algorithm": "incidence_index",
+      "phase": "preparation",
+      "scope": "Compiled IR to incidence index"
+    },
+    {
+      "algorithm": "dijkstra_prepared",
+      "phase": "execution",
+      "scope": "Dijkstra on compiled IR and ready index; fresh query workspace"
+    },
+    {
+      "algorithm": "source_to_dijkstra",
+      "phase": "end_to_end_memory",
+      "scope": "Resident text through fresh compilation, index and Dijkstra"
+    },
+    {
+      "algorithm": "file_to_dijkstra",
+      "phase": "end_to_end_file",
+      "scope": "Local file read, fresh compilation, index and Dijkstra; warm OS cache"
+    }
+  ],
+  "platforms": [
+    {
+      "schema_version": 1,
+      "suite": "parsing",
+      "runs": 3,
+      "smoke": false,
+      "platform": "windows",
+      "created_at": "2026-09-06T17:54:26+0200",
+      "source_commit": "f6bd760de9552325525dfa03e5e5c96dac9f010c",
+      "dirty_paths": "?? reports/parsing-benchmarks/2026-09-06/windows-driver.log\n?? reports/parsing-benchmarks/2026-09-06/windows-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/windows-driver.stderr.log\n?? reports/parsing-benchmarks/2026-09-06/windows-interrupted/",
+      "host": "KyberSaman",
+      "os": "Windows-11-10.0.26200-SP0",
+      "cpu_count": 24,
+      "python": "3.12.13",
+      "metric_scope": "iteration batch means, not request tails",
+      "runtime": {
+        "image": null,
+        "emulated": false
+      },
+      "binaries": {
+        "informed": {
+          "path": "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "sha256": "336fc38d7612b9428b09675e94515cfc6282e53b9d059e441f7f882a583480f7"
+        }
+      },
+      "complete": true
+    }
+  ]
+}

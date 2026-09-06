@@ -1,6 +1,31 @@
 # Parsing and graph ingestion benchmarks
 
-Created-at: 2026-09-06 17:43 +02:00. Updated 18:43 +02:00. Status: phase breakdown verified; supplementary measurements and publication pending.
+Created-at: 2026-09-06 17:43 +02:00. Updated 19:06 +02:00. Status: Windows phase breakdown measured and verified; website deployment in progress. Remote publication awaits the user's host-condition decision.
+
+## Current delivery and measurement conditions
+
+Windows: the original five phases and five additional phases are complete on all 16 inputs, each with three fresh processes and 27 retained samples. Published tables contain 80 + 80 rows, 480 processes and 4320 samples. Additional stages took 633.4 seconds of process wall time. Largest observed process peak in the added matrix: 3080.4 MiB, below 16 GiB. Nine Python verification tests passed, including stage labels, exact artifact hashes and independent nested-campaign manifests. The web application's 11 tests, AST structure gate, strict TypeScript check and production build passed.
+
+The new data retain two measured source revisions: original stages f6bd760de9552325525dfa03e5e5c96dac9f010c, added stages 5fcfb5f2e52bd4584a08aa2fd2f97620085dbc6a. The Graph production sources, dependencies and fixture topology are unchanged. The original and additional Windows campaigns ran in different time windows, so their overlapping totals must not be subtracted to infer I/O cost or an optimization. A same-binary paired source/file-to-query smoke is recorded separately under `stages/windows-scope-control`; it is a diagnostic control, not pooled into the three-process table.
+
+Amaterasu: the original native five-stage matrix finished 240/240 processes. These results are retained on the remote checkout but excluded from the new published tables pending the user's reply. An actual two-second `/proc` CPU probe at 18:54:44 found existing Ruby/Gazebo at 142.9% CPU, Python at 14.3%, parameter_bridge at 12.3% and robot_state_publisher at 9.9%, with affinity spanning all 16 logical CPUs. This is not a quiet measurement host. The user was asked whether clearly labelled observations under this background load are acceptable or a quiet rerun is required. No other application's processes were changed. The agent's own supervising shell was stopped before ARM64 launch and removed after native completion; no benchmark coordinator is left paused. ARM64 full parse matrix and native supplementary stages remain pending. Existing ARM64 smoke results are not promoted to full-campaign results.
+
+For map512 (30,032,345 source bytes), Windows pooled medians are:
+
+| Measured operation | Median (ms) |
+|---|---:|
+| Generator including direct IR construction | 112.309 |
+| Existing IR to source text | 272.503 |
+| Local file read, warm OS cache | 10.602 |
+| Resident text to AST | 810.570 |
+| Existing AST to IR | 1577.792 |
+| Full resident-source compilation | 4618.918 |
+| Incidence index | 23.637 |
+| Dijkstra on ready index, fresh workspace | 112.072 |
+| Resident source to query result | 4882.580 |
+| Local file to query result, warm OS cache | 4326.479 |
+
+These operations overlap and are not additive components of one captured execution. The full distributions, source identities and timing boundaries are in the CSV/JSON evidence. Process memory includes fixture generation, validation and retained sampler objects; it is not a per-stage memory delta. No external road-map importer was added.
 
 ## Explicit phase breakdown
 

@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	workload=sts1023	subject=ast_to_ir	phase=process_baseline	working_set_b=5021696	self_peak_b=5021696
+EVIDENCE_SOURCE	bytes=6123540	fnv1a64=14820121925083322683	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	workload=sts1023	subject=ast_to_ir	phase=source_validated	working_set_b=80936960	self_peak_b=512372736
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	ordinal=0	repetitions=1	wall_us=320669.100	cpu_us=312500.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	ordinal=1	repetitions=1	wall_us=321859.800	cpu_us=328125.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	ordinal=2	repetitions=1	wall_us=314302.700	cpu_us=296875.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	ordinal=3	repetitions=1	wall_us=315826.900	cpu_us=312500.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	ordinal=4	repetitions=1	wall_us=317139.500	cpu_us=296875.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	ordinal=5	repetitions=1	wall_us=313521.100	cpu_us=312500.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	ordinal=6	repetitions=1	wall_us=305223.200	cpu_us=281250.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	ordinal=7	repetitions=1	wall_us=311500.500	cpu_us=296875.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	ordinal=8	repetitions=1	wall_us=295713.200	cpu_us=281250.000	checksum=14820121925083322683
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	section=parsing	workload=sts1023	subject=ast_to_ir	status=OK	nodes=1023	arcs=174251	incidences=522753	warmups=2	samples=9	repetitions=1	wall_median_us=314302.700	wall_q1_us=311500.500	wall_q3_us=317139.500	wall_worst_us=321859.800	cpu_median_us=296875.000	cpu_q1_us=296875.000	cpu_q3_us=312500.000	cpu_worst_us=328125.000	checksum=14820121925083322683
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-sts1023-ast_to_ir-t1	workload=sts1023	subject=ast_to_ir	phase=complete	working_set_b=100884480	self_peak_b=601120768
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 5.15s
+

@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-grid6-compile-t1	workload=grid6	subject=compile	phase=process_baseline	working_set_b=5021696	self_peak_b=5021696
+EVIDENCE_SOURCE	bytes=1529	fnv1a64=16763265845343142648	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-grid6-compile-t1	workload=grid6	subject=compile	phase=source_validated	working_set_b=5558272	self_peak_b=5681152
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	ordinal=0	repetitions=1	wall_us=297.300	cpu_us=0.000	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	ordinal=1	repetitions=1	wall_us=234.200	cpu_us=0.000	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	ordinal=2	repetitions=1	wall_us=232.000	cpu_us=0.000	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	ordinal=3	repetitions=1	wall_us=249.600	cpu_us=0.000	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	ordinal=4	repetitions=1	wall_us=194.800	cpu_us=0.000	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	ordinal=5	repetitions=1	wall_us=317.600	cpu_us=0.000	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	ordinal=6	repetitions=1	wall_us=297.200	cpu_us=0.000	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	ordinal=7	repetitions=1	wall_us=203.500	cpu_us=0.000	checksum=16763265845343142648
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	ordinal=8	repetitions=1	wall_us=242.700	cpu_us=0.000	checksum=16763265845343142648
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-grid6-compile-t1	section=parsing	workload=grid6	subject=compile	status=OK	nodes=36	arcs=60	incidences=120	warmups=2	samples=9	repetitions=1	wall_median_us=242.700	wall_q1_us=232.000	wall_q3_us=297.200	wall_worst_us=317.600	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=16763265845343142648
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-grid6-compile-t1	workload=grid6	subject=compile	phase=complete	working_set_b=5980160	self_peak_b=6389760
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+

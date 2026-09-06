@@ -23,8 +23,11 @@ class EvidenceContract(unittest.TestCase):
                     (original / platform / "campaign.json").read_bytes()
                 )
             summary = CampaignSummary(root)
+            (root / "stages").mkdir()
+            (root / "stages" / "independent-evidence.json").write_text("{}")
             summary.write(("windows", "native"))
             manifest = json.loads((root / "artifacts-manifest.json").read_text())
+            self.assertNotIn("stages/independent-evidence.json", manifest)
             for filename, expected in manifest.items():
                 self.assertEqual(
                     hashlib.sha256((root / filename).read_bytes()).hexdigest(), expected

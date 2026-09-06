@@ -1,0 +1,1861 @@
+{
+  "schema_version": 1,
+  "suite": "parsing",
+  "runs": 1,
+  "smoke": true,
+  "phases": [
+    "generate_ir",
+    "emit_source",
+    "read_source",
+    "dijkstra_prepared",
+    "file_to_dijkstra"
+  ],
+  "platform": "windows",
+  "created_at": "2026-09-06T18:44:11+0200",
+  "source_commit": "5fcfb5f2e52bd4584a08aa2fd2f97620085dbc6a",
+  "driver_commit": "5fcfb5f2e52bd4584a08aa2fd2f97620085dbc6a",
+  "driver_sha256": "17ebbe4451a32e80b43b60b03c7a89b6eb0339f9a7ec15c6a1985681dcf3a81c",
+  "dirty_paths": "?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.aux\n?? docs/plans/2026-09-06-cross-platform-benchmarks/plan.log\n?? reports/parsing-benchmarks/2026-09-06/windows-driver.log\n?? reports/parsing-benchmarks/2026-09-06/windows-driver.pid\n?? reports/parsing-benchmarks/2026-09-06/windows-driver.stderr.log\n?? reports/parsing-benchmarks/2026-09-06/windows-interrupted/\n?? reports/parsing-benchmarks/2026-09-06/windows/",
+  "host": "KyberSaman",
+  "os": "Windows-11-10.0.26200-SP0",
+  "cpu_count": 24,
+  "python": "3.12.13",
+  "metric_scope": "iteration batch means, not request tails",
+  "runtime": {
+    "image": null,
+    "emulated": false
+  },
+  "binaries": {
+    "informed": {
+      "path": "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+      "sha256": "6265ec9293594ca8aec5a3af26c972895b49b7fd0121599483f54b8a26b200d3"
+    }
+  },
+  "cells": [
+    {
+      "id": "parsing_parsing_cell-map512-generate_ir-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-generate_ir-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "phase": "source_validated",
+            "working_set_b": "279830528",
+            "self_peak_b": "2038304768"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "phase": "complete",
+            "working_set_b": "331173888",
+            "self_peak_b": "2038304768"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "126454.600",
+            "cpu_us": "93750.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "126594.400",
+            "cpu_us": "140625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "122906.100",
+            "cpu_us": "125000.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "117391.200",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "109722.900",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "99419.400",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "98703.600",
+            "cpu_us": "93750.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "100844.700",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "99625.000",
+            "cpu_us": "93750.000",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-generate_ir-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "generate_ir",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "109722.900",
+            "wall_q1_us": "99625.000",
+            "wall_q3_us": "122906.100",
+            "wall_worst_us": "126594.400",
+            "cpu_median_us": "109375.000",
+            "cpu_q1_us": "93750.000",
+            "cpu_q3_us": "109375.000",
+            "cpu_worst_us": "140625.000",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 7.125,
+        "peak_rss_bytes": 2038304768,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-map512-emit_source-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-emit_source-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "workload": "map512",
+            "subject": "emit_source",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "workload": "map512",
+            "subject": "emit_source",
+            "phase": "source_validated",
+            "working_set_b": "279822336",
+            "self_peak_b": "2038280192"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "workload": "map512",
+            "subject": "emit_source",
+            "phase": "complete",
+            "working_set_b": "281042944",
+            "self_peak_b": "2038280192"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "277900.800",
+            "cpu_us": "281250.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "297833.700",
+            "cpu_us": "296875.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "271715.800",
+            "cpu_us": "265625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "279064.000",
+            "cpu_us": "265625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "281957.100",
+            "cpu_us": "281250.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "284780.300",
+            "cpu_us": "296875.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "284273.800",
+            "cpu_us": "281250.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "287857.000",
+            "cpu_us": "281250.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "276909.400",
+            "cpu_us": "281250.000",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-emit_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "emit_source",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "281957.100",
+            "wall_q1_us": "277900.800",
+            "wall_q3_us": "284780.300",
+            "wall_worst_us": "297833.700",
+            "cpu_median_us": "281250.000",
+            "cpu_q1_us": "281250.000",
+            "cpu_q3_us": "281250.000",
+            "cpu_worst_us": "296875.000",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 8.375,
+        "peak_rss_bytes": 2038280192,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-map512-read_source-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-read_source-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "workload": "map512",
+            "subject": "read_source",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "workload": "map512",
+            "subject": "read_source",
+            "phase": "source_validated",
+            "working_set_b": "279851008",
+            "self_peak_b": "2038341632"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "workload": "map512",
+            "subject": "read_source",
+            "phase": "complete",
+            "working_set_b": "279896064",
+            "self_peak_b": "2038341632"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "11287.200",
+            "cpu_us": "15625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "10377.000",
+            "cpu_us": "15625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "10702.800",
+            "cpu_us": "0.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "10728.600",
+            "cpu_us": "15625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "10397.000",
+            "cpu_us": "15625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "11055.500",
+            "cpu_us": "15625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "11081.500",
+            "cpu_us": "0.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "10567.500",
+            "cpu_us": "15625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "10562.100",
+            "cpu_us": "15625.000",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-read_source-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "read_source",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "10702.800",
+            "wall_q1_us": "10562.100",
+            "wall_q3_us": "11055.500",
+            "wall_worst_us": "11287.200",
+            "cpu_median_us": "15625.000",
+            "cpu_q1_us": "15625.000",
+            "cpu_q3_us": "15625.000",
+            "cpu_worst_us": "15625.000",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 5.344000000011874,
+        "peak_rss_bytes": 2038341632,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-map512-dijkstra_prepared-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "phase": "source_validated",
+            "working_set_b": "279695360",
+            "self_peak_b": "2038345728"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "phase": "complete",
+            "working_set_b": "285331456",
+            "self_peak_b": "2041622528"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "109148.200",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "108954.300",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "113621.900",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "108512.600",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "111734.400",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "111295.800",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "108770.700",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "109574.600",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "107292.200",
+            "cpu_us": "109375.000",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "dijkstra_prepared",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "109148.200",
+            "wall_q1_us": "108770.700",
+            "wall_q3_us": "111295.800",
+            "wall_worst_us": "113621.900",
+            "cpu_median_us": "109375.000",
+            "cpu_q1_us": "109375.000",
+            "cpu_q3_us": "109375.000",
+            "cpu_worst_us": "109375.000",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 10.85999999998603,
+        "peak_rss_bytes": 2041622528,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-map512-file_to_dijkstra-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "phase": "source_validated",
+            "working_set_b": "279654400",
+            "self_peak_b": "2038403072"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "phase": "complete",
+            "working_set_b": "338751488",
+            "self_peak_b": "3229986816"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "30032345",
+            "fnv1a64": "7563304331229731996",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "4193579.100",
+            "cpu_us": "4171875.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "4233769.600",
+            "cpu_us": "4218750.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "4133605.200",
+            "cpu_us": "4109375.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "4143424.800",
+            "cpu_us": "4093750.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "4116554.800",
+            "cpu_us": "4093750.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "4214924.600",
+            "cpu_us": "4218750.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "4138680.900",
+            "cpu_us": "4140625.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "4266440.500",
+            "cpu_us": "4250000.000",
+            "checksum": "7563304331229731996"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "4171807.100",
+            "cpu_us": "4156250.000",
+            "checksum": "7563304331229731996"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-map512-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "map512",
+            "subject": "file_to_dijkstra",
+            "status": "OK",
+            "nodes": "262144",
+            "arcs": "521632",
+            "incidences": "1043264",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "4171807.100",
+            "wall_q1_us": "4138680.900",
+            "wall_q3_us": "4214924.600",
+            "wall_worst_us": "4266440.500",
+            "cpu_median_us": "4156250.000",
+            "cpu_q1_us": "4109375.000",
+            "cpu_q3_us": "4218750.000",
+            "cpu_worst_us": "4250000.000",
+            "checksum": "7563304331229731996"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 56.35899999999674,
+        "peak_rss_bytes": 3229986816,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-generate_ir-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-generate_ir-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "phase": "process_baseline",
+            "working_set_b": "5013504",
+            "self_peak_b": "5013504"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "phase": "source_validated",
+            "working_set_b": "180973568",
+            "self_peak_b": "1203830784"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "phase": "complete",
+            "working_set_b": "214753280",
+            "self_peak_b": "1203830784"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "72603.300",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "74899.600",
+            "cpu_us": "78125.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "64372.900",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "72665.100",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "70539.500",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "72199.900",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "68344.400",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "62004.100",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "61456.500",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-generate_ir-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "generate_ir",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "70539.500",
+            "wall_q1_us": "64372.900",
+            "wall_q3_us": "72603.300",
+            "wall_worst_us": "74899.600",
+            "cpu_median_us": "62500.000",
+            "cpu_q1_us": "62500.000",
+            "cpu_q3_us": "62500.000",
+            "cpu_worst_us": "78125.000",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 4.23399999999674,
+        "peak_rss_bytes": 1203830784,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-emit_source-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-emit_source-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "phase": "source_validated",
+            "working_set_b": "181014528",
+            "self_peak_b": "1203798016"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "phase": "complete",
+            "working_set_b": "182333440",
+            "self_peak_b": "1203798016"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "60976.000",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "64709.600",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "62832.800",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "67831.600",
+            "cpu_us": "78125.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "64192.700",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "72828.000",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "64258.300",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "64951.400",
+            "cpu_us": "78125.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "67784.400",
+            "cpu_us": "62500.000",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-emit_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "emit_source",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "64709.600",
+            "wall_q1_us": "64192.700",
+            "wall_q3_us": "67784.400",
+            "wall_worst_us": "72828.000",
+            "cpu_median_us": "62500.000",
+            "cpu_q1_us": "62500.000",
+            "cpu_q3_us": "62500.000",
+            "cpu_worst_us": "78125.000",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 3.8280000000086147,
+        "peak_rss_bytes": 1203798016,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-read_source-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-read_source-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "phase": "source_validated",
+            "working_set_b": "181014528",
+            "self_peak_b": "1203793920"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "phase": "complete",
+            "working_set_b": "181080064",
+            "self_peak_b": "1203793920"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "4783.300",
+            "cpu_us": "0.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "4970.400",
+            "cpu_us": "0.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "5655.200",
+            "cpu_us": "15625.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "5366.300",
+            "cpu_us": "0.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "5014.400",
+            "cpu_us": "0.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "5249.200",
+            "cpu_us": "15625.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "5167.200",
+            "cpu_us": "0.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "5369.500",
+            "cpu_us": "0.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "5278.500",
+            "cpu_us": "15625.000",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-read_source-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "read_source",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "5249.200",
+            "wall_q1_us": "5014.400",
+            "wall_q3_us": "5366.300",
+            "wall_worst_us": "5655.200",
+            "cpu_median_us": "NA",
+            "cpu_q1_us": "NA",
+            "cpu_q3_us": "NA",
+            "cpu_worst_us": "NA",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 3.2809999999881256,
+        "peak_rss_bytes": 1203793920,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "phase": "process_baseline",
+            "working_set_b": "5013504",
+            "self_peak_b": "5013504"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "phase": "source_validated",
+            "working_set_b": "180883456",
+            "self_peak_b": "1203507200"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "phase": "complete",
+            "working_set_b": "183885824",
+            "self_peak_b": "1204633600"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "false",
+            "final_drop": "false",
+            "file_cache": "NA"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "96873.900",
+            "cpu_us": "93750.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "96017.900",
+            "cpu_us": "93750.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "97784.100",
+            "cpu_us": "109375.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "95629.000",
+            "cpu_us": "93750.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "94617.800",
+            "cpu_us": "93750.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "98584.600",
+            "cpu_us": "93750.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "103143.000",
+            "cpu_us": "109375.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "101474.100",
+            "cpu_us": "93750.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "101513.500",
+            "cpu_us": "93750.000",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-dijkstra_prepared-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "dijkstra_prepared",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "97784.100",
+            "wall_q1_us": "96017.900",
+            "wall_q3_us": "101474.100",
+            "wall_worst_us": "103143.000",
+            "cpu_median_us": "93750.000",
+            "cpu_q1_us": "93750.000",
+            "cpu_q3_us": "93750.000",
+            "cpu_worst_us": "109375.000",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 7.062000000005355,
+        "peak_rss_bytes": 1204633600,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+      "run": 1,
+      "log": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1.log",
+      "records": {
+        "PHASE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "phase": "process_baseline",
+            "working_set_b": "5017600",
+            "self_peak_b": "5017600"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "phase": "source_validated",
+            "working_set_b": "180768768",
+            "self_peak_b": "1203257344"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "phase": "complete",
+            "working_set_b": "217088000",
+            "self_peak_b": "1833115648"
+          }
+        ],
+        "SOURCE": [
+          {
+            "bytes": "16022102",
+            "fnv1a64": "9661416703183500483",
+            "projection": "graph_fixture_v1",
+            "file_io": "true",
+            "final_drop": "false",
+            "file_cache": "warm"
+          }
+        ],
+        "SAMPLE": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "0",
+            "repetitions": "1",
+            "wall_us": "2771757.600",
+            "cpu_us": "2718750.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "1",
+            "repetitions": "1",
+            "wall_us": "2694132.000",
+            "cpu_us": "2671875.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "2",
+            "repetitions": "1",
+            "wall_us": "2682790.400",
+            "cpu_us": "2640625.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "3",
+            "repetitions": "1",
+            "wall_us": "2664353.300",
+            "cpu_us": "2671875.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "4",
+            "repetitions": "1",
+            "wall_us": "2664223.300",
+            "cpu_us": "2656250.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "5",
+            "repetitions": "1",
+            "wall_us": "2669379.900",
+            "cpu_us": "2656250.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "6",
+            "repetitions": "1",
+            "wall_us": "2654865.800",
+            "cpu_us": "2578125.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "7",
+            "repetitions": "1",
+            "wall_us": "2637570.500",
+            "cpu_us": "2625000.000",
+            "checksum": "9661416703183500483"
+          },
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "ordinal": "8",
+            "repetitions": "1",
+            "wall_us": "2655767.200",
+            "cpu_us": "2656250.000",
+            "checksum": "9661416703183500483"
+          }
+        ],
+        "CELL": [
+          {
+            "run": "run1-parsing_parsing_cell-random1e6-file_to_dijkstra-t1",
+            "section": "parsing",
+            "workload": "random1e6",
+            "subject": "file_to_dijkstra",
+            "status": "OK",
+            "nodes": "200000",
+            "arcs": "333333",
+            "incidences": "999999",
+            "warmups": "2",
+            "samples": "9",
+            "repetitions": "1",
+            "wall_median_us": "2664353.300",
+            "wall_q1_us": "2655767.200",
+            "wall_q3_us": "2682790.400",
+            "wall_worst_us": "2771757.600",
+            "cpu_median_us": "2656250.000",
+            "cpu_q1_us": "2640625.000",
+            "cpu_q3_us": "2671875.000",
+            "cpu_worst_us": "2718750.000",
+            "checksum": "9661416703183500483"
+          }
+        ]
+      },
+      "resources": {
+        "wall_seconds": 34.796999999991385,
+        "peak_rss_bytes": 1833115648,
+        "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+        "command": [
+          "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+          "parsing::parsing_cell",
+          "--exact",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      }
+    }
+  ],
+  "correctness": [
+    {
+      "suite": "informed",
+      "log": "correctness-informed.log",
+      "wall_seconds": 0.0779999999795109,
+      "peak_rss_bytes": 6762496,
+      "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+      "command": [
+        "D:\\hakiko_ai_ws\\03_implementation\\hymeko_framework\\graph\\target\\release\\deps\\informed_berge_evidence-5404063906fe2968.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "complete": true
+}

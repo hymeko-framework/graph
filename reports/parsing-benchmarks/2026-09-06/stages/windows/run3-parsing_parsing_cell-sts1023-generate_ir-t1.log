@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	workload=sts1023	subject=generate_ir	phase=process_baseline	working_set_b=5017600	self_peak_b=5017600
+EVIDENCE_SOURCE	bytes=6123540	fnv1a64=14820121925083322683	projection=graph_fixture_v1	file_io=false	final_drop=false	file_cache=NA
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	workload=sts1023	subject=generate_ir	phase=source_validated	working_set_b=81502208	self_peak_b=512098304
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	ordinal=0	repetitions=1	wall_us=23892.900	cpu_us=15625.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	ordinal=1	repetitions=1	wall_us=24895.300	cpu_us=31250.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	ordinal=2	repetitions=1	wall_us=23695.200	cpu_us=15625.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	ordinal=3	repetitions=1	wall_us=22999.500	cpu_us=15625.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	ordinal=4	repetitions=1	wall_us=22825.400	cpu_us=15625.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	ordinal=5	repetitions=1	wall_us=22486.700	cpu_us=31250.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	ordinal=6	repetitions=1	wall_us=21897.200	cpu_us=31250.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	ordinal=7	repetitions=1	wall_us=21171.900	cpu_us=31250.000	checksum=14820121925083322683
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	ordinal=8	repetitions=1	wall_us=21317.400	cpu_us=31250.000	checksum=14820121925083322683
+EVIDENCE_CELL	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	section=parsing	workload=sts1023	subject=generate_ir	status=OK	nodes=1023	arcs=174251	incidences=522753	warmups=2	samples=9	repetitions=1	wall_median_us=22825.400	wall_q1_us=21897.200	wall_q3_us=23695.200	wall_worst_us=24895.300	cpu_median_us=31250.000	cpu_q1_us=15625.000	cpu_q3_us=31250.000	cpu_worst_us=31250.000	checksum=14820121925083322683
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-sts1023-generate_ir-t1	workload=sts1023	subject=generate_ir	phase=complete	working_set_b=97976320	self_peak_b=512098304
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 1.44s
+

@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	workload=transport128	subject=ast_to_ir	phase=process_baseline	working_set_b=5021696	self_peak_b=5021696
+EVIDENCE_SOURCE	bytes=1713341	fnv1a64=16538832663855003189	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	workload=transport128	subject=ast_to_ir	phase=source_validated	working_set_b=22712320	self_peak_b=134836224
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	ordinal=0	repetitions=1	wall_us=72722.000	cpu_us=78125.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	ordinal=1	repetitions=1	wall_us=76567.900	cpu_us=78125.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	ordinal=2	repetitions=1	wall_us=88043.200	cpu_us=78125.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	ordinal=3	repetitions=1	wall_us=72070.000	cpu_us=78125.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	ordinal=4	repetitions=1	wall_us=83205.600	cpu_us=78125.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	ordinal=5	repetitions=1	wall_us=79867.100	cpu_us=78125.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	ordinal=6	repetitions=1	wall_us=72685.100	cpu_us=78125.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	ordinal=7	repetitions=1	wall_us=74885.100	cpu_us=78125.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	ordinal=8	repetitions=1	wall_us=73226.800	cpu_us=62500.000	checksum=16538832663855003189
+EVIDENCE_CELL	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	section=parsing	workload=transport128	subject=ast_to_ir	status=OK	nodes=16384	arcs=32513	incidences=65040	warmups=2	samples=9	repetitions=1	wall_median_us=74885.100	wall_q1_us=72722.000	wall_q3_us=79867.100	wall_worst_us=88043.200	cpu_median_us=78125.000	cpu_q1_us=78125.000	cpu_q3_us=78125.000	cpu_worst_us=78125.000	checksum=16538832663855003189
+EVIDENCE_PHASE	run=run3-parsing_parsing_cell-transport128-ast_to_ir-t1	workload=transport128	subject=ast_to_ir	phase=complete	working_set_b=25210880	self_peak_b=165253120
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 1.29s
+

@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	workload=grid200_d80	subject=ast_to_ir	phase=process_baseline	working_set_b=5021696	self_peak_b=5021696
+EVIDENCE_SOURCE	bytes=2801182	fnv1a64=9727528773937826764	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	workload=grid200_d80	subject=ast_to_ir	phase=source_validated	working_set_b=38895616	self_peak_b=254648320
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	ordinal=0	repetitions=1	wall_us=157594.400	cpu_us=156250.000	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	ordinal=1	repetitions=1	wall_us=149556.700	cpu_us=140625.000	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	ordinal=2	repetitions=1	wall_us=148057.100	cpu_us=140625.000	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	ordinal=3	repetitions=1	wall_us=140174.100	cpu_us=125000.000	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	ordinal=4	repetitions=1	wall_us=143677.900	cpu_us=125000.000	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	ordinal=5	repetitions=1	wall_us=153818.000	cpu_us=156250.000	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	ordinal=6	repetitions=1	wall_us=145486.700	cpu_us=140625.000	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	ordinal=7	repetitions=1	wall_us=144948.800	cpu_us=140625.000	checksum=9727528773937826764
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	ordinal=8	repetitions=1	wall_us=147017.000	cpu_us=140625.000	checksum=9727528773937826764
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	section=parsing	workload=grid200_d80	subject=ast_to_ir	status=OK	nodes=40000	arcs=79600	incidences=159200	warmups=2	samples=9	repetitions=1	wall_median_us=147017.000	wall_q1_us=144948.800	wall_q3_us=149556.700	wall_worst_us=157594.400	cpu_median_us=140625.000	cpu_q1_us=140625.000	cpu_q3_us=140625.000	cpu_worst_us=156250.000	checksum=9727528773937826764
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-grid200_d80-ast_to_ir-t1	workload=grid200_d80	subject=ast_to_ir	phase=complete	working_set_b=45068288	self_peak_b=283820032
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 2.36s
+

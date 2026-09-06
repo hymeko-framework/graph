@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	workload=grid256	subject=parse_ast	phase=process_baseline	working_set_b=5017600	self_peak_b=5017600
+EVIDENCE_SOURCE	bytes=4666838	fnv1a64=1028608474074712194	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	workload=grid256	subject=parse_ast	phase=source_validated	working_set_b=58990592	self_peak_b=399310848
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	ordinal=0	repetitions=1	wall_us=142502.900	cpu_us=156250.000	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	ordinal=1	repetitions=1	wall_us=137166.100	cpu_us=125000.000	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	ordinal=2	repetitions=1	wall_us=135805.500	cpu_us=140625.000	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	ordinal=3	repetitions=1	wall_us=136400.800	cpu_us=140625.000	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	ordinal=4	repetitions=1	wall_us=130939.500	cpu_us=140625.000	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	ordinal=5	repetitions=1	wall_us=132276.900	cpu_us=125000.000	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	ordinal=6	repetitions=1	wall_us=131203.500	cpu_us=125000.000	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	ordinal=7	repetitions=1	wall_us=136243.900	cpu_us=140625.000	checksum=1028608474074712194
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	ordinal=8	repetitions=1	wall_us=130040.300	cpu_us=125000.000	checksum=1028608474074712194
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	section=parsing	workload=grid256	subject=parse_ast	status=OK	nodes=65536	arcs=130560	incidences=261120	warmups=2	samples=9	repetitions=1	wall_median_us=135805.500	wall_q1_us=131203.500	wall_q3_us=136400.800	wall_worst_us=142502.900	cpu_median_us=140625.000	cpu_q1_us=125000.000	cpu_q3_us=140625.000	cpu_worst_us=156250.000	checksum=1028608474074712194
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-grid256-parse_ast-t1	workload=grid256	subject=parse_ast	phase=complete	working_set_b=68456448	self_peak_b=399310848
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 2.72s
+

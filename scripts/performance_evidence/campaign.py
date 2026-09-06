@@ -806,11 +806,15 @@ class CampaignSummary:
         (self.root / "source-provenance.json").write_text(
             json.dumps(provenance, indent=2) + "\n", encoding="utf8"
         )
+        # Each nested campaign owns its own manifest and measured revision.
+        files = list(self.root.glob("*"))
+        for platform_name in platforms:
+            files.extend((self.root / platform_name).rglob("*"))
         manifest = {
             str(p.relative_to(self.root)).replace("\\", "/"): hashlib.sha256(
                 p.read_bytes()
             ).hexdigest()
-            for p in sorted(self.root.rglob("*"))
+            for p in sorted(files)
             if p.is_file() and p.name != "artifacts-manifest.json"
         }
         (self.root / "artifacts-manifest.json").write_text(

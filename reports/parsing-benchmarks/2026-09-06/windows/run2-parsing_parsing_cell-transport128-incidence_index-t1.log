@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	workload=transport128	subject=incidence_index	phase=process_baseline	working_set_b=5021696	self_peak_b=5021696
+EVIDENCE_SOURCE	bytes=1713341	fnv1a64=16538832663855003189	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	workload=transport128	subject=incidence_index	phase=source_validated	working_set_b=23044096	self_peak_b=135249920
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	ordinal=0	repetitions=1	wall_us=429.100	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	ordinal=1	repetitions=1	wall_us=621.200	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	ordinal=2	repetitions=1	wall_us=420.200	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	ordinal=3	repetitions=1	wall_us=444.300	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	ordinal=4	repetitions=1	wall_us=407.600	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	ordinal=5	repetitions=1	wall_us=413.900	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	ordinal=6	repetitions=1	wall_us=424.100	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	ordinal=7	repetitions=1	wall_us=422.800	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	ordinal=8	repetitions=1	wall_us=454.800	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	section=parsing	workload=transport128	subject=incidence_index	status=OK	nodes=16384	arcs=32513	incidences=65040	warmups=2	samples=9	repetitions=1	wall_median_us=424.100	wall_q1_us=420.200	wall_q3_us=444.300	wall_worst_us=621.200	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=16538832663855003189
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-transport128-incidence_index-t1	workload=transport128	subject=incidence_index	phase=complete	working_set_b=23785472	self_peak_b=135999488
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.53s
+

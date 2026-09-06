@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map512-emit_source-t1	workload=map512	subject=emit_source	phase=process_baseline	working_set_b=5013504	self_peak_b=5013504
+EVIDENCE_SOURCE	bytes=30032345	fnv1a64=7563304331229731996	projection=graph_fixture_v1	file_io=false	final_drop=false	file_cache=NA
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map512-emit_source-t1	workload=map512	subject=emit_source	phase=source_validated	working_set_b=279822336	self_peak_b=2038288384
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	ordinal=0	repetitions=1	wall_us=277919.700	cpu_us=281250.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	ordinal=1	repetitions=1	wall_us=275206.100	cpu_us=281250.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	ordinal=2	repetitions=1	wall_us=271703.800	cpu_us=265625.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	ordinal=3	repetitions=1	wall_us=274162.800	cpu_us=281250.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	ordinal=4	repetitions=1	wall_us=277067.800	cpu_us=281250.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	ordinal=5	repetitions=1	wall_us=272106.500	cpu_us=265625.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	ordinal=6	repetitions=1	wall_us=272503.000	cpu_us=281250.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	ordinal=7	repetitions=1	wall_us=274242.300	cpu_us=265625.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	ordinal=8	repetitions=1	wall_us=273352.100	cpu_us=281250.000	checksum=7563304331229731996
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-map512-emit_source-t1	section=parsing	workload=map512	subject=emit_source	status=OK	nodes=262144	arcs=521632	incidences=1043264	warmups=2	samples=9	repetitions=1	wall_median_us=274162.800	wall_q1_us=272503.000	wall_q3_us=275206.100	wall_worst_us=277919.700	cpu_median_us=281250.000	cpu_q1_us=265625.000	cpu_q3_us=281250.000	cpu_worst_us=281250.000	checksum=7563304331229731996
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map512-emit_source-t1	workload=map512	subject=emit_source	phase=complete	working_set_b=281042944	self_peak_b=2038288384
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 8.21s
+

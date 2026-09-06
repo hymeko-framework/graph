@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	workload=map128	subject=file_to_dijkstra	phase=process_baseline	working_set_b=5013504	self_peak_b=5013504
+EVIDENCE_SOURCE	bytes=1695870	fnv1a64=7081903807066336403	projection=graph_fixture_v1	file_io=true	final_drop=false	file_cache=warm
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	workload=map128	subject=file_to_dijkstra	phase=source_validated	working_set_b=23580672	self_peak_b=134324224
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	ordinal=0	repetitions=1	wall_us=205682.900	cpu_us=203125.000	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	ordinal=1	repetitions=1	wall_us=195801.900	cpu_us=203125.000	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	ordinal=2	repetitions=1	wall_us=193433.500	cpu_us=187500.000	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	ordinal=3	repetitions=1	wall_us=192827.000	cpu_us=187500.000	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	ordinal=4	repetitions=1	wall_us=192584.000	cpu_us=203125.000	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	ordinal=5	repetitions=1	wall_us=189687.400	cpu_us=187500.000	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	ordinal=6	repetitions=1	wall_us=185875.100	cpu_us=187500.000	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	ordinal=7	repetitions=1	wall_us=184148.900	cpu_us=187500.000	checksum=7081903807066336403
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	ordinal=8	repetitions=1	wall_us=184700.300	cpu_us=187500.000	checksum=7081903807066336403
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	section=parsing	workload=map128	subject=file_to_dijkstra	status=OK	nodes=16384	arcs=32108	incidences=64216	warmups=2	samples=9	repetitions=1	wall_median_us=192584.000	wall_q1_us=185875.100	wall_q3_us=193433.500	wall_worst_us=205682.900	cpu_median_us=187500.000	cpu_q1_us=187500.000	cpu_q3_us=203125.000	cpu_worst_us=203125.000	checksum=7081903807066336403
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-map128-file_to_dijkstra-t1	workload=map128	subject=file_to_dijkstra	phase=complete	working_set_b=28061696	self_peak_b=208203776
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 2.60s
+

@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	workload=transport128	subject=dijkstra_prepared	phase=process_baseline	working_set_b=5013504	self_peak_b=5013504
+EVIDENCE_SOURCE	bytes=1713341	fnv1a64=16538832663855003189	projection=graph_fixture_v1	file_io=false	final_drop=false	file_cache=NA
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	workload=transport128	subject=dijkstra_prepared	phase=source_validated	working_set_b=22695936	self_peak_b=134742016
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	ordinal=0	repetitions=1	wall_us=1203.100	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	ordinal=1	repetitions=1	wall_us=1033.600	cpu_us=15625.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	ordinal=2	repetitions=1	wall_us=1103.200	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	ordinal=3	repetitions=1	wall_us=1076.500	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	ordinal=4	repetitions=1	wall_us=1102.200	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	ordinal=5	repetitions=1	wall_us=1084.900	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	ordinal=6	repetitions=1	wall_us=1094.800	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	ordinal=7	repetitions=1	wall_us=1141.500	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_SAMPLE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	ordinal=8	repetitions=1	wall_us=1107.000	cpu_us=0.000	checksum=16538832663855003189
+EVIDENCE_CELL	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	section=parsing	workload=transport128	subject=dijkstra_prepared	status=OK	nodes=16384	arcs=32513	incidences=65040	warmups=2	samples=9	repetitions=1	wall_median_us=1102.200	wall_q1_us=1084.900	wall_q3_us=1107.000	wall_worst_us=1203.100	cpu_median_us=NA	cpu_q1_us=NA	cpu_q3_us=NA	cpu_worst_us=NA	checksum=16538832663855003189
+EVIDENCE_PHASE	run=run2-parsing_parsing_cell-transport128-dijkstra_prepared-t1	workload=transport128	subject=dijkstra_prepared	phase=complete	working_set_b=23396352	self_peak_b=135426048
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.49s
+

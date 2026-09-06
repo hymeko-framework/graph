@@ -1,0 +1,20 @@
+
+running 1 test
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	workload=map512	subject=parse_ast	phase=process_baseline	working_set_b=5021696	self_peak_b=5021696
+EVIDENCE_SOURCE	bytes=30032345	fnv1a64=7563304331229731996	projection=graph_fixture_v1	file_io=false	final_drop=false
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	workload=map512	subject=parse_ast	phase=source_validated	working_set_b=279564288	self_peak_b=2038276096
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	ordinal=0	repetitions=1	wall_us=790577.500	cpu_us=781250.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	ordinal=1	repetitions=1	wall_us=799168.800	cpu_us=781250.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	ordinal=2	repetitions=1	wall_us=770219.300	cpu_us=765625.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	ordinal=3	repetitions=1	wall_us=766022.300	cpu_us=781250.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	ordinal=4	repetitions=1	wall_us=764985.900	cpu_us=765625.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	ordinal=5	repetitions=1	wall_us=761718.700	cpu_us=765625.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	ordinal=6	repetitions=1	wall_us=766921.000	cpu_us=765625.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	ordinal=7	repetitions=1	wall_us=744647.400	cpu_us=750000.000	checksum=7563304331229731996
+EVIDENCE_SAMPLE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	ordinal=8	repetitions=1	wall_us=748234.300	cpu_us=750000.000	checksum=7563304331229731996
+EVIDENCE_CELL	run=run1-parsing_parsing_cell-map512-parse_ast-t1	section=parsing	workload=map512	subject=parse_ast	status=OK	nodes=262144	arcs=521632	incidences=1043264	warmups=2	samples=9	repetitions=1	wall_median_us=766022.300	wall_q1_us=761718.700	wall_q3_us=770219.300	wall_worst_us=799168.800	cpu_median_us=765625.000	cpu_q1_us=765625.000	cpu_q3_us=781250.000	cpu_worst_us=781250.000	checksum=7563304331229731996
+EVIDENCE_PHASE	run=run1-parsing_parsing_cell-map512-parse_ast-t1	workload=map512	subject=parse_ast	phase=complete	working_set_b=331251712	self_peak_b=2038276096
+test parsing::parsing_cell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 15.63s
+
