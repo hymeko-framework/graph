@@ -31,7 +31,7 @@ class Cell:
 
     @property
     def key(self) -> str:
-        return f"{self.test}-{self.workload}-{self.subject}-t{self.threads}"
+        return f"{self.test.replace('::', '_')}-{self.workload}-{self.subject}-t{self.threads}"
 
     def environment(self, run: int) -> dict[str, str]:
         prefix = "INFORMED_BERGE" if self.suite == "informed" else "EVIDENCE"
@@ -48,22 +48,65 @@ class Cell:
         return result
 
     @staticmethod
-    def matrix() -> list[Cell]:
+    def matrix(suite: str = "graph") -> list[Cell]:
+        if suite == "parsing":
+            workloads = (
+                "grid200_d80",
+                "map32",
+                "map128",
+                "map512",
+                "corridor128",
+                "transport128",
+                "path65k",
+                "grid256",
+                "sts1023",
+                "random1e6",
+                "layered10",
+                "grid6",
+                "grid5",
+                "sts31",
+                "parallel16",
+                "sts511",
+            )
+            phases = (
+                "parse_ast",
+                "ast_to_ir",
+                "compile",
+                "incidence_index",
+                "source_to_dijkstra",
+            )
+            return [
+                Cell("informed", "parsing::parsing_cell", w, p)
+                for w in workloads
+                for p in phases
+            ]
+        if suite != "graph":
+            raise ValueError(f"unknown suite: {suite}")
         cells = []
         for distance in (20, 40, 80):
             for subject in ("dijkstra_unit", "astar_l1", "astar_l2"):
-                cells.append(Cell("informed", "search_cell", f"grid200_d{distance}", subject))
+                cells.append(
+                    Cell("informed", "search_cell", f"grid200_d{distance}", subject)
+                )
         for workload in ("map32", "map128", "map512", "corridor128", "transport128"):
             subjects = (
                 ("dijkstra_weight", "astar_discrete")
                 if workload == "transport128"
-                else ("dijkstra_weight", "astar_metric", "astar_discrete", "astar_combined")
+                else (
+                    "dijkstra_weight",
+                    "astar_metric",
+                    "astar_discrete",
+                    "astar_combined",
+                )
             )
             cells.extend(Cell("informed", "search_cell", workload, s) for s in subjects)
-            cells.append(Cell("informed", "preparation_cell", workload, "discrete_hops"))
+            cells.append(
+                Cell("informed", "preparation_cell", workload, "discrete_hops")
+            )
         for workload in ("path65k", "grid256", "sts1023", "random1e6", "map512"):
             cells.extend(
-                Cell("informed", "shortest_cell", workload, s) for s in ("bfs_shortest", "dijkstra_unit")
+                Cell("informed", "shortest_cell", workload, s)
+                for s in ("bfs_shortest", "dijkstra_unit")
             )
         for workload, subject in (
             ("layered10", "paths_goal"),
@@ -80,7 +123,8 @@ class Cell:
                 for s in ("reachable", "components", "rank2", "levi")
             )
         cells.extend(
-            Cell("algorithm", "operation_cell", "sts511", "independent_query_batch", t) for t in (1, 2, 4)
+            Cell("algorithm", "operation_cell", "sts511", "independent_query_batch", t)
+            for t in (1, 2, 4)
         )
         return cells
 
@@ -114,19 +158,36 @@ class Evidence:
         if not all(math.isfinite(v) and v > 0 for v in values):
             raise ValueError("invalid sample duration")
         for field, value in zip(
-            ("q1", "median", "q3", "worst"), (values[2], values[4], values[6], values[8])
+            ("q1", "median", "q3", "worst"),
+            (values[2], values[4], values[6], values[8]),
         ):
             if abs(float(cell[f"wall_{field}_us"]) - value) > 0.002:
                 raise ValueError(f"raw/summary {field} mismatch")
         results = records.get("RESULT", [])
         if (
             cell.get("section")
-            in {"informed_search", "berge_shortest", "berge_enumeration", "heuristic_preparation"}
+            in {
+                "informed_search",
+                "berge_shortest",
+                "berge_enumeration",
+                "heuristic_preparation",
+            }
             and len(results) != 1
         ):
             raise ValueError("missing informed-client result")
-        if results and (len(results) != 1 or results[0]["path_hash"] != cell["checksum"]):
+        if results and (
+            len(results) != 1 or results[0]["path_hash"] != cell["checksum"]
+        ):
             raise ValueError("result/cell mismatch")
+        if cell.get("section") == "parsing":
+            sources = records.get("SOURCE", [])
+            if len(sources) != 1 or int(sources[0]["bytes"]) <= 0:
+                raise ValueError("missing parsing input provenance")
+            if (
+                sources[0]["fnv1a64"] != cell["checksum"]
+                or sources[0]["projection"] != "graph_fixture_v1"
+            ):
+                raise ValueError("parsing input identity mismatch")
         return records
 
 
@@ -135,8 +196,9 @@ class ProcessRunner:
         self.args = args
         self.binaries = {
             "informed": Path(args.informed).resolve(),
-            "algorithm": Path(args.algorithm).resolve(),
         }
+        if args.suite == "graph":
+            self.binaries["algorithm"] = Path(args.algorithm).resolve()
 
     @staticmethod
     def memory(pid: int, process: subprocess.Popen) -> int:
@@ -160,18 +222,27 @@ class ProcessRunner:
             counters = Counters()
             counters.cb = ctypes.sizeof(counters)
             ok = ctypes.windll.psapi.GetProcessMemoryInfo(
-                ctypes.c_void_p(int(process._handle)), ctypes.byref(counters), counters.cb
+                ctypes.c_void_p(int(process._handle)),
+                ctypes.byref(counters),
+                counters.cb,
             )
             return int(counters.peak) if ok else 0
         try:
             fields = Path(f"/proc/{pid}/status").read_text().splitlines()
             return max(
-                (int(x.split()[1]) * 1024 for x in fields if x.startswith(("VmHWM:", "VmRSS:"))), default=0
+                (
+                    int(x.split()[1]) * 1024
+                    for x in fields
+                    if x.startswith(("VmHWM:", "VmRSS:"))
+                ),
+                default=0,
             )
         except (FileNotFoundError, ProcessLookupError):
             return 0
 
-    def invoke(self, suite: str, arguments: list[str], environment: dict[str, str], log: Path) -> dict:
+    def invoke(
+        self, suite: str, arguments: list[str], environment: dict[str, str], log: Path
+    ) -> dict:
         binary = self.binaries[suite]
         command = [str(binary), *arguments]
         container = None
@@ -213,7 +284,14 @@ class ProcessRunner:
                 if container:
                     for _ in range(40):
                         probe = subprocess.run(
-                            ["docker", "inspect", "--format", "{{.State.Pid}}", container],
+                            check=False,
+                            args=[
+                                "docker",
+                                "inspect",
+                                "--format",
+                                "{{.State.Pid}}",
+                                container,
+                            ],
                             capture_output=True,
                             text=True,
                         )
@@ -225,10 +303,13 @@ class ProcessRunner:
                     peak = max(peak, self.memory(pid, process))
                     elapsed = time.monotonic() - start
                     if peak > 16 * 1024**3 or elapsed > self.args.timeout:
-                        raise RuntimeError(f"resource budget exceeded: {log.name}, {peak} B, {elapsed:.1f}s")
+                        raise RuntimeError(
+                            f"resource budget exceeded: {log.name}, {peak} B, {elapsed:.1f}s"
+                        )
                     if elapsed >= next_update:
                         print(
-                            f"  running {log.name}: {elapsed:.1f}s, peak {peak / 1024**2:.1f} MiB", flush=True
+                            f"  running {log.name}: {elapsed:.1f}s, peak {peak / 1024**2:.1f} MiB",
+                            flush=True,
                         )
                         next_update += 10
                     time.sleep(0.05)
@@ -240,7 +321,11 @@ class ProcessRunner:
                     process.kill()
                     process.wait()
                 if container:
-                    subprocess.run(["docker", "rm", "-f", container], capture_output=True, check=True)
+                    subprocess.run(
+                        ["docker", "rm", "-f", container],
+                        capture_output=True,
+                        check=True,
+                    )
         return {
             "wall_seconds": time.monotonic() - start,
             "peak_rss_bytes": peak,
@@ -264,10 +349,13 @@ class Campaign:
         repo = Path(__file__).resolve().parents[2]
 
         def git(*arguments: str) -> str:
-            return subprocess.check_output(["git", "-C", str(repo), *arguments], text=True).strip()
+            return subprocess.check_output(
+                ["git", "-C", str(repo), *arguments], text=True
+            ).strip()
 
         result = {
             "schema_version": 1,
+            "suite": self.args.suite,
             "platform": self.args.platform,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "source_commit": git("rev-parse", "HEAD"),
@@ -282,7 +370,10 @@ class Campaign:
                 "emulated": self.args.platform == "arm64",
             },
             "binaries": {
-                k: {"path": str(v), "sha256": hashlib.sha256(v.read_bytes()).hexdigest()}
+                k: {
+                    "path": str(v),
+                    "sha256": hashlib.sha256(v.read_bytes()).hexdigest(),
+                }
                 for k, v in self.runner.binaries.items()
             },
             "cells": [],
@@ -291,11 +382,28 @@ class Campaign:
         for suite in self.runner.binaries:
             print(f"correctness {suite}", flush=True)
             log = self.output / f"correctness-{suite}.log"
-            observation = self.runner.invoke(suite, ["--test-threads=1"], {"RAYON_NUM_THREADS": "4"}, log)
-            result["correctness"].append({"suite": suite, "log": log.name, **observation})
-        cells = Cell.matrix()
+            observation = self.runner.invoke(
+                suite, ["--test-threads=1"], {"RAYON_NUM_THREADS": "4"}, log
+            )
+            result["correctness"].append(
+                {"suite": suite, "log": log.name, **observation}
+            )
+        cells = Cell.matrix(self.args.suite)
         if self.args.smoke:
-            cells = [cells[0], cells[-1]]
+            cells = (
+                [
+                    c
+                    for c in cells
+                    if (c.workload, c.subject)
+                    in {
+                        ("map512", "compile"),
+                        ("random1e6", "compile"),
+                        ("grid5", "parse_ast"),
+                    }
+                ]
+                if self.args.suite == "parsing"
+                else [cells[0], cells[-1]]
+            )
         previous = {}
         for run in range(1, self.args.runs + 1):
             order = cells if run % 2 else list(reversed(cells))
@@ -306,9 +414,20 @@ class Campaign:
                 )
                 log = self.output / f"run{run}-{cell.key}.log"
                 observation = self.runner.invoke(
-                    cell.suite, [cell.test, "--exact", "--ignored", "--nocapture"], cell.environment(run), log
+                    cell.suite,
+                    [cell.test, "--exact", "--ignored", "--nocapture"],
+                    cell.environment(run),
+                    log,
                 )
                 records = Evidence.parse(log.read_text(encoding="utf8"))
+                observed_peaks = [
+                    int(p["self_peak_b"])
+                    for p in records.get("PHASE", [])
+                    if p.get("self_peak_b", "NA") != "NA"
+                ]
+                observation["peak_rss_bytes"] = max(
+                    [observation["peak_rss_bytes"], *observed_peaks]
+                )
                 checksum = records["CELL"][0]["checksum"]
                 if cell.key in previous and previous[cell.key] != checksum:
                     raise ValueError(f"cross-run checksum drift: {cell.key}")
@@ -354,7 +473,7 @@ class CampaignSummary:
         self.source_commits.add(campaign["source_commit"])
         if len(self.source_commits) != 1:
             raise ValueError("platforms measured different source revisions")
-        expected = {cell.key for cell in Cell.matrix()}
+        expected = {cell.key for cell in Cell.matrix(campaign.get("suite", "graph"))}
         if len(campaign["cells"]) != 3 * len(expected):
             raise ValueError("campaign process count does not match declared matrix")
         groups = {}
@@ -363,25 +482,41 @@ class CampaignSummary:
             key = observation["id"]
             records = observation["records"]
             cell = records["CELL"][0]
-            identity = {k: cell[k] for k in ("status", "nodes", "arcs", "incidences", "checksum")}
-            for kind in ("RESULT", "WORK"):
-                identity[kind] = [{k: v for k, v in r.items() if k != "run"} for r in records.get(kind, [])]
+            identity = {
+                k: cell[k]
+                for k in ("status", "nodes", "arcs", "incidences", "checksum")
+            }
+            for kind in ("RESULT", "WORK", "SOURCE"):
+                identity[kind] = [
+                    {k: v for k, v in r.items() if k != "run"}
+                    for r in records.get(kind, [])
+                ]
             if key in self.reference and identity != self.reference[key]:
-                raise ValueError(f"semantic/work-counter drift: {campaign['platform']} {key}")
+                raise ValueError(
+                    f"semantic/work-counter drift: {campaign['platform']} {key}"
+                )
             self.reference[key] = identity
             groups.setdefault(key, []).append(observation)
             if records.get("RESULT"):
-                results.setdefault((observation["run"], cell["section"], cell["workload"]), []).append(
-                    records["RESULT"][0]
-                )
+                results.setdefault(
+                    (observation["run"], cell["section"], cell["workload"]), []
+                ).append(records["RESULT"][0])
         if set(groups) != expected:
             raise ValueError("missing/unknown matrix cells")
         for (_, section, workload), paired in results.items():
-            if section == "informed_search" and len({r["cost_micros"] for r in paired}) != 1:
+            if (
+                section == "informed_search"
+                and len({r["cost_micros"] for r in paired}) != 1
+            ):
                 raise ValueError(f"A*/Dijkstra optimal-cost mismatch: {workload}")
             if section == "berge_shortest":
-                if len(paired) != 2 or len({(r["reachable"], r["hops"]) for r in paired}) != 1:
-                    raise ValueError(f"BFS/Dijkstra reachability/hop mismatch: {workload}")
+                if (
+                    len(paired) != 2
+                    or len({(r["reachable"], r["hops"]) for r in paired}) != 1
+                ):
+                    raise ValueError(
+                        f"BFS/Dijkstra reachability/hop mismatch: {workload}"
+                    )
                 weighted = next(r for r in paired if r["subject"] == "dijkstra_unit")
                 if int(weighted["cost_micros"]) != int(weighted["hops"]) * 1_000_000:
                     raise ValueError(f"unit-cost/hop mismatch: {workload}")
@@ -391,12 +526,22 @@ class CampaignSummary:
             cell = observations[0]["records"]["CELL"][0]
             if cell["status"] != "OK":
                 continue
-            samples = sorted(float(s["wall_us"]) for o in observations for s in o["records"]["SAMPLE"])
-            if len(samples) != 27 or not all(math.isfinite(s) and s > 0 for s in samples):
+            samples = sorted(
+                float(s["wall_us"])
+                for o in observations
+                for s in o["records"]["SAMPLE"]
+            )
+            if len(samples) != 27 or not all(
+                math.isfinite(s) and s > 0 for s in samples
+            ):
                 raise ValueError(f"invalid pooled samples: {key}")
             peaks = [o["resources"]["peak_rss_bytes"] for o in observations]
-            if min(peaks) <= 0 or any(o["resources"]["exit_code"] != 0 for o in observations):
-                raise ValueError(f"missing process memory or unsuccessful process: {key}")
+            if min(peaks) <= 0 or any(
+                o["resources"]["exit_code"] != 0 for o in observations
+            ):
+                raise ValueError(
+                    f"missing process memory or unsuccessful process: {key}"
+                )
             self.rows.append(
                 {
                     "platform": campaign["platform"],
@@ -411,6 +556,9 @@ class CampaignSummary:
                     "worst_batch_mean_ns": samples[-1] * 1000,
                     "checksum": cell["checksum"],
                     "peak_rss_bytes": max(peaks),
+                    "source_bytes": observations[0]["records"]
+                    .get("SOURCE", [{}])[0]
+                    .get("bytes", ""),
                 }
             )
         self.resources.append(
@@ -418,21 +566,34 @@ class CampaignSummary:
                 "platform": campaign["platform"],
                 "processes": len(campaign["cells"]),
                 "successful_cells": sum(
-                    v[0]["records"]["CELL"][0]["status"] == "OK" for v in groups.values()
+                    v[0]["records"]["CELL"][0]["status"] == "OK"
+                    for v in groups.values()
                 ),
-                "peak_rss_bytes": max(o["resources"]["peak_rss_bytes"] for o in campaign["cells"]),
-                "process_wall_seconds": sum(o["resources"]["wall_seconds"] for o in campaign["cells"]),
+                "peak_rss_bytes": max(
+                    o["resources"]["peak_rss_bytes"] for o in campaign["cells"]
+                ),
+                "process_wall_seconds": sum(
+                    o["resources"]["wall_seconds"] for o in campaign["cells"]
+                ),
             }
         )
 
     def write(self) -> None:
         for platform_name in ("windows", "native", "arm64"):
-            self.accept(json.loads((self.root / platform_name / "campaign.json").read_text(encoding="utf8")))
+            self.accept(
+                json.loads(
+                    (self.root / platform_name / "campaign.json").read_text(
+                        encoding="utf8"
+                    )
+                )
+            )
         for filename, rows in (
             ("platform-summary.csv", self.rows),
             ("process-resources.csv", self.resources),
         ):
-            with (self.root / filename).open("w", encoding="utf8", newline="") as stream:
+            with (self.root / filename).open(
+                "w", encoding="utf8", newline=""
+            ) as stream:
                 writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
                 writer.writeheader()
                 writer.writerows(rows)
@@ -446,7 +607,9 @@ class CampaignSummary:
             "bfs_dijkstra_and_astar_optimal_cost_checks": True,
             "quantiles": "sorted pooled batch means, indexes floor(n/4), floor(n/2), floor(3n/4)",
         }
-        (self.root / "verification.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf8")
+        (self.root / "verification.json").write_text(
+            json.dumps(receipt, indent=2) + "\n", encoding="utf8"
+        )
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from svg_plot import bar_svg
 
@@ -455,13 +618,21 @@ class CampaignSummary:
             ("map128", "search_cell-map128-astar_combined-t1"),
             ("transport", "search_cell-transport128-astar_discrete-t1"),
         ]
+        if self.rows[0]["source_bytes"]:
+            selections = [
+                (w, f"parsing_parsing_cell-{w}-parse_ast-t1")
+                for w in ("map32", "map128", "map512")
+            ]
         platforms = ["windows", "native", "arm64"]
         indexed = {(row["platform"], row["benchmark"]): row for row in self.rows}
         plotted = [
-            (label, [indexed[p, key]["median_ns"] / 1000 for p in platforms]) for label, key in selections
+            (label, [indexed[p, key]["median_ns"] / 1000 for p in platforms])
+            for label, key in selections
         ]
         bar_svg(
-            "Selected graph search medians (ARM64 is QEMU)",
+            "Selected parsing medians (ARM64 is QEMU)"
+            if self.rows[0]["source_bytes"]
+            else "Selected graph search medians (ARM64 is QEMU)",
             plotted,
             [],
             platforms,
@@ -477,18 +648,24 @@ if __name__ == "__main__":
         CampaignSummary(Path(sys.argv[2]).resolve()).write()
         raise SystemExit(0)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--platform", choices=("windows", "native", "arm64"), required=True)
+    parser.add_argument(
+        "--platform", choices=("windows", "native", "arm64"), required=True
+    )
     parser.add_argument("--informed", required=True)
-    parser.add_argument("--algorithm", required=True)
+    parser.add_argument("--algorithm")
+    parser.add_argument("--suite", choices=("graph", "parsing"), default="graph")
     parser.add_argument("--output", required=True)
     parser.add_argument("--qemu")
     parser.add_argument(
-        "--image", default="sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9"
+        "--image",
+        default="sha256:32d322b19846336d25f755f73618a448e3621982d52c48064e95af8b3dcbc2d9",
     )
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--smoke", action="store_true")
     arguments = parser.parse_args()
+    if arguments.suite == "graph" and not arguments.algorithm:
+        parser.error("--algorithm is required for the graph suite")
     if arguments.runs < 1 or (arguments.platform == "arm64" and not arguments.qemu):
         parser.error("positive --runs and an ARM64 --qemu path are required")
     Campaign(arguments).run()

@@ -8,7 +8,10 @@ from campaign import CampaignSummary, Cell, Evidence
 
 class EvidenceContract(unittest.TestCase):
     def fixture(self):
-        rows = [f"EVIDENCE_SAMPLE\tordinal={i}\twall_us={i + 1}\tchecksum=123" for i in range(9)]
+        rows = [
+            f"EVIDENCE_SAMPLE\tordinal={i}\twall_us={i + 1}\tchecksum=123"
+            for i in range(9)
+        ]
         rows.append(
             "EVIDENCE_CELL\tstatus=OK\tsamples=9\tchecksum=123\twall_q1_us=3\twall_median_us=5\twall_q3_us=7\twall_worst_us=9"
         )
@@ -34,11 +37,48 @@ class EvidenceContract(unittest.TestCase):
         cells = Cell.matrix()
         self.assertEqual(sum(c.suite == "informed" for c in cells), 48)
         self.assertEqual(len(cells), len({c.key for c in cells}))
-        self.assertEqual({c.threads for c in cells if c.subject == "independent_query_batch"}, {1, 2, 4})
+        self.assertEqual(
+            {c.threads for c in cells if c.subject == "independent_query_batch"},
+            {1, 2, 4},
+        )
+
+    def test_parsing_covers_every_existing_source_topology_and_phase(self):
+        matrix = Cell.matrix("parsing")
+        originals = {
+            c.workload if not c.workload.startswith("grid200_d") else "grid200_d80"
+            for c in Cell.matrix()
+        }
+        self.assertEqual({c.workload for c in matrix}, originals)
+        self.assertEqual(len(matrix), 5 * len(originals))
+        self.assertTrue(all(":" not in c.key for c in matrix))
+        with self.assertRaises(ValueError):
+            Cell.matrix("unknown")
+
+    def test_parsing_requires_source_identity_and_positive_bytes(self):
+        source = self.fixture().replace(
+            "EVIDENCE_CELL\t", "EVIDENCE_CELL\tsection=parsing\t"
+        )
+        valid = (
+            source
+            + "\nEVIDENCE_SOURCE\tbytes=100\tfnv1a64=123\tprojection=graph_fixture_v1"
+        )
+        self.assertEqual(Evidence.parse(valid)["SOURCE"][0]["bytes"], "100")
+        for invalid in (
+            source,
+            valid.replace("bytes=100", "bytes=0"),
+            valid.replace("fnv1a64=123", "fnv1a64=456"),
+        ):
+            with self.assertRaises(ValueError):
+                Evidence.parse(invalid)
 
     def test_archived_campaign_rejects_corrupted_provenance_and_process_identity(self):
-        root = Path(__file__).resolve().parents[2] / "reports/cross-platform-benchmarks/2026-09-06"
-        original = json.loads((root / "windows/campaign.json").read_text(encoding="utf8"))
+        root = (
+            Path(__file__).resolve().parents[2]
+            / "reports/cross-platform-benchmarks/2026-09-06"
+        )
+        original = json.loads(
+            (root / "windows/campaign.json").read_text(encoding="utf8")
+        )
         for fault in ("source", "checksum", "repetition", "missing"):
             summary = CampaignSummary(root)
             summary.accept(original)

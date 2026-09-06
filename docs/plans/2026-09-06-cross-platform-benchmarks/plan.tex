@@ -15,4 +15,61 @@ Created-at: 2026-09-06 12:50 +02:00.
 \paragraph{Rollback} Revert campaign scripts/evidence commit, remove only named transient build staging after successful extraction, preserve reusable caches and all production sources.
 
 \input{plan.tikz}
+
+\section*{Parsing extension, created 2026-09-06 17:29 +02:00}
+\paragraph{Ownership and discovery} Parser owns lexer/AST; Core owns interning,
+resolution, lowering and ModuleStore; Graph owns the existing benchmark fixtures
+and evidence campaign. The parser-backed ecoread repository and uses queries were
+executed. Discovery: find parser benches, Graph informed clients and scripts;
+grep parse/serialize/writer; read parser\_bench.rs, ir\_writer.rs,
+ModuleStore, RealParser, informed\_common and statistics. Verdict: EXTEND the
+Graph evidence client and campaign. IrWriter emits an arc placeholder and is not
+a round-trip serializer; a private test fixture projection must preserve numeric
+node annotations and signed weighted incidences and reject unsupported input.
+No production serializer or parser is added. Baseline duplication: 517 clones,
+12272 lines, 152 files. Fetch succeeded through the existing host's IP; integrate
+fresh Graph main eae7a57 into the existing task branch, preserving previous data.
+Core dependency remains locked to fc3eda9b; parser 284c490d.
+\paragraph{Acceptance} Parse actual deterministic HyMeKo text for every distinct
+source topology used by the existing 59 cells (query-distance variants share the
+same source). Record source byte count and hash, nodes/arcs/incidences, correct
+signed targets, weights and positions. Compare parsed IR with the generating IR
+and check query reachability, optimal cost and valid path. Include explicit
+parse rejection and corrupted fixture controls. Parser errors cannot count as
+successful fast parses.
+\paragraph{Phases} Measure resident UTF-8 text to AST; already parsed AST through
+interning/resolution/lowering; complete fresh ModuleStore compilation (including
+production validation and hashes); parsed IR to incidence index; and fresh
+text through compilation/index/Dijkstra with a fresh workspace. Input generation,
+filesystem I/O, strong verification and final object destruction stay outside
+factory timings; intermediate pipeline destruction stays inside. End-to-end is
+measured directly, never computed by adding medians. Reuse existing factory
+sampling (2 warmups, 9 samples), resource telemetry and process driver. Three
+fresh processes per cell per platform, sizes up to map512 and random1e6. Lexical
+pattern suites already in parser remain separate from topology-specific rows.
+\paragraph{Affected paths and authority} This existing plan bundle;
+hymeko\_graph/tests/informed\_berge\_evidence.rs and new private
+informed\_common/parsing.rs; scripts/performance\_evidence/campaign.py and its
+tests; generated SYMBOLS.md; reports/2026-09-06-parsing-benchmarks.md and
+reports/parsing-benchmarks/2026-09-06/* (CSV/JSON/logs/SVG/manifests).
+The user's explicit request authorizes this benchmark-only test extension under
+the protected Graph crate. No production edits or new dependencies. Website
+reads the resulting Graph table using its existing generic adapter, at
+/srv/apps/benchmark. No web source is placed in Core.
+\paragraph{Budgets and ETA} Estimated 45--75 minutes including implementation,
+focused tests, cached builds and three platform campaigns. Largest source is
+map512 (262144 nodes, approximately 523000 arcs); nested AST and compiled stores
+may consume much more memory than the original IR. Smoke largest inputs before
+full runs; hard 16GiB RSS limit, 180 seconds per process initially. The new phase
+wall costs are unknown: refine campaign ETA from the largest-input smoke before
+launch, without reducing the declared matrix silently. Native and QEMU never
+measure concurrently; no website build overlaps measurements. Reuse existing
+checkouts, target caches, cross image and explicit QEMU on Amaterasu.
+\paragraph{Rollback and interpretation} Revert only this benchmark extension;
+keep original evidence immutable. Remove named transient deployment/build files
+on completion. No worktrees/clones. Times characterize these pinned versions and
+representations; serialized IR has edge declarations absent from the synthetic
+IR and this overhead is reported. QEMU is emulation, not native ARM hardware.
+This adds measurements, not a SOTA superiority claim.
+
 \end{document}

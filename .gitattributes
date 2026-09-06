@@ -3,3 +3,6 @@
 /reports/2026-09-05-dependency-refresh.md -text
 # Cross-platform raw logs and manifests are hashed as collected.
 /reports/cross-platform-benchmarks/** -text
+
+# Parsing evidence bytes are hashed exactly as collected.
+/reports/parsing-benchmarks/** -text

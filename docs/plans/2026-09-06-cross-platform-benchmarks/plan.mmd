@@ -1,4 +1,9 @@
 flowchart LR
-  Sources[Committed repository artifacts] --> Verify[Validate provenance and results]
-  Verify --> Evidence[Measured evidence]
-  Evidence --> View[Independent website]
+  Fixture[Existing graph fixtures] --> Source[Deterministic HyMeKo text]
+  Source --> AST[Real parser AST]
+  AST --> IR[Core resolved IR]
+  IR --> Index[Incidence index]
+  Index --> Query[Dijkstra]
+  Source --> Compile[Fresh ModuleStore compilation]
+  Compile --> Query
+  Query --> Evidence[Existing campaign and independent website]

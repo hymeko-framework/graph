@@ -24,6 +24,8 @@ mod statistics;
 mod telemetry;
 #[path = "informed_common/mod.rs"]
 mod workloads;
+#[path = "informed_common/parsing.rs"]
+mod parsing;
 
 use statistics::{Measurement, measure_calibrated_verified};
 

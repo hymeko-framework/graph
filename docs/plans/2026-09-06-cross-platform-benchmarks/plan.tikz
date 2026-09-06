@@ -1,1 +1,1 @@
-\begin{tikzpicture}\node[draw,text width=11cm,align=center]{Graph production APIs $\rightarrow$ existing evidence clients $\rightarrow$ Windows / Amaterasu / ARM64 QEMU};\end{tikzpicture}
+\begin{tikzpicture}\node[draw,text width=11cm,align=center]{Existing graph fixtures $\to$ HyMeKo text $\to$ real parser AST $\to$ Core IR $\to$ incidence index $\to$ Dijkstra\\Separate phase timings and directly measured complete pipeline};\end{tikzpicture}
