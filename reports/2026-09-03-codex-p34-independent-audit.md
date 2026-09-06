@@ -650,3 +650,6 @@ The older timing harness has some fixture/timing duplication already acknowledge
 - Provider preflight checks the six imported files; overlap candidates are resolved by the DISCOVERY disposition rather than claimed absent. The normal Git merge commit records that disposition. Graph still has no installed hook, so explicit checks are the evidence.
 
 Full local command logs are in this checkout's `.git/graph-main-consolidation-tests.log`, `.git/graph-main-consolidation-clippy.log`, and `.git/graph-main-consolidation-preflight.log`. The authoritative source is the normal merge commit, published on main. Publication and exact-tip branch retirement are verified against the server after the commit.
+
+
+Publication synchronization: the final fetch found the user's concurrent PR #1 merge on remote main at `321d47990f765455c40c620f480d4ae6900f988e` (parents b234c487 and 978c39ea). Its complete tree is identical to 978c39ea. It is included by a normal merge, preserving that server history; the only additional file change is this synchronization note. Tests remain applicable because all production, test, fixture and dependency files are unchanged from the verified 4cb8414 consolidation. No branch was deleted before this new remote-main history was integrated.
