@@ -1,0 +1,25 @@
+operation	owner	source_revision	source_benchmark	measurement_mode	status	notes
+Ir construction	hymeko/core	70b4f364	hymeko_core/benches/ir_bench.rs:147 bench_ir_construction	Criterion sizes/arity	MEASURED-OWNER	Full canonical Ir construction is measured by its owner
+declaration insertion	hymeko/core	70b4f364	bench_ir_construction	part of composite	INCLUDED-NOT-ISOLATED	No separate insertion distribution at this revision
+node insertion	hymeko/core	70b4f364	bench_ir_construction	part of composite	INCLUDED-NOT-ISOLATED	No separate insertion distribution at this revision
+edge insertion	hymeko/core	70b4f364	bench_ir_construction	part of composite	INCLUDED-NOT-ISOLATED	No separate insertion distribution at this revision
+hyperarc insertion	hymeko/core	70b4f364	bench_ir_construction	part of composite	INCLUDED-NOT-ISOLATED	No separate insertion distribution at this revision
+incidence insertion	hymeko/core	70b4f364	bench_ir_construction	part of composite	INCLUDED-NOT-ISOLATED	References are built within arcs; not isolated
+canonical ID lookup	hymeko/core	70b4f364	hymeko_core/benches/ir_bench.rs:398 bench_ir_lookup	Criterion point/dense lookup	MEASURED-OWNER	Direct table and checked accessor variants
+declaration to record mapping	hymeko/core	70b4f364	ir_bench.rs:526/584/623/807/955 m2a families	Criterion point/dense/mixed	MEASURED-OWNER	Direct guarded map and accessor paths
+hierarchy traversal	hymeko/core	70b4f364	hymeko_core/benches/ir_bench.rs:712 bench_m2a_hierarchy	Criterion traversal	MEASURED-OWNER	Direct and accessor hierarchy traversal
+arc to incidence traversal	hymeko/core	70b4f364	hymeko_core/benches/ir_bench.rs:1041 bench_m2a1_end_to_end	Criterion composite traversal	MEASURED-OWNER	Whole-Ir walk resolves every arc reference
+node to incident arcs	hymeko/core	70b4f364	IncidenceIndex::incident_arcs	no owner benchmark	UNMEASURED	Graph representation timings include but do not isolate it
+exact incidence-coordinate resolution	hymeko/core	70b4f364	IncidenceIndex::resolve	no owner benchmark	UNMEASURED	Correctness-covered; latency not isolated
+path-index construction	hymeko/core	70b4f364	build_path_index	no owner benchmark	UNMEASURED	Do not substitute hierarchy traversal
+path-index lookup	hymeko/core	70b4f364	DerivedPathIndex	no owner benchmark	UNMEASURED	No isolated Criterion group at resolved revision
+incidence-index construction	hymeko/core	70b4f364	build_incidence_index	consumer composite only	INCLUDED-NOT-ISOLATED	Included in representation preparation; needs core-owned isolated group
+incidence-index validation	hymeko/core	70b4f364	build_incidence_index	consumer composite only	INCLUDED-NOT-ISOLATED	Build and validation are not separated by the public API
+canonical hash	hymeko/core	70b4f364	hymeko_core/benches/ir_bench.rs:454 bench_ir_canonical_hash	Criterion by nodes/arity	MEASURED-OWNER	Throughput normalized by incidences
+clone	hymeko/core	70b4f364	hymeko_core/benches/ir_bench.rs:433 bench_ir_clone	Criterion by size	MEASURED-OWNER	Owned result materialization included
+serialization	hymeko/core	70b4f364	hymeko_core/benches/ir_bench.rs:488 bench_ir_serde	Criterion JSON bytes	MEASURED-OWNER	Serialize path
+deserialization	hymeko/core	70b4f364	hymeko_core/benches/ir_bench.rs:488 bench_ir_serde	Criterion JSON bytes	MEASURED-OWNER	Deserialize path
+graph reachability/component/path queries	hymeko/graph	d06465a	hymeko_graph/tests/performance_evidence.rs	9 samples median/IQR/worst	MEASURED-CONSUMER	Separate graph-owned query evidence
+rank/basis result materialization	hymeko/graph	d06465a	performance_evidence operation cells	part of query	INCLUDED-NOT-ISOLATED	Reused output is included; fresh output allocation remains separately audited
+canonical deletion	hymeko/core	70b4f364	append-only Ir	unsupported	NOT-IMPLEMENTED	No public canonical deletion API
+transactional in-place update	hymeko/core	70b4f364	append-only Ir	unsupported	NOT-IMPLEMENTED	No public transactional mutation API

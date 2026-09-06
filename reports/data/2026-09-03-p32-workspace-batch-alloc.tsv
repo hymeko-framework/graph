@@ -1,0 +1,6 @@
+mode	queries	us_per_query	allocs_per_query
+fresh-workspace-per-query	1	1685.10	21.00
+reused-same-goal	1	1700.90	7.00
+reused-varied-batch1	1	1.00	2.00
+reused-varied-batch16	16	261.63	4.94
+reused-varied-batch256	256	515.50	5.84

@@ -35,8 +35,9 @@ came within one message of making, because twelve of fourteen local checkouts we
    type or variant names, `_under` suffixes, mode booleans that select between an old and a new
    arithmetic, and any runtime selector whose only purpose is to reproduce a retired result. A
    retired result lives in V&V, or it does not live.
-4. **Dependency direction is one-way and acyclic.** `graph` depends on no sibling HyMeKo
-   repository. Adding such a dependency is a core-level decision.
+4. **Dependency direction is one-way and acyclic.** `graph` consumes the canonical
+   `hymeko_core::ir` from `core`; Core does not depend on Graph. See `CORE.YAML`
+   and the workspace manifest. Adding a different dependency is a core-level decision.
 
 ## Known state, 2026-08-30
 

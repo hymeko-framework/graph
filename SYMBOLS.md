@@ -13,18 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**6 package(s), 454 public symbol(s).**
-
-## graph (rust)
-
-- **Root:** `.`
-- **Manifest:** `Cargo.toml`
-- **Charter:** Graph theory and hypergraph extensions for analysis and modelling with HyMeKo.
-
-### functions
-
-- `run` — `docs/migration/2026-08-30-tensor-parity/harness/shared/cases.rs`
-- `run_rest` — `docs/migration/2026-08-30-tensor-parity/harness/shared/cases.rs`
+**7 package(s), 482 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -33,6 +22,17 @@ docstring are all excluded for a stated reason rather than by luck.
 - **Charter:** <no charter>
 
 _No public symbols._
+
+## docs (rust)
+
+- **Root:** `docs`
+- **Manifest:** none -- inferred from sources
+- **Charter:** <no charter>
+
+### functions
+
+- `run` — `docs/migration/2026-08-30-tensor-parity/harness/shared/cases.rs`
+- `run_rest` — `docs/migration/2026-08-30-tensor-parity/harness/shared/cases.rs`
 
 ## parity_g (rust)
 
@@ -101,14 +101,19 @@ _No public symbols._
 - `EnumerationRequest` — `hymeko_graph/src/signed_tuples.rs`
 - `FirBackward` — `hymeko_graph/src/spine.rs`
 - `FractionNegativeScorer` — `hymeko_graph/src/topk_cycles.rs`
+- `GraphicMatroidWorkspace` — `hymeko_graph/src/matroid/workspace.rs`
 - `HybridScorer` — `hymeko_graph/src/topk_cycles.rs`
 - `HyperTraversal` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `IncidenceCoo` — `hymeko_graph/src/incidence.rs`
 - `IncidenceWeightCost` — `hymeko_graph/src/direct_ir/informed.rs`
+- `IncrementalLevi` — `hymeko_graph/src/matroid/levi.rs`
+- `IncrementalRank2` — `hymeko_graph/src/matroid/rank2.rs`
 - `InformedSearchWorkspace` — `hymeko_graph/src/direct_ir/informed.rs`
 - `InverseDegreeScorer` — `hymeko_graph/src/topk_cycles.rs`
 - `Lcg` — `hymeko_graph/src/rand_lcg.rs`
+- `LeviCoord` — `hymeko_graph/src/matroid/levi.rs`
 - `LowRootScorer` — `hymeko_graph/src/topk_cycles.rs`
+- `MatroidRef` — `hymeko_graph/src/matroid/facade.rs`
 - `MetricHeuristic` — `hymeko_graph/src/direct_ir/informed.rs`
 - `MetricStepCost` — `hymeko_graph/src/direct_ir/informed.rs`
 - `NoFilter` — `hymeko_graph/src/vertex_filter.rs`
@@ -153,6 +158,7 @@ _No public symbols._
 - `IncidenceOutput` — `hymeko_graph/src/incidence.rs`
 - `IncidenceResult` — `hymeko_graph/src/incidence.rs`
 - `InformedSearchError` — `hymeko_graph/src/direct_ir/informed.rs`
+- `MatroidError` — `hymeko_graph/src/matroid/error.rs`
 - `MultiEdgeSignResolution` — `hymeko_graph/src/signed_tuples.rs`
 - `PrunerDecision` — `hymeko_graph/src/pruner.rs`
 - `Sign` — `hymeko_graph/src/signed_graph.rs`
@@ -161,6 +167,8 @@ _No public symbols._
 
 ### functions
 
+- `accepted` — `hymeko_graph/src/matroid/levi.rs`
+- `accepted` — `hymeko_graph/src/matroid/rank2.rs`
 - `arcs` — `hymeko_graph/src/direct_ir/dual.rs`
 - `arcs` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `arity` — `hymeko_graph/src/hyper_operator.rs`
@@ -175,6 +183,8 @@ _No public symbols._
 - `balanced` — `hymeko_graph/src/signed_tuples.rs`
 - `batch_reachable_counts` — `hymeko_graph/src/direct_ir/batch.rs`
 - `begin` — `hymeko_graph/src/direct_ir/workspace.rs`
+- `begin` — `hymeko_graph/src/matroid/levi.rs`
+- `begin` — `hymeko_graph/src/matroid/rank2.rs`
 - `berge_shortest_path` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `best_first_dfs` — `hymeko_graph/src/traversal_heuristic.rs`
 - `bfs_distances` — `hymeko_graph/src/traversal.rs`
@@ -274,6 +284,7 @@ _No public symbols._
 - `has_edge` — `hymeko_graph/src/unsigned_cycles/csr.rs`
 - `hyperedge_len` — `hymeko_graph/src/direct_ir/informed.rs`
 - `hyperedge_len` — `hymeko_graph/src/direct_ir/traversal.rs`
+- `incidence` — `hymeko_graph/src/matroid/facade.rs`
 - `index` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `inner` — `hymeko_graph/src/pruner.rs`
 - `into_flat` — `hymeko_graph/src/unsigned_cycles/sink.rs`
@@ -300,6 +311,10 @@ _No public symbols._
 - `len` — `hymeko_graph/src/signed_tuples.rs`
 - `len` — `hymeko_graph/src/topk_cycles.rs`
 - `len` — `hymeko_graph/src/topk_walks.rs`
+- `levi_components` — `hymeko_graph/src/matroid/levi.rs`
+- `levi_independent` — `hymeko_graph/src/matroid/levi.rs`
+- `levi_rank` — `hymeko_graph/src/matroid/levi.rs`
+- `levi_spanning_basis` — `hymeko_graph/src/matroid/levi.rs`
 - `low_root` — `hymeko_graph/src/topk_cycles.rs`
 - `make_identity_sink` — `hymeko_graph/src/unsigned_cycles/parallel.rs`
 - `make_thread_sink` — `hymeko_graph/src/unsigned_cycles/parallel.rs`
@@ -321,6 +336,8 @@ _No public symbols._
 - `new` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `new` — `hymeko_graph/src/direct_ir/workspace.rs`
 - `new` — `hymeko_graph/src/hyper_operator.rs`
+- `new` — `hymeko_graph/src/matroid/facade.rs`
+- `new` — `hymeko_graph/src/matroid/workspace.rs`
 - `new` — `hymeko_graph/src/pruner.rs`
 - `new` — `hymeko_graph/src/rand_lcg.rs`
 - `new` — `hymeko_graph/src/spine.rs`
@@ -335,15 +352,21 @@ _No public symbols._
 - `node_to_edge` — `hymeko_graph/src/hyper_operator.rs`
 - `nodes` — `hymeko_graph/src/direct_ir/informed.rs`
 - `nodes` — `hymeko_graph/src/direct_ir/traversal.rs`
+- `offer` — `hymeko_graph/src/matroid/levi.rs`
+- `offer` — `hymeko_graph/src/matroid/rank2.rs`
 - `offer` — `hymeko_graph/src/unsigned_cycles/sink.rs`
 - `par_batch_reachable_counts` — `hymeko_graph/src/direct_ir/batch.rs`
 - `path_hash` — `hymeko_graph/src/direct_ir/informed.rs`
 - `per_vertex` — `hymeko_graph/src/topk_cycles.rs`
 - `push` — `hymeko_graph/src/topk_cycles.rs`
+- `rank2_rank` — `hymeko_graph/src/matroid/rank2.rs`
+- `rank2_spanning_forest` — `hymeko_graph/src/matroid/rank2.rs`
+- `rank2_weighted_basis` — `hymeko_graph/src/matroid/rank2.rs`
 - `reachable_nodes` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `reset` — `hymeko_graph/src/traversal.rs`
 - `reset` — `hymeko_graph/src/traversal_heuristic.rs`
 - `resolution` — `hymeko_graph/src/signed_tuples.rs`
+- `retained_bytes` — `hymeko_graph/src/matroid/workspace.rs`
 - `rhs` — `hymeko_graph/src/hyper_operator.rs`
 - `s` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `s_connected_components` — `hymeko_graph/src/direct_ir/s_connect.rs`
@@ -537,3 +560,17 @@ _No public symbols._
 - `with_required_products` — `hymeko_pgraph/src/friedler.rs`
 - `with_valid_o_nodes` — `hymeko_pgraph/src/friedler.rs`
 - `write_pgip` — `hymeko_pgraph/src/pgip_io.rs`
+
+## scripts (python)
+
+- **Root:** `scripts`
+- **Manifest:** none -- inferred from sources
+- **Charter:** <no charter>
+
+### functions
+
+- `bar_svg` — `scripts/svg_plot.py`
+- `be_q` — `scripts/p34_figures.py`
+- `line_svg` — `scripts/svg_plot.py`
+- `pts` — `scripts/p33_matroid_figures.py`
+- `read_tsv` — `scripts/p34_figures.py`

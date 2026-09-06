@@ -1,0 +1,22 @@
+%% P3 direct-Ir navigation & search performance. STRATEGY HYMEKO-PLATFORM-2026-09-01-v1.
+flowchart TD
+    SRC["HyMeKo source / deterministic generator"] --> PARSE["parser + lowering"]
+    PARSE --> IR["canonical hymeko_core::ir::Ir  (nodes, arcs, incidences)"]
+    IR --> IDX["build_incidence_index -> sparse IncidenceIndex  (Theta(nnz) prep)"]
+    IDX --> NAV["direct Berge navigation/search (borrowed view = O(1); apply B/BT = Theta(nnz))"]
+    NAV --> R1["reachability / components / s-connect / dual"]
+    NAV --> R2["berge_shortest_path / Dijkstra (h=0) / A* (metric, consistent)"]
+    NAV --> R3["batch 1/16/256, serial + Rayon, reusable TraversalWorkspace"]
+    subgraph W["workloads (this phase)"]
+      W1["Steiner STS(2^m-1) = PG(m-1,2)"]
+      W2["iterated Mycielski (rank-2)"]
+      W3["map/routing grid (positions as Ir values)"]
+      W4["seeded random: uniform rank-k / hub / disconnected"]
+    end
+    W --> IR
+    subgraph C["controls + oracles ONLY (not production)"]
+      C1["no-index O(V*E) incidence scan"]
+      C2["materialised pairwise/clique"]
+      C3["oracle Dijkstra / exhaustive"]
+    end
+    NAV -. verified against .-> C

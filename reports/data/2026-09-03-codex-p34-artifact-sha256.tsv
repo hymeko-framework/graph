@@ -1,0 +1,12 @@
+path	sha256
+reports/data/2026-09-03-p34-cpu-scaling.tsv	bf26646761dd80c41e4fb44eb9fa6dea2407ef6b1cb8a65285c070b5c5fe0df5
+reports/data/2026-09-03-p34-ir-ops.tsv	065da488d930a56e3d2ab5fbd7044aaec7876fa88413ea55d730fb57b2558f25
+reports/data/2026-09-03-p34-levi-perf.tsv	2ada3b3f5d4fca8939820132b9c25ef566b1ce1fdf6b5c8075011be7562150cc
+reports/data/2026-09-03-p34-manifest.tsv	1bdf636517053072fd38de3fffcde7c0e1916cdd7ebf73e10a36f9908b5d3d36
+reports/data/2026-09-03-p34-memory.tsv	954248ec011b64345f39d64a813ebac3166f42f6330fd03848446cda80b95933
+reports/data/2026-09-03-p34-representation.tsv	43f2bd26a2a2f8659c858d296d80a5fd0584262d27feb3cd751a248f22bc214b
+reports/data/2026-09-03-p34-ts-norm.tsv	b72721834777b92bd60806c1e8f93ea03875226e0d0dfb296d04a17b0a309647
+reports/figures/p34-breakeven.svg	ce61a24a1bb5699a454c0abb3487f8061ff506d82a1ea8cba216b98c52184dfd
+reports/figures/p34-cpu-scaling.svg	8f07024a28be4e40b72a0abb847593fa5f5c25046fdda063d75bcd7bce329fc7
+reports/figures/p34-memory.svg	f2da9491948be22d2303b610c7168b753a8fec40d8efa4b2e8113dceb9f50315
+reports/figures/p34-rank-basis-ratio.svg	c3295feecb2122d6b6f70458f7bc439c026dc34e4f8c66e39d315a0b12a1bb6f

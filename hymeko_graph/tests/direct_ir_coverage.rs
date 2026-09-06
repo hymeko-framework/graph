@@ -196,6 +196,11 @@ fn berge_enum_budget_depth_and_expansion_bounds() {
     let out =
         enumerate_berge_paths(&index, w.node("x0"), Some(w.node("x11")), depth_budget).unwrap();
     assert!(out.items.is_empty(), "depth 2 cannot reach the far end");
+    assert_eq!(
+        out.bound,
+        Some(BudgetKind::Depth),
+        "depth truncation is explicit"
+    );
 
     // expansion bound: a tiny expansion budget stops early and reports it
     let exp_budget = EnumBudget::new(100, 1000, 1);

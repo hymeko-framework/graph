@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" font-family="sans-serif">
+<rect width="100%" height="100%" fill="white"/>
+<text x="480" y="28" text-anchor="middle" font-size="18" font-weight="bold">Fresh-process Levi resident memory</text>
+<text x="480" y="48" text-anchor="middle" font-size="11">self-observed phase working set plus independently polled child peak</text>
+<line x1="80" y1="450.0" x2="920" y2="450.0" stroke="#e8e8e8"/>
+<text x="72" y="454.0" text-anchor="end" font-size="10">0</text>
+<line x1="80" y1="384.3" x2="920" y2="384.3" stroke="#e8e8e8"/>
+<text x="72" y="388.3" text-anchor="end" font-size="10">50</text>
+<line x1="80" y1="318.6" x2="920" y2="318.6" stroke="#e8e8e8"/>
+<text x="72" y="322.6" text-anchor="end" font-size="10">100</text>
+<line x1="80" y1="253.0" x2="920" y2="253.0" stroke="#e8e8e8"/>
+<text x="72" y="257.0" text-anchor="end" font-size="10">150</text>
+<line x1="80" y1="187.3" x2="920" y2="187.3" stroke="#e8e8e8"/>
+<text x="72" y="191.3" text-anchor="end" font-size="10">200</text>
+<line x1="80" y1="121.6" x2="920" y2="121.6" stroke="#e8e8e8"/>
+<text x="72" y="125.6" text-anchor="end" font-size="10">250</text>
+<text x="80.0" y="475" text-anchor="middle" font-size="10">process baseline</text>
+<text x="248.0" y="475" text-anchor="middle" font-size="10">canonical ir</text>
+<text x="416.0" y="475" text-anchor="middle" font-size="10">incidence index</text>
+<text x="584.0" y="475" text-anchor="middle" font-size="10">prepared</text>
+<text x="752.0" y="475" text-anchor="middle" font-size="10">measured</text>
+<text x="920.0" y="475" text-anchor="middle" font-size="10">external peak</text>
+<circle cx="80.0" cy="443.7" r="3.5" fill="#555"/>
+<circle cx="248.0" cy="404.5" r="3.5" fill="#555"/>
+<circle cx="416.0" cy="401.8" r="3.5" fill="#555"/>
+<circle cx="584.0" cy="396.5" r="3.5" fill="#555"/>
+<circle cx="752.0" cy="402.0" r="3.5" fill="#555"/>
+<circle cx="920.0" cy="396.4" r="3.5" fill="#555"/>
+<polyline points="80.0,443.7 248.0,404.5 416.0,401.8 584.0,396.5 752.0,402.0 920.0,396.4" fill="none" stroke="#555" stroke-width="2.2"/>
+<rect x="790" y="72" width="12" height="12" fill="#555"/>
+<text x="808" y="82" font-size="10">path65k</text>
+<circle cx="80.0" cy="443.8" r="3.5" fill="#9a7635"/>
+<circle cx="248.0" cy="387.3" r="3.5" fill="#9a7635"/>
+<circle cx="416.0" cy="382.7" r="3.5" fill="#9a7635"/>
+<circle cx="584.0" cy="375.0" r="3.5" fill="#9a7635"/>
+<circle cx="752.0" cy="382.9" r="3.5" fill="#9a7635"/>
+<circle cx="920.0" cy="373.7" r="3.5" fill="#9a7635"/>
+<polyline points="80.0,443.8 248.0,387.3 416.0,382.7 584.0,375.0 752.0,382.9 920.0,373.7" fill="none" stroke="#9a7635" stroke-width="2.2"/>
+<rect x="790" y="90" width="12" height="12" fill="#9a7635"/>
+<text x="808" y="100" font-size="10">grid256</text>
+<circle cx="80.0" cy="443.7" r="3.5" fill="#287a52"/>
+<circle cx="248.0" cy="365.9" r="3.5" fill="#287a52"/>
+<circle cx="416.0" cy="358.1" r="3.5" fill="#287a52"/>
+<circle cx="584.0" cy="350.6" r="3.5" fill="#287a52"/>
+<circle cx="752.0" cy="357.8" r="3.5" fill="#287a52"/>
+<circle cx="920.0" cy="348.9" r="3.5" fill="#287a52"/>
+<polyline points="80.0,443.7 248.0,365.9 416.0,358.1 584.0,350.6 752.0,357.8 920.0,348.9" fill="none" stroke="#287a52" stroke-width="2.2"/>
+<rect x="790" y="108" width="12" height="12" fill="#287a52"/>
+<text x="808" y="118" font-size="10">sts1023</text>
+<circle cx="80.0" cy="443.7" r="3.5" fill="#b45f2d"/>
+<circle cx="248.0" cy="261.9" r="3.5" fill="#b45f2d"/>
+<circle cx="416.0" cy="244.9" r="3.5" fill="#b45f2d"/>
+<circle cx="584.0" cy="225.9" r="3.5" fill="#b45f2d"/>
+<circle cx="752.0" cy="244.6" r="3.5" fill="#b45f2d"/>
+<circle cx="920.0" cy="215.6" r="3.5" fill="#b45f2d"/>
+<polyline points="80.0,443.7 248.0,261.9 416.0,244.9 584.0,225.9 752.0,244.6 920.0,215.6" fill="none" stroke="#b45f2d" stroke-width="2.2"/>
+<rect x="790" y="126" width="12" height="12" fill="#b45f2d"/>
+<text x="808" y="136" font-size="10">random1e6</text>
+<circle cx="80.0" cy="443.7" r="3.5" fill="#356cb6"/>
+<circle cx="248.0" cy="157.4" r="3.5" fill="#356cb6"/>
+<circle cx="416.0" cy="140.4" r="3.5" fill="#356cb6"/>
+<circle cx="584.0" cy="111.6" r="3.5" fill="#356cb6"/>
+<circle cx="752.0" cy="139.0" r="3.5" fill="#356cb6"/>
+<circle cx="920.0" cy="106.3" r="3.5" fill="#356cb6"/>
+<polyline points="80.0,443.7 248.0,157.4 416.0,140.4 584.0,111.6 752.0,139.0 920.0,106.3" fill="none" stroke="#356cb6" stroke-width="2.2"/>
+<rect x="790" y="144" width="12" height="12" fill="#356cb6"/>
+<text x="808" y="154" font-size="10">map512</text>
+<line x1="80" y1="450" x2="920" y2="450" stroke="#333"/>
+<line x1="80" y1="65" x2="80" y2="450" stroke="#333"/>
+<text x="20" y="260" text-anchor="middle" font-size="12" transform="rotate(-90 20 260)">resident memory (MiB)</text>
+</svg>

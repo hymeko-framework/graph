@@ -1,0 +1,47 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,enumitem}
+\title{P3.4 --- Provenance-safe facade, implicit-Levi matroid, final measurement closure}
+\author{HYMEKO-PLATFORM-2026-09-01-v1 / ROADMAP-TASK P3.4}
+\date{2026-09-03}
+\begin{document}
+\maketitle
+
+\section*{Provenance correction (make invalid states unrepresentable)}
+The facade dropped its separate \texttt{\&Ir}:
+\[
+\texttt{MatroidRef<'a,'ir>}\;=\;\{\ \texttt{incidence}:\ \texttt{\&'a IncidenceIndex<'ir>}\ \},
+\qquad \texttt{ir()} \equiv \texttt{incidence.ir()}.
+\]
+A foreign \texttt{(Ir, index)} pairing is now unrepresentable at the type level---no runtime check,
+no \texttt{SnapshotMismatch}. Size drops from two words to one; construction stays $O(1)$, zero
+allocation. A \texttt{compile\_fail} doctest proves the old two-argument constructor no longer
+compiles.
+
+\section*{Implicit incidence/Levi graphic matroid}
+Ground set: exact incidence coordinates $(\texttt{HyperArcId}, \texttt{slot})$. The implicit
+bipartite (Levi) graph has one vertex per canonical node and one per canonical hyperarc, and one
+edge per incidence coordinate. With vertex universe $V = N + A$ (all nodes, all hyperarcs; isolated
+node and zero-incidence hyperarc are singleton components) and $C$ connected components,
+\[
+\texttt{rank} \;=\; \texttt{basis\_size} \;=\; V - C \;=\; (N + A) - C .
+\]
+The DSU coordinate space is shared with the rank-2 matroid: node $n \mapsto n$, hyperarc
+$a \mapsto N + a$. No Levi graph, star adjacency, pairwise graph, or second incidence table is
+materialised; the canonical \texttt{Ir} and existing \texttt{IncidenceIndex} are iterated in place.
+The basis is a \emph{connectivity certificate only}: it preserves neither weighted shortest paths,
+incidence signs, hyperedge semantics, $T/S$ propagation, $B/B^{\top}/B^{\top}B$, nor message passing.
+
+\section*{Measurement closure}
+Isolated-subprocess CPU (Rayon $1/2/4/8/16/\max$) via \texttt{TotalProcessorTime}; peak RSS via
+\texttt{PeakWorkingSet64}; per-component retained memory normalized per entity; representation
+break-even (direct / no-index scan / sparse star CSR / clique / Levi certificate) with
+$\texttt{total}(Q) = \texttt{prep} + Q\cdot\texttt{query}$ at $Q\in\{1,16,256\}$; the $T/S$-norm
+matrix over \texttt{hymeko\_pgraph::andor}; and a unified public-API construction/manipulation matrix
+(addendum 12A). Coverage is recorded \texttt{UNMEASURED} (tool unavailable, not inferred).
+
+\section*{Gates}
+No \texttt{CORE.YAML} edit beyond the approved graph edit; no production PGraph modification; peak RSS
+$<16$\,GiB; no manufactured $A^\ast$ victory; every mutant caught by a named test and the source
+restored bit-for-bit.
+\end{document}
