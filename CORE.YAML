@@ -14,7 +14,7 @@ schema_version: 1
 project:
   name: HyMeKo graph layer
   root_language: rust
-  canonical_registry: ../core/WORKSPACE.yaml
+  canonical_registry: ../hymeko/ecosystem.hymeko
 
 core:
   # Generic signed-graph and hypergraph algorithms: incidence, cycle and walk enumeration,

@@ -1,0 +1,70 @@
+section	workload	variant	nodes	arcs	incidences	warmups	samples	median_us	q1_us	q3_us	worst_us	checksum	value	unit	notes
+levi_oracle	sts31	independent_eager_dsu	31	155	465	-	-	-	-	-	-	1	185.000000	rank	checksum=independent component count; production rank asserted equal
+levi_oracle	sts127	independent_eager_dsu	127	2667	8001	-	-	-	-	-	-	1	2793.000000	rank	checksum=independent component count; production rank asserted equal
+levi_oracle	sts511	independent_eager_dsu	511	43435	130305	-	-	-	-	-	-	1	43945.000000	rank	checksum=independent component count; production rank asserted equal
+levi_oracle	sts1023	independent_eager_dsu	1023	174251	522753	-	-	-	-	-	-	1	175273.000000	rank	checksum=independent component count; production rank asserted equal
+levi_oracle	two_sts7	independent_eager_dsu	14	14	42	-	-	-	-	-	-	2	26.000000	rank	checksum=independent component count; production rank asserted equal
+levi_oracle	random1e6	independent_eager_dsu	200000	333333	999999	-	-	-	-	-	-	1323	532010.000000	rank	checksum=independent component count; production rank asserted equal
+levi_oracle	transport	independent_eager_dsu	65536	129745	259496	-	-	-	-	-	-	205	195076.000000	rank	checksum=independent component count; production rank asserted equal
+rank2_timing	path65k	forest	65536	65535	131070	2	9	1695.200	1125.200	1961.800	2017.300	65535	25.867094	ns_per_arc	alternating with weighted basis
+rank2_timing	path65k	weighted_min	65536	65535	131070	2	9	3418.900	3339.400	4236.700	4645.600	65535	2.016812	ratio_vs_forest	alternating with forest; includes edge collection, allocation, sort, output
+aa_null	path65k	forest_a	65536	65535	131070	2	9	617.100	595.800	713.500	1966.200	65535	1.017477	ratio_a_over_b	same operation, alternating independent workspaces
+aa_null	path65k	forest_b	65536	65535	131070	2	9	606.500	588.200	857.300	1433.300	65535	0.982823	ratio_b_over_a	same operation, alternating independent workspaces
+rank2_timing	grid256	forest	65536	130560	261120	2	9	4136.600	3844.200	4241.400	4778.500	65535	31.683517	ns_per_arc	alternating with weighted basis
+rank2_timing	grid256	weighted_min	65536	130560	261120	2	9	4005.600	3976.900	4325.400	4708.600	65535	0.968331	ratio_vs_forest	alternating with forest; includes edge collection, allocation, sort, output
+aa_null	grid256	forest_a	65536	130560	261120	2	9	3669.700	3529.500	4071.700	4145.100	65535	0.913815	ratio_a_over_b	same operation, alternating independent workspaces
+aa_null	grid256	forest_b	65536	130560	261120	2	9	4015.800	3787.300	4257.000	4506.300	65535	1.094313	ratio_b_over_a	same operation, alternating independent workspaces
+levi_timing	sts1023	basis_a	1023	174251	522753	2	9	9725.800	9472.700	9791.400	10435.200	175273	18.604963	ns_per_incidence	alternating A/A; warm workspace and output capacity
+aa_null	sts1023	levi_basis_b	1023	174251	522753	2	9	9694.200	9504.200	10243.100	11261.700	175273	0.996751	ratio_b_over_a	same operation, alternating independent workspaces
+levi_timing	random1e6	basis_a	200000	333333	999999	2	9	29185.400	28295.600	29710.800	35848.800	532010	29.185429	ns_per_incidence	alternating A/A; warm workspace and output capacity
+aa_null	random1e6	levi_basis_b	200000	333333	999999	2	9	28136.100	28004.200	28621.600	29207.800	532010	0.964047	ratio_b_over_a	same operation, alternating independent workspaces
+batch_scaling	sts1023	1_threads	1023	174251	522753	2	9	432013.000	426176.600	436053.700	459680.600	65472	1.000000	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	sts1023	2_threads	1023	174251	522753	2	9	229398.100	219576.100	234235.700	234563.500	65472	1.883246	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	sts1023	4_threads	1023	174251	522753	2	9	113718.100	110634.400	120842.000	126141.000	65472	3.798982	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	sts1023	8_threads	1023	174251	522753	2	9	60479.500	58027.800	63506.500	77504.400	65472	7.143131	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	sts1023	16_threads	1023	174251	522753	2	9	35208.100	33771.600	35672.800	36420.500	65472	12.270273	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	sts1023	24_threads	1023	174251	522753	2	9	33461.000	29902.600	34297.800	35975.100	65472	12.910941	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	random1e6	1_threads	200000	333333	999999	2	9	3750359.900	3749005.100	3809881.900	3859642.100	12715392	1.000000	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	random1e6	2_threads	200000	333333	999999	2	9	1980796.300	1971669.100	1991479.200	2015041.400	12715392	1.893360	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	random1e6	4_threads	200000	333333	999999	2	9	1075528.700	1062358.700	1083892.500	1130911.900	12715392	3.486992	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	random1e6	8_threads	200000	333333	999999	2	9	607008.700	603246.000	619354.300	628493.500	12715392	6.178429	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	random1e6	16_threads	200000	333333	999999	2	9	428143.100	424891.000	438593.300	451120.400	12715392	8.759594	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	random1e6	24_threads	200000	333333	999999	2	9	403348.700	389918.500	413076.400	489505.300	12715392	9.298059	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	map512	1_threads	262144	521632	1043264	2	9	2293650.200	2271912.100	2299769.600	2316416.400	16751104	1.000000	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	map512	2_threads	262144	521632	1043264	2	9	1158729.500	1153168.100	1176032.800	1226876.400	16751104	1.979453	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	map512	4_threads	262144	521632	1043264	2	9	637397.200	597097.700	660456.800	732994.900	16751104	3.598463	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	map512	8_threads	262144	521632	1043264	2	9	361861.900	358541.500	370665.800	378489.900	16751104	6.338468	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	map512	16_threads	262144	521632	1043264	2	9	222397.400	213855.900	229431.900	247810.600	16751104	10.313296	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+batch_scaling	map512	24_threads	262144	521632	1043264	2	9	204610.100	196047.900	207510.700	211751.700	16751104	11.209858	speedup_vs_1_thread	fixed batch of 64 independent serial reachability searches; local Rayon pool
+component_count_prep	sts1023	direct_cached_count	1023	174251	522753	2	9	5460.300	5324.000	5578.200	5906.200	1	6277132.000000	retained_bytes	prep computes canonical connected-component count; query reads cached usize
+component_count_query	sts1023	direct_cached_count	1023	174251	522753	2	9	19.400	19.400	19.400	23.900	1	0.194000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	sts1023	levi_cached_count	1023	174251	522753	2	9	9313.900	9075.500	9421.200	9788.200	1	2103288.000000	retained_bytes	prep computes implicit-Levi component count; query reads cached usize
+component_count_query	sts1023	levi_cached_count	1023	174251	522753	2	9	19.400	19.300	19.400	19.400	1	0.194000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	sts1023	sparse_star_cached_count	1023	174251	522753	2	9	13368.300	13226.400	13686.600	17280.900	1	4883124.000000	retained_bytes	prep builds sparse bipartite CSR and computes count; query reads cached usize
+component_count_query	sts1023	sparse_star_cached_count	1023	174251	522753	2	9	19.300	19.300	19.400	19.500	1	0.193000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	sts1023	clique_cached_count	1023	174251	522753	2	9	16840.600	16459.300	17103.500	17173.000	1	4194304.000000	retained_bytes	prep builds 2-section and computes count; query reads cached usize
+component_count_query	sts1023	clique_cached_count	1023	174251	522753	2	9	19.300	19.300	19.300	19.400	1	0.193000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	random1e6	direct_cached_count	200000	333333	999999	2	9	59184.600	56415.600	61671.600	70469.100	1323	12799992.000000	retained_bytes	prep computes canonical connected-component count; query reads cached usize
+component_count_query	random1e6	direct_cached_count	200000	333333	999999	2	9	19.300	19.300	19.400	19.400	1323	0.193000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	random1e6	levi_cached_count	200000	333333	999999	2	9	27220.100	25996.700	27896.900	33067.000	1323	6399996.000000	retained_bytes	prep computes implicit-Levi component count; query reads cached usize
+component_count_query	random1e6	levi_cached_count	200000	333333	999999	2	9	19.400	19.400	19.400	19.600	1323	0.194000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	random1e6	sparse_star_cached_count	200000	333333	999999	2	9	44915.600	44229.300	45465.800	51295.900	1323	10133328.000000	retained_bytes	prep builds sparse bipartite CSR and computes count; query reads cached usize
+component_count_query	random1e6	sparse_star_cached_count	200000	333333	999999	2	9	19.400	19.400	19.400	19.500	1323	0.194000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	random1e6	clique_cached_count	200000	333333	999999	2	9	46636.500	45297.600	47558.700	50632.100	1323	8388608.000000	retained_bytes	prep builds 2-section and computes count; query reads cached usize
+component_count_query	random1e6	clique_cached_count	200000	333333	999999	2	9	20.800	20.800	20.900	20.900	1323	0.208000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	map512	direct_cached_count	262144	521632	1043264	2	9	38663.400	38580.500	38897.400	39193.100	409	13567748.000000	retained_bytes	prep computes canonical connected-component count; query reads cached usize
+component_count_query	map512	direct_cached_count	262144	521632	1043264	2	9	19.400	19.400	19.400	25.100	409	0.194000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	map512	levi_cached_count	262144	521632	1043264	2	9	21935.800	21841.700	22355.500	23003.600	409	9405312.000000	retained_bytes	prep computes implicit-Levi component count; query reads cached usize
+component_count_query	map512	levi_cached_count	262144	521632	1043264	2	9	19.400	19.400	19.400	19.500	409	0.194000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	map512	sparse_star_cached_count	262144	521632	1043264	2	9	37708.700	36991.400	38662.700	39352.800	409	11481220.000000	retained_bytes	prep builds sparse bipartite CSR and computes count; query reads cached usize
+component_count_query	map512	sparse_star_cached_count	262144	521632	1043264	2	9	19.400	19.400	19.400	19.700	409	0.194000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+component_count_prep	map512	clique_cached_count	262144	521632	1043264	2	9	47007.200	46606.500	48236.000	49133.100	409	4194304.000000	retained_bytes	prep builds 2-section and computes count; query reads cached usize
+component_count_query	map512	clique_cached_count	262144	521632	1043264	2	9	19.400	19.400	19.400	19.500	409	0.194000	ns_per_cached_read	identical 100000-read result materialization loop for every representation
+ts_norm	chain1500	boolean-exact	1500	1499	2998	2	9	113.000	110.100	115.400	118.100	1500	1500	producible_count	production propagate; reliability=1.0 for BooleanExact, 0.9 for fuzzy norms
+ts_norm	chain1500	godel	1500	1499	2998	2	9	114.100	113.200	116.100	118.000	1500	1500	producible_count	production propagate; reliability=1.0 for BooleanExact, 0.9 for fuzzy norms
+ts_norm	chain1500	product	1500	1499	2998	2	9	25.000	24.600	25.100	27.700	197	197	producible_count	production propagate; reliability=1.0 for BooleanExact, 0.9 for fuzzy norms
+ts_norm	chain1500	lukasiewicz	1500	1499	2998	2	9	16.800	16.700	16.900	16.900	10	10	producible_count	production propagate; reliability=1.0 for BooleanExact, 0.9 for fuzzy norms
+correction_before_after	path65k	before_ce84134_incremental	65536	65535	131070	2_per_run	5x15	644.500	631.400	668.900	800.600	65535	1.000000	ratio_after_over_before	five alternating process-order rounds; each point is median of 15 samples
+correction_before_after	path65k	after_a471e1b_incremental	65536	65535	131070	2_per_run	5x15	661.600	644.700	696.600	706.200	65535	1.026532	ratio_after_over_before	+2.65%; within the independent path A/A envelope
+correction_before_after	grid256	before_ce84134_incremental	65536	130560	261120	2_per_run	5x15	3696.000	3394.600	3765.600	3857.100	65535	1.000000	ratio_after_over_before	five alternating process-order rounds; each point is median of 15 samples
+correction_before_after	grid256	after_a471e1b_incremental	65536	130560	261120	2_per_run	5x15	3994.100	3652.200	4022.700	4166.900	65535	1.080655	ratio_after_over_before	+8.07%; independent grid A/A drift was 9.43%, so no separable regression

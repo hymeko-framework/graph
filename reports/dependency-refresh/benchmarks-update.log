@@ -1,0 +1,8 @@
+    Blocking waiting for file lock on package cache
+    Updating git repository `ssh://git@amaterasu.local:2222/hymeko/parser.git`
+    Updating git repository `ssh://git@amaterasu.local:2222/hymeko/core.git`
+    Updating crates.io index
+     Locking 1 package to latest Rust 1.97.1 compatible version
+    Removing hymeko_core v0.1.0 (ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#75c6c7b2)
+      Adding hymeko_core v0.1.0 (ssh://git@amaterasu.local:2222/hymeko/core.git?rev=ac1131b5490734b855021f6076753417e1337cd6#ac1131b5)
+note: pass `--verbose` to see 16 unchanged dependencies behind latest

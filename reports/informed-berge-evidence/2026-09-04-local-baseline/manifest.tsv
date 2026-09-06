@@ -1,0 +1,24 @@
+key	value
+run	20260904-044302+02:00
+source_commit	3d0dffbce5299a571a318f651d3958930c14a32b
+evidence_client_blob	a6f4a30bbca668509477342be8516b42d91f313c
+independent_oracle_blob	fdc93d649ea708cb357003cdecf89106a41e592b
+binary_path	D:\h\codex-graph-p34-audit\tmp\target\release\deps\informed_berge_evidence-128c406da344c858.exe
+binary_sha256	eeb27488c9e06ff99d00acee998aa938d7db3521e97541837fe689d345791d68
+profile	release
+warmups	2
+samples	9
+cpu_batch_target_us	250000
+search_contract	full path hash outside timed boundary; equal optimal cost per workload; deterministic SearchStats; consistent heuristics require zero reopenings
+shortest_contract	public BFS Berge shortest and unit-cost Dijkstra agree on reachability and hyperedge count
+enumeration_contract	full ordered output hash outside timing; finite depth/result/expansion budgets; explicit stopping reason
+dstar_status	NOT_IMPLEMENTED; repeated A* is not reported as D* or LPA*
+logical_processors	24
+ambient_cpu_avg_pct	7
+ambient_cpu_max_pct	10
+os	Microsoft Windows 11 Home build 26200
+cpu	Intel(R) Core(TM) Ultra 9 275HX
+ram_bytes	68097818624
+rustc	rustc 1.97.1 (8bab26f4f 2026-07-14)
+cargo	cargo 1.97.1 (c980f4866 2026-06-30)
+command	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/informed_berge_evidence/run.ps1 -RunDate 2026-09-04-local-baseline -ScratchRoot D:\h\codex-graph-p34-audit\tmp

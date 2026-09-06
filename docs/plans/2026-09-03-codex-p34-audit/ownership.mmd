@@ -1,0 +1,19 @@
+flowchart LR
+    CORE["hymeko/core\nCanonical Ir + canonical IDs\nIncidenceIndex + validation\nNo graph algorithms"]
+    GRAPH["hymeko/graph\nDirect-Ir traversal and routing\nRank-2 + implicit-Levi matroids\nShared caller-owned scratch"]
+    PGRAPH["hymeko/graph::hymeko_pgraph\nP-graph schema/lowering\nAND/OR T/S propagation\nMSG/SSG/ABB"]
+    CONTROLS["Test/benchmark controls only\nMaterialized sparse-star CSR\nClique / 2-section\nIndependent DSU/Kruskal oracles"]
+    NAGARE["Nagare\nPlatform HNN owner\n(per 2026-09 platform strategy)"]
+    HOTARU["Hotaru\nLegacy duplicated hypergraph helpers\nOwnership docs still conflict"]
+
+    CORE -->|"borrow Ir + IncidenceIndex"| GRAPH
+    CORE -->|"borrow Ir + IncidenceIndex"| PGRAPH
+    GRAPH -->|"PGraphView primitive"| PGRAPH
+    CONTROLS -.->|"must never become production authority"| GRAPH
+    GRAPH -.->|"features consumed by"| NAGARE
+    HOTARU -.->|"migration / ownership reconciliation required"| GRAPH
+
+    DRIFT["Documentation drift\ncore README still names removed hymeko_hnn\ngraph Cargo header says crates do not depend\nHotaru-vs-graph hypergraph ownership conflicts"]
+    DRIFT -.-> CORE
+    DRIFT -.-> GRAPH
+    DRIFT -.-> HOTARU

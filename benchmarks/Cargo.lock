@@ -543,9 +543,10 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 [[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+ssh://git@amaterasu.local:2222/hymeko/core.git?branch=main#75c6c7b2c7fce2dd512575a4a642494f7d9f9943"
+source = "git+ssh://git@amaterasu.local:2222/hymeko/core.git?rev=92383b38a7c56c197300d9b85e81f637135a8743#92383b38a7c56c197300d9b85e81f637135a8743"
 dependencies = [
  "blake3",
+ "ciborium",
  "nalgebra",
  "nalgebra-sparse",
  "num-traits",
@@ -560,6 +561,7 @@ name = "hymeko_graph"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "hymeko_core",
  "rayon",
 ]
 
