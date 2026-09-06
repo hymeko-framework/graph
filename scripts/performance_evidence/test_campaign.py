@@ -1,4 +1,6 @@
 import copy
+import csv
+import hashlib
 import json
 import tempfile
 import unittest
@@ -8,6 +10,35 @@ from campaign import PHASES, Campaign, CampaignSummary, Cell, Evidence
 
 
 class EvidenceContract(unittest.TestCase):
+    def test_summary_publishes_measured_boundaries_and_exact_hashes(self):
+        original = (
+            Path(__file__).resolve().parents[2]
+            / "reports/cross-platform-benchmarks/2026-09-06"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for platform in ("windows", "native"):
+                (root / platform).mkdir()
+                (root / platform / "campaign.json").write_bytes(
+                    (original / platform / "campaign.json").read_bytes()
+                )
+            summary = CampaignSummary(root)
+            summary.write(("windows", "native"))
+            manifest = json.loads((root / "artifacts-manifest.json").read_text())
+            for filename, expected in manifest.items():
+                self.assertEqual(
+                    hashlib.sha256((root / filename).read_bytes()).hexdigest(), expected
+                )
+            with (root / "platform-summary.csv").open(newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            self.assertEqual(
+                {r["phase"] for r in rows if r["algorithm"] == "discrete_hops"},
+                {"preparation"},
+            )
+            self.assertTrue(all(r["measurement_scope"] for r in rows))
+            self.assertEqual({r["platform"] for r in rows}, {"windows", "native"})
+            self.assertTrue((root / "search-platforms.svg").is_file())
+
     def test_phase_breakdown_is_explicit_and_file_boundaries_are_required(self):
         phases = [p[0] for p in PHASES]
         self.assertEqual(len(phases), 10)

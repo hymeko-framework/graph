@@ -675,7 +675,10 @@ class CampaignSummary:
                     "workload": cell["workload"],
                     "algorithm": cell["subject"],
                     "phase": next(
-                        (p[1] for p in PHASES if p[0] == cell["subject"]), "execution"
+                        (p[1] for p in PHASES if p[0] == cell["subject"]),
+                        "preparation"
+                        if cell.get("section") == "heuristic_preparation"
+                        else "execution",
                     ),
                     "measurement_scope": next(
                         (p[2] for p in PHASES if p[0] == cell["subject"]),
@@ -740,7 +743,12 @@ class CampaignSummary:
             "metric_rows": len(self.rows),
             "raw_samples": sum(r["samples"] for r in self.rows),
             "semantic_and_work_counter_parity": True,
-            "bfs_dijkstra_and_astar_optimal_cost_checks": True,
+            "bfs_dijkstra_and_astar_optimal_cost_checks": all(
+                c.get("suite", "graph") == "graph" for c in campaigns
+            ),
+            "parsed_fixture_equivalence_checks": all(
+                c.get("suite") == "parsing" for c in campaigns
+            ),
             "quantiles": "sorted pooled batch means, indexes floor(n/4), floor(n/2), floor(3n/4)",
         }
         (self.root / "verification.json").write_text(
@@ -755,19 +763,18 @@ class CampaignSummary:
             ("transport", "search_cell-transport128-astar_discrete-t1"),
         ]
         if self.rows[0]["source_bytes"]:
+            common = set.intersection(
+                *(
+                    {r["algorithm"] for r in self.rows if r["platform"] == p}
+                    for p in platforms
+                )
+            )
+            subject = next(
+                (s for s in ("parse_ast", "file_to_dijkstra") if s in common),
+                min(common),
+            )
             selections = [
-                (w, f"parsing_parsing_cell-{w}-parse_ast-t1")
-                for w in ("map32", "map128", "map512")
-            ]
-        if self.rows[0]["algorithm"] in {
-            "generate_ir",
-            "emit_source",
-            "read_source",
-            "dijkstra_prepared",
-            "file_to_dijkstra",
-        }:
-            selections = [
-                (w, f"parsing_parsing_cell-{w}-file_to_dijkstra-t1")
+                (w, f"parsing_parsing_cell-{w}-{subject}-t1")
                 for w in ("map32", "map128", "map512")
             ]
         indexed = {(row["platform"], row["benchmark"]): row for row in self.rows}
