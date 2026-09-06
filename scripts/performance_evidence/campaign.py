@@ -342,6 +342,29 @@ class Campaign:
         self.output = Path(args.output).resolve()
         self.output.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def resume_checkpoint(current: dict, saved: dict) -> dict:
+        for key in (
+            "source_commit",
+            "binaries",
+            "suite",
+            "platform",
+            "runtime",
+            "runs",
+            "smoke",
+        ):
+            if current[key] != saved[key]:
+                raise ValueError(f"checkpoint identity changed: {key}")
+        identities = [(c["run"], c["id"]) for c in saved["cells"]]
+        if len(identities) != len(set(identities)):
+            raise ValueError("duplicate checkpoint cell")
+        return saved
+
+    def save_checkpoint(self, result: dict) -> None:
+        temporary = self.output / "checkpoint.pending.json"
+        temporary.write_text(json.dumps(result, indent=2) + "\n", encoding="utf8")
+        temporary.replace(self.output / "checkpoint.json")
+
     def run(self) -> None:
         target = self.output / "campaign.json"
         if target.exists():
@@ -356,6 +379,8 @@ class Campaign:
         result = {
             "schema_version": 1,
             "suite": self.args.suite,
+            "runs": self.args.runs,
+            "smoke": self.args.smoke,
             "platform": self.args.platform,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "source_commit": git("rev-parse", "HEAD"),
@@ -379,7 +404,27 @@ class Campaign:
             "cells": [],
             "correctness": [],
         }
+        checkpoint = self.output / "checkpoint.json"
+        if checkpoint.exists():
+            if not self.args.resume:
+                raise ValueError(
+                    "checkpoint exists; use --resume with the same binary and source"
+                )
+            result = self.resume_checkpoint(
+                result, json.loads(checkpoint.read_text(encoding="utf8"))
+            )
+            for cell in result["cells"]:
+                if (
+                    Evidence.parse(
+                        (self.output / cell["log"]).read_text(encoding="utf8")
+                    )
+                    != cell["records"]
+                ):
+                    raise ValueError("checkpoint/raw evidence mismatch")
+        self.save_checkpoint(result)
         for suite in self.runner.binaries:
+            if any(c["suite"] == suite for c in result["correctness"]):
+                continue
             print(f"correctness {suite}", flush=True)
             log = self.output / f"correctness-{suite}.log"
             observation = self.runner.invoke(
@@ -388,6 +433,7 @@ class Campaign:
             result["correctness"].append(
                 {"suite": suite, "log": log.name, **observation}
             )
+            self.save_checkpoint(result)
         cells = Cell.matrix(self.args.suite)
         if self.args.smoke:
             cells = (
@@ -404,10 +450,15 @@ class Campaign:
                 if self.args.suite == "parsing"
                 else [cells[0], cells[-1]]
             )
-        previous = {}
+        previous = {
+            c["id"]: c["records"]["CELL"][0]["checksum"] for c in result["cells"]
+        }
+        completed = {(c["run"], c["id"]) for c in result["cells"]}
         for run in range(1, self.args.runs + 1):
             order = cells if run % 2 else list(reversed(cells))
             for ordinal, cell in enumerate(order, 1):
+                if (run, cell.key) in completed:
+                    continue
                 print(
                     f"{self.args.platform} run {run}/{self.args.runs} {ordinal}/{len(cells)} {cell.key}",
                     flush=True,
@@ -441,6 +492,7 @@ class Campaign:
                         "resources": observation,
                     }
                 )
+                self.save_checkpoint(result)
                 (self.output / "progress.json").write_text(
                     json.dumps(
                         {
@@ -663,6 +715,7 @@ if __name__ == "__main__":
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--resume", action="store_true")
     arguments = parser.parse_args()
     if arguments.suite == "graph" and not arguments.algorithm:
         parser.error("--algorithm is required for the graph suite")

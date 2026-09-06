@@ -1,12 +1,52 @@
 import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
-from campaign import CampaignSummary, Cell, Evidence
+from campaign import Campaign, CampaignSummary, Cell, Evidence
 
 
 class EvidenceContract(unittest.TestCase):
+    def test_checkpoint_is_atomic_and_rejects_changed_provenance(self):
+        current = {
+            "source_commit": "a" * 40,
+            "binaries": {"informed": {"sha256": "b" * 64}},
+            "suite": "parsing",
+            "platform": "windows",
+            "runtime": {},
+            "runs": 3,
+            "smoke": False,
+            "cells": [],
+        }
+        saved = copy.deepcopy(current)
+        saved["cells"] = [{"run": 1, "id": "parse"}]
+        self.assertEqual(Campaign.resume_checkpoint(current, saved), saved)
+        for key in (
+            "source_commit",
+            "binaries",
+            "suite",
+            "platform",
+            "runtime",
+            "runs",
+            "smoke",
+        ):
+            changed = copy.deepcopy(saved)
+            changed[key] = "changed"
+            with self.assertRaises(ValueError):
+                Campaign.resume_checkpoint(current, changed)
+        with tempfile.TemporaryDirectory() as directory:
+            campaign = Campaign.__new__(Campaign)
+            campaign.output = Path(directory)
+            campaign.save_checkpoint(saved)
+            self.assertEqual(
+                json.loads((campaign.output / "checkpoint.json").read_text()), saved
+            )
+            self.assertFalse((campaign.output / "checkpoint.pending.json").exists())
+        saved["cells"] *= 2
+        with self.assertRaises(ValueError):
+            Campaign.resume_checkpoint(current, saved)
+
     def fixture(self):
         rows = [
             f"EVIDENCE_SAMPLE\tordinal={i}\twall_us={i + 1}\tchecksum=123"
