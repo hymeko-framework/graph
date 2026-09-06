@@ -596,10 +596,10 @@ Production source, manifests, Core/Parser pins, both lockfiles and the separate 
 
 ### Branch names and exact pre-retirement tips
 
-The nine requested branches and older fully integrated Graph branches are consolidated into main. `-` means that the name existed only on the other side. These exact refs permit reconstruction with `git branch <name> <tip>` and a normal push if later requested; no extra archival branch is needed.
+The nine requested branches and older fully integrated Graph branches are consolidated into main. This table records local refs and the fetched remote-tracking refs; a tracking ref can outlive its server branch. `-` means that the name existed only in the other namespace. These exact refs permit reconstruction with `git branch <name> <tip>` and a normal push if later requested; no extra archival branch is needed.
 
 <!-- graph-branch-tips:start -->
-| Branch | Local tip | Remote tip |
+| Branch | Local tip | Remote-tracking tip |
 |---|---|---|
 | `audit/platform-2026-09-05` | `978c39eae94132cf02d1eae1a4040d608ef12d73` | `978c39eae94132cf02d1eae1a4040d608ef12d73` |
 | `chore/canonical-graph-governance` | `-` | `610d1eb1d30c9b22d4daa2758e54473cf64e191a` |
@@ -653,3 +653,10 @@ Full local command logs are in this checkout's `.git/graph-main-consolidation-te
 
 
 Publication synchronization: the final fetch found the user's concurrent PR #1 merge on remote main at `321d47990f765455c40c620f480d4ae6900f988e` (parents b234c487 and 978c39ea). Its complete tree is identical to 978c39ea. It is included by a normal merge, preserving that server history; the only additional file change is this synchronization note. Tests remain applicable because all production, test, fixture and dependency files are unchanged from the verified 4cb8414 consolidation. No branch was deleted before this new remote-main history was integrated.
+
+
+### Verified completion
+
+Verified at 2026-09-06T04:18:06+02:00: **main is the only local and server-side Graph branch**, and the canonical working tree is clean. Server main contains all nine requested original tips and the concurrent PR #1 merge. The final `ls-remote --heads` check, rather than cached tracking refs, found only two remaining server branches: `feat/graph-query-performance-matrix` and `feat/pgraph-lowered-borrows-canonical-ir`. Both were deleted atomically with their exact expected-tip guards after confirming that main contains them. **14 fully merged local branches** were deleted with `git branch -d`; **19 stale remote-tracking refs** were pruned because their corresponding branches were already absent on the server. Those 19 server deletions are not attributed to this operation.
+
+The branch table preserves their original tip identities inside main's committed report. Every listed commit is still reachable from main. No new worktree was created and no other repository was changed during this Graph consolidation. This final documentation update changes no tested code, test harness, fixture, manifest or lockfile; the 557-passing-test validation above remains applicable.
