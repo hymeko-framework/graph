@@ -62,6 +62,17 @@ impl Octree {
     /// No undeclared cells are created. Invalid requests leave this tree untouched.
     pub fn adapt(&self, refine: &[usize], coarsen: &[usize]) -> Result<Remesh, String> {
         let mut active: HashSet<_> = self.leaves.iter().copied().collect();
+        if refine.is_empty() && coarsen.is_empty() {
+            let mut tree = self.clone();
+            // Keep the established canonical frontier order even when a caller
+            // has permuted its public leaves array. No topology changed, so no
+            // new balance search is needed for a validated Octree. Retain the
+            // geometric transfer predicate even for unchanged leaves: accepted
+            // coordinate roundoff can yield tiny overlaps between neighbours.
+            tree.set_frontier(&active)?;
+            let overlaps = self.overlaps(&tree);
+            return Ok(Remesh { tree, overlaps });
+        }
         let mut requested = HashSet::new();
         for &i in refine {
             if !requested.insert(i) || !active.contains(&i) || self.cells[i].children.len() != 8 {
@@ -109,21 +120,7 @@ impl Octree {
                 }
             }
             if split.is_empty() {
-                let mut overlaps = Vec::new();
-                for (a, &i) in self.leaves.iter().enumerate() {
-                    for (b, &j) in tree.leaves.iter().enumerate() {
-                        let (a_cell, b_cell) = (&self.cells[i], &tree.cells[j]);
-                        let v: f64 = (0..3)
-                            .map(|k| {
-                                (a_cell.hi[k].min(b_cell.hi[k]) - a_cell.lo[k].max(b_cell.lo[k]))
-                                    .max(0.0)
-                            })
-                            .product();
-                        if v > 0.0 {
-                            overlaps.push((a, b, v));
-                        }
-                    }
-                }
+                let overlaps = self.overlaps(&tree);
                 return Ok(Remesh { tree, overlaps });
             }
             for i in split {
@@ -286,12 +283,12 @@ impl Octree {
         for &child in &parent.children {
             let c = &cells[child];
             let mut code = 0;
-            for k in 0..3 {
-                let upper = (c.lo[k] - mid[k]).abs() <= side * 1e-12;
+            for (k, &middle) in mid.iter().enumerate() {
+                let upper = (c.lo[k] - middle).abs() <= side * 1e-12;
                 let (lo, hi) = if upper {
-                    (mid[k], parent.hi[k])
+                    (middle, parent.hi[k])
                 } else {
-                    (parent.lo[k], mid[k])
+                    (parent.lo[k], middle)
                 };
                 if (c.lo[k] - lo).abs() > side * 1e-12 || (c.hi[k] - hi).abs() > side * 1e-12 {
                     return Err("child does not occupy a parent octant".into());
@@ -308,13 +305,20 @@ impl Octree {
     }
     /// Shared subfaces: leaf indexes, area and normal centre distance.
     /// One coarse face naturally yields four independently conserved subfaces.
-    /// Bounded pair scan for the initial <=1024-leaf demonstrator.
+    /// The authored hierarchy filters candidates; exact predicates and ordered
+    /// leaf-index output are preserved, including coarse/fine subfaces.
     pub fn faces(&self) -> Vec<(usize, usize, f64, f64)> {
         let mut out = Vec::new();
         let root = &self.cells[self.root];
         let eps = (root.hi[0] - root.lo[0]) * 1e-12;
+        let index = Frontier::new(self);
+        let mut stack = Vec::new();
         for (i, &a) in self.leaves.iter().enumerate() {
-            for (j, &b) in self.leaves.iter().enumerate().skip(i + 1) {
+            index.visit::<true>(&self.cells[a], eps, &mut stack, |j| {
+                if j <= i {
+                    return;
+                }
+                let b = self.leaves[j];
                 let (a, b) = (&self.cells[a], &self.cells[b]);
                 for axis in 0..3 {
                     if (a.hi[axis] - b.lo[axis]).abs() > eps
@@ -335,9 +339,106 @@ impl Octree {
                         ));
                     }
                 }
+            });
+        }
+        out.sort_by_key(|&(i, j, _, _)| (i, j));
+        out
+    }
+
+    fn overlaps(&self, next: &Self) -> Vec<(usize, usize, f64)> {
+        let index = Frontier::new(next);
+        let mut stack = Vec::new();
+        let mut out = Vec::new();
+        for (a, &i) in self.leaves.iter().enumerate() {
+            let a_cell = &self.cells[i];
+            index.visit::<false>(a_cell, 0.0, &mut stack, |b| {
+                let b_cell = &next.cells[next.leaves[b]];
+                let v: f64 = (0..3)
+                    .map(|k| {
+                        (a_cell.hi[k].min(b_cell.hi[k]) - a_cell.lo[k].max(b_cell.lo[k])).max(0.0)
+                    })
+                    .product();
+                if v > 0.0 {
+                    out.push((a, b, v));
+                }
+            });
+        }
+        out.sort_unstable_by_key(|&(a, b, _)| (a, b));
+        out
+    }
+}
+
+// Ephemeral query accelerator over the canonical projected hierarchy. Public
+// cells/leaves can be changed by a caller, so caching this across calls would
+// need an invalidation contract that Octree deliberately does not invent.
+struct Frontier<'a> {
+    tree: &'a Octree,
+    slots: Vec<Option<usize>>,
+    bounds: Vec<([f64; 3], [f64; 3])>,
+}
+impl<'a> Frontier<'a> {
+    fn new(tree: &'a Octree) -> Self {
+        let mut slots = vec![None; tree.cells.len()];
+        for (i, &cell) in tree.leaves.iter().enumerate() {
+            slots[cell] = Some(i);
+        }
+        let mut bounds: Vec<_> = tree.cells.iter().map(|c| (c.lo, c.hi)).collect();
+        let mut order = Vec::new();
+        let mut stack = vec![tree.root];
+        while let Some(i) = stack.pop() {
+            order.push(i);
+            if slots[i].is_none() {
+                stack.extend(&tree.cells[i].children);
             }
         }
-        out
+        for &i in order.iter().rev() {
+            if slots[i].is_some() {
+                continue;
+            }
+            for &child in &tree.cells[i].children {
+                // Union actual descendant bounds: accepted authored roundoff
+                // may put a child slightly outside its nominal parent box.
+                let (lo, hi) = bounds[child];
+                for k in 0..3 {
+                    bounds[i].0[k] = bounds[i].0[k].min(lo[k]);
+                    bounds[i].1[k] = bounds[i].1[k].max(hi[k]);
+                }
+            }
+        }
+        Self {
+            tree,
+            slots,
+            bounds,
+        }
+    }
+    // Face queries include touching boxes; transfer queries require strictly
+    // positive volume and can prune tangencies before reaching their leaves.
+    fn visit<const TOUCHING: bool>(
+        &self,
+        cell: &Cell,
+        eps: f64,
+        stack: &mut Vec<usize>,
+        mut emit: impl FnMut(usize),
+    ) {
+        stack.clear();
+        stack.push(self.tree.root);
+        while let Some(i) = stack.pop() {
+            let (lo, hi) = self.bounds[i];
+            if (0..3).any(|k| {
+                if TOUCHING {
+                    cell.lo[k] - hi[k] > eps || lo[k] - cell.hi[k] > eps
+                } else {
+                    cell.lo[k] >= hi[k] || lo[k] >= cell.hi[k]
+                }
+            }) {
+                continue;
+            }
+            if let Some(slot) = self.slots[i] {
+                emit(slot);
+            } else {
+                stack.extend(&self.tree.cells[i].children);
+            }
+        }
     }
 }
 
@@ -373,6 +474,205 @@ mod tests {
     };
     use std::sync::atomic::{AtomicU64, Ordering};
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    // Synthetic projected geometry; no parsing is timed by the structural probe.
+    fn scaling_tree(depth: usize, mut extra: usize) -> Octree {
+        fn append(
+            tree: &mut Octree,
+            lo: [f64; 3],
+            side: f64,
+            level: usize,
+            depth: usize,
+            extra: &mut usize,
+        ) -> usize {
+            let index = tree.cells.len();
+            tree.cells.push(Cell {
+                decl: DeclId::new(index),
+                lo,
+                hi: lo.map(|v| v + side),
+                depth: level,
+                children: Vec::new(),
+            });
+            let split = level < depth || (level == depth && *extra > 0);
+            if level == depth && split {
+                *extra -= 1;
+            }
+            if split {
+                for octant in 0..8 {
+                    let child_lo =
+                        std::array::from_fn(|k| lo[k] + ((octant >> k) & 1) as f64 * side * 0.5);
+                    let child = append(tree, child_lo, side * 0.5, level + 1, depth, extra);
+                    tree.cells[index].children.push(child);
+                }
+            } else {
+                tree.leaves.push(index);
+            }
+            index
+        }
+        let mut tree = Octree {
+            cells: Vec::new(),
+            leaves: Vec::new(),
+            root: 0,
+        };
+        append(&mut tree, [0.0; 3], 1.0, 0, depth, &mut extra);
+        tree
+    }
+
+    // Frozen overlap predicate from adapt at 454271d (same provenance as faces).
+    fn exhaustive_overlaps(old: &Octree, new: &Octree) -> Vec<(usize, usize, f64)> {
+        let mut out = Vec::new();
+        for (a, &i) in old.leaves.iter().enumerate() {
+            for (b, &j) in new.leaves.iter().enumerate() {
+                let (a_cell, b_cell) = (&old.cells[i], &new.cells[j]);
+                let v: f64 = (0..3)
+                    .map(|k| {
+                        (a_cell.hi[k].min(b_cell.hi[k]) - a_cell.lo[k].max(b_cell.lo[k])).max(0.0)
+                    })
+                    .product();
+                if v > 0.0 {
+                    out.push((a, b, v));
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn scaled_frontiers_match_frozen_ordered_geometry_and_remap() {
+        for (depth, extra) in [(0, 0), (1, 0), (2, 0), (3, 0), (3, 70)] {
+            let mut tree = scaling_tree(depth, extra);
+            for scale in [0.001, 1.0, 100.0] {
+                for cell in &mut tree.cells {
+                    cell.lo = cell.lo.map(|v| v * scale + 0.125);
+                    cell.hi = cell.hi.map(|v| v * scale + 0.125);
+                }
+                tree.leaves.reverse();
+                assert_eq!(tree.faces(), exhaustive_faces(&tree));
+                let result = tree.adapt(&[], &[]).unwrap();
+                assert_eq!(result.overlaps, exhaustive_overlaps(&tree, &result.tree));
+                let parents: Vec<_> = tree
+                    .cells
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, c)| {
+                        c.children.len() == 8 && c.children.iter().all(|i| tree.leaves.contains(i))
+                    })
+                    .map(|(i, _)| i)
+                    .collect();
+                let coarse = tree.adapt(&[], &parents).unwrap();
+                assert_eq!(coarse.overlaps, exhaustive_overlaps(&tree, &coarse.tree));
+                let refine: Vec<_> = parents
+                    .into_iter()
+                    .filter(|i| coarse.tree.leaves.contains(i))
+                    .collect();
+                let fine = coarse.tree.adapt(&refine, &[]).unwrap();
+                assert_eq!(fine.overlaps, exhaustive_overlaps(&coarse.tree, &fine.tree));
+            }
+        }
+    }
+
+    #[test]
+    fn descendant_roundoff_and_public_geometry_changes_preserve_exact_predicates() {
+        let mut tree = scaling_tree(3, 70);
+        // Perturb every node by less than its parent's authored tolerance,
+        // including descendants extending outside their nominal parent bounds.
+        for (i, cell) in tree.cells.iter_mut().enumerate().skip(1) {
+            let delta = (cell.hi[0] - cell.lo[0]) * 1e-13;
+            for k in 0..3 {
+                let sign = if (i + k) % 2 == 0 { 1.0 } else { -1.0 };
+                cell.lo[k] += sign * delta;
+                cell.hi[k] += sign * delta;
+            }
+        }
+        for _ in 0..2 {
+            assert_eq!(tree.faces(), exhaustive_faces(&tree));
+            let result = tree.adapt(&[], &[]).unwrap();
+            assert_eq!(result.overlaps, exhaustive_overlaps(&tree, &result.tree));
+            assert!(
+                result.overlaps.len() > tree.leaves.len(),
+                "roundoff overlap exercised"
+            );
+            tree.leaves.rotate_left(19);
+            for cell in &mut tree.cells {
+                cell.lo = cell.lo.map(|v| v * 0.25 - 1.0);
+                cell.hi = cell.hi.map(|v| v * 0.25 - 1.0);
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "bounded release octree operation timing profile"]
+    fn octree_scaling_profile() {
+        use std::{hint::black_box, time::Instant};
+        for (depth, extra) in [(1, 0), (2, 0), (3, 0), (3, 70)] {
+            let tree = scaling_tree(depth, extra);
+            let coarsen: Vec<_> = tree
+                .cells
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| {
+                    c.children.len() == 8 && c.children.iter().all(|i| tree.leaves.contains(i))
+                })
+                .map(|(i, _)| i)
+                .collect();
+            for operation in ["faces", "noop", "coarsen"] {
+                for run in 0..6 {
+                    let timer = Instant::now();
+                    for _ in 0..100 {
+                        match operation {
+                            "faces" => {
+                                black_box(tree.faces());
+                            }
+                            "noop" => {
+                                black_box(tree.adapt(&[], &[]).unwrap());
+                            }
+                            _ => {
+                                black_box(tree.adapt(&[], &coarsen).unwrap());
+                            }
+                        }
+                    }
+                    let seconds = timer.elapsed().as_secs_f64();
+                    assert!(seconds < 5.0, "octree 100-call budget: {seconds}");
+                    println!(
+                        "OCTREE_PROFILE,{},{operation},{run},{seconds:.9}",
+                        tree.leaves.len()
+                    );
+                }
+            }
+        }
+    }
+    // Frozen private oracle: Graph 454271d; original file SHA256
+    // 573faec946ae0d950205c9a1b30cdea4552b4e2678f5836efe55ef0b39848d5f.
+    fn exhaustive_faces(tree: &Octree) -> Vec<(usize, usize, f64, f64)> {
+        let mut out = Vec::new();
+        let root = &tree.cells[tree.root];
+        let eps = (root.hi[0] - root.lo[0]) * 1e-12;
+        for (i, &a) in tree.leaves.iter().enumerate() {
+            for (j, &b) in tree.leaves.iter().enumerate().skip(i + 1) {
+                let (a, b) = (&tree.cells[a], &tree.cells[b]);
+                for axis in 0..3 {
+                    if (a.hi[axis] - b.lo[axis]).abs() > eps
+                        && (b.hi[axis] - a.lo[axis]).abs() > eps
+                    {
+                        continue;
+                    }
+                    let mut area = 1.0;
+                    for k in (0..3).filter(|&k| k != axis) {
+                        area *= (a.hi[k].min(b.hi[k]) - a.lo[k].max(b.lo[k])).max(0.0);
+                    }
+                    if area > 0.0 {
+                        out.push((
+                            i,
+                            j,
+                            area,
+                            (a.hi[axis] - a.lo[axis] + b.hi[axis] - b.lo[axis]) * 0.5,
+                        ));
+                    }
+                }
+            }
+        }
+        out
+    }
+
     // Test-only source fixture authoring, using the real Core compiler.
     fn source(refine: bool) -> String {
         let mut s = String::from("fixture {}\ndomain { root { lo [0,0,0]; hi [2,2,2];\n");
