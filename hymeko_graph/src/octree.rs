@@ -12,6 +12,9 @@ use hymeko::{
 };
 use std::collections::{HashMap, HashSet};
 
+mod bounds;
+pub use bounds::BoundsIndex;
+
 /// One authored axis-aligned cubic cell; identity belongs to Core.
 #[derive(Clone, Debug)]
 pub struct Cell {
