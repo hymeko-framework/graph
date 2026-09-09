@@ -26,6 +26,21 @@ core:
   # generic graph crate, where a copy previously drifted.
   - hymeko_pgraph
 
+  # SBSH -- the spatial overlay on the canonical IR. Added 2026-09-09 by explicit direction; this
+  # entry is the written declaration that addition requires. It owns exactly two things the rest of
+  # the layer does not have: the N-dimensional laminar orthtree over POINTS (quadtree = dim 2,
+  # octree = dim 3), and the min-degree treewidth certificate.
+  #
+  # It owns NO hypergraph, NO incidence and NO traversal -- those stay `hymeko_graph`'s, and this
+  # crate consumes them. Two boundaries follow and are load-bearing:
+  #   * `hymeko_graph::quadtree` remains the SOLE owner of raster subdivision (image variance +
+  #     Forman-Ricci curvature over pixels). `hymeko_sbsh` subdivides a POINT SET; it ships no
+  #     energy/raster split rule, and one must not be added here. `SplitRule` is a trait so a
+  #     caller supplies its own.
+  #   * The IR-to-coordinate seam is `hymeko_graph::direct_ir::PositionProvider`, reused, never
+  #     redeclared.
+  - hymeko_sbsh
+
 # Consumers. `nagare` links `hymeko_graph` by path; `tensor` MAY consume it and MUST NOT vendor it.
 # A breaking change to a public API above is a breaking change to those consumers -- build them
 # before proposing one.

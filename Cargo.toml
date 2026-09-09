@@ -18,7 +18,7 @@
 # neither library resolves criterion. See that manifest.
 [workspace]
 resolver = "3"
-members = ["hymeko_graph", "hymeko_pgraph"]
+members = ["hymeko_graph", "hymeko_pgraph", "hymeko_sbsh"]
 
 [workspace.dependencies]
 # The split-out HyMeKo repos. `hymeko_framework_rust` is retired; these are

@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**7 package(s), 482 public symbol(s).**
+**8 package(s), 522 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -560,6 +560,64 @@ _No public symbols._
 - `with_required_products` — `hymeko_pgraph/src/friedler.rs`
 - `with_valid_o_nodes` — `hymeko_pgraph/src/friedler.rs`
 - `write_pgip` — `hymeko_pgraph/src/pgip_io.rs`
+
+## hymeko_sbsh (rust)
+
+- **Root:** `hymeko_sbsh`
+- **Manifest:** `hymeko_sbsh/Cargo.toml`
+- **Charter:** # `hymeko_sbsh` — Spatial Bounded-width Signed Hypergraph
+
+### traits
+
+- `SplitRule` — `hymeko_sbsh/src/orthtree.rs`
+
+### structs
+
+- `CountSplit` — `hymeko_sbsh/src/orthtree.rs`
+- `ElimCost` — `hymeko_sbsh/src/width.rs`
+- `IrPositions` — `hymeko_sbsh/src/ir_positions.rs`
+- `OrthConfig` — `hymeko_sbsh/src/orthtree.rs`
+- `OrthTree` — `hymeko_sbsh/src/orthtree.rs`
+- `SbshScene` — `hymeko_sbsh/src/scene.rs`
+
+### enums
+
+- `SceneError` — `hymeko_sbsh/src/scene.rs`
+
+### functions
+
+- `adjacency` — `hymeko_sbsh/src/width.rs`
+- `build` — `hymeko_sbsh/src/scene.rs`
+- `build_orthtree` — `hymeko_sbsh/src/orthtree.rs`
+- `cell_hi` — `hymeko_sbsh/src/orthtree.rs`
+- `cell_lo` — `hymeko_sbsh/src/orthtree.rs`
+- `certificate_width` — `hymeko_sbsh/src/width.rs`
+- `certificate_width_of` — `hymeko_sbsh/src/width.rs`
+- `contains` — `hymeko_sbsh/src/orthtree.rs`
+- `decls` — `hymeko_sbsh/src/ir_positions.rs`
+- `decls` — `hymeko_sbsh/src/scene.rs`
+- `dim` — `hymeko_sbsh/src/scene.rs`
+- `elimination_cost` — `hymeko_sbsh/src/width.rs`
+- `from_attribute` — `hymeko_sbsh/src/ir_positions.rs`
+- `is_empty` — `hymeko_sbsh/src/ir_positions.rs`
+- `is_leaf` — `hymeko_sbsh/src/orthtree.rs`
+- `leaf_of` — `hymeko_sbsh/src/orthtree.rs`
+- `leaves` — `hymeko_sbsh/src/orthtree.rs`
+- `len` — `hymeko_sbsh/src/ir_positions.rs`
+- `n_cells` — `hymeko_sbsh/src/orthtree.rs`
+- `objects_in_region` — `hymeko_sbsh/src/orthtree.rs`
+- `objects_in_region` — `hymeko_sbsh/src/scene.rs`
+- `order_min_degree` — `hymeko_sbsh/src/width.rs`
+- `patch_of` — `hymeko_sbsh/src/scene.rs`
+- `patches` — `hymeko_sbsh/src/scene.rs`
+- `point_bbox` — `hymeko_sbsh/src/orthtree.rs`
+- `point_index` — `hymeko_sbsh/src/scene.rs`
+- `point_of` — `hymeko_sbsh/src/scene.rs`
+- `points` — `hymeko_sbsh/src/scene.rs`
+- `primal_adjacency` — `hymeko_sbsh/src/scene.rs`
+- `tree` — `hymeko_sbsh/src/scene.rs`
+- `verify_laminar` — `hymeko_sbsh/src/orthtree.rs`
+- `width` — `hymeko_sbsh/src/scene.rs`
 
 ## scripts (python)
 
