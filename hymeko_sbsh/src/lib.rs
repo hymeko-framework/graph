@@ -23,6 +23,29 @@
 //! semantic hyperarcs grafted onto it. [`width::certificate_width`] is the one structural number
 //! that says how much.
 //!
+//! ## How little of this is an overlay
+//!
+//! "Overlay" should not mean "a parallel model kept in step with the IR". It means one added part,
+//! `P`, and the crate is built so that everything else is read from the IR in place:
+//!
+//! - **Coordinates come from the IR.** A numeric list attribute compiles to a child declaration
+//!   whose `anno.value` is `ValueR::List([Num, ...])`, so a model that declares its own poses needs
+//!   no external table at all -- [`IrPositions`] reads them straight out of `Ir`. An external
+//!   [`hymeko_graph::direct_ir::PositionProvider`] remains available for poses that genuinely live
+//!   outside the model (live simulation state, a tracker), and neither source is privileged.
+//! - **The primal graph is never materialised.** `direct_ir` sets the standard -- "no pairwise
+//!   flattening, no materialised star or clique" -- and
+//!   [`SbshScene::primal_adjacency`] meets it: a `k`-member hyperarc makes its members mutually
+//!   adjacent without ever building the `k*(k-1)/2` pairs, because the elimination game consumes
+//!   adjacency, not an edge list.
+//! - **No reverse index.** Declarations are enumerated in ascending `DeclId` order, so the point
+//!   vector is already sorted and a binary search replaces what was a `BTreeMap`.
+//!
+//! What genuinely cannot be read from the IR is the tree itself. The IR has no spatial structure
+//! and no notion of nesting by position, so `P` has to be *computed* -- and the one thing the crate
+//! stores beyond it is a contiguous `f64` buffer of the coordinates, which is a deliberate cache
+//! for the build's hot loop, filled once from the IR. That is the whole overlay.
+//!
 //! ## Ownership, and why this is a separate crate
 //!
 //! Per `CORE.YAML`, `hymeko_graph` is the canonical owner of generic signed-graph and hypergraph
@@ -50,10 +73,12 @@
 //! [`hymeko_graph::direct_ir::PositionProvider`], so binding a scene to the IR needs no lossy
 //! conversion at the boundary.
 
+pub mod ir_positions;
 pub mod orthtree;
 pub mod scene;
 pub mod width;
 
+pub use ir_positions::IrPositions;
 pub use orthtree::{CountSplit, OrthConfig, OrthTree, SplitRule, build_orthtree, point_bbox};
 pub use scene::{SbshScene, SceneError};
-pub use width::{ElimCost, certificate_width, elimination_cost};
+pub use width::{ElimCost, certificate_width, certificate_width_of, elimination_cost};

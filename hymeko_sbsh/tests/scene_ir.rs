@@ -191,12 +191,13 @@ fn the_primal_graph_cliques_each_hyperarc_and_the_width_follows() {
     let scene = scene_of(&w, &coords, 2);
     let index = build_incidence_index(w.ir()).expect("index");
 
-    let edges = scene.primal_edges(&index);
-    // e1 and e2 are binary (1 edge each); e3 is ternary and cliques to 3 edges.
+    let adj = scene.primal_adjacency(&index);
+    // e1 and e2 are binary (1 edge each); e3 is ternary and induces a 3-clique. Summing the
+    // adjacency's degrees counts every undirected edge twice: 2 * (1 + 1 + 3) = 10.
+    let half: usize = adj.iter().map(|n| n.len()).sum();
     assert_eq!(
-        edges.len(),
-        5,
-        "2 binary arcs + one 3-clique = 5 primal edges, got {edges:?}"
+        half, 10,
+        "2 binary arcs + one 3-clique = 5 undirected edges, got adj {adj:?}"
     );
 
     // a-b-c is a chain (width 1); d,e,f is a triangle (width 2); the scene is their disjoint
@@ -211,11 +212,11 @@ fn a_ternary_arc_is_not_flattened_to_a_single_pair() {
     let coords = [("d", [0.0, 0.0]), ("e", [1.0, 0.0]), ("f", [0.0, 1.0])];
     let scene = scene_of(&w, &coords, 4);
     let index = build_incidence_index(w.ir()).expect("index");
-    let edges = scene.primal_edges(&index);
+    let adj = scene.primal_adjacency(&index);
+    let half: usize = adj.iter().map(|n| n.len()).sum();
     assert_eq!(
-        edges.len(),
-        3,
-        "a 3-member arc must clique to 3 edges, got {edges:?}"
+        half, 6,
+        "a 3-member arc must induce a 3-clique (6 half-edges), got {adj:?}"
     );
     assert_eq!(scene.width(&index), 2, "a triangle certifies at width 2");
 }

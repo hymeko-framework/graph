@@ -116,6 +116,24 @@ pub fn elimination_cost(adj: &[BTreeSet<u32>], order: &[u32]) -> ElimCost {
     ElimCost { fill, width, flops }
 }
 
+/// The width certificate taken **directly from an adjacency**, with no intermediate edge list.
+///
+/// `certificate_width` exists for callers who already hold edges; this is for callers who can
+/// enumerate neighbours in place. A `k`-member hyperarc induces a `k`-clique, and materialising
+/// that clique as `k*(k-1)/2` pairs only to insert them into sets is work the elimination never
+/// needed -- `direct_ir` names "no pairwise flattening, no materialised star or clique" as the
+/// standard for traversing the canonical IR, and the certificate can meet it.
+///
+/// # Preconditions
+/// `adj` is symmetric and self-loop free -- the contract [`adjacency`] establishes.
+pub fn certificate_width_of(adj: &[BTreeSet<u32>]) -> usize {
+    if adj.is_empty() {
+        return 0;
+    }
+    let order = order_min_degree(adj.len(), adj);
+    elimination_cost(adj, &order).width
+}
+
 /// The SBSH width certificate for a constraint graph on `n` vertices: a treewidth upper bound via
 /// min-degree elimination. Signs, if the caller has them, are irrelevant here and may be dropped
 /// before calling.
