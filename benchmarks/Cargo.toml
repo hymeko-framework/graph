@@ -22,7 +22,7 @@ publish = false
 [dependencies]
 hymeko_graph = { path = "../hymeko_graph" }
 hymeko_pgraph = { path = "../hymeko_pgraph" }
-parser = { git = "ssh://git@amaterasu.local:2222/hymeko/parser.git", branch = "master" }
+parser = { git = "https://github.com/hymeko-framework/parser.git", rev = "f11628591a8183586492807ecdf43c64e6d31c5f" }
 
 [dev-dependencies]
 criterion = "0.8.2"

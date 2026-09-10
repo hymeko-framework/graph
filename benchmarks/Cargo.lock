@@ -543,7 +543,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 [[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+ssh://git@amaterasu.local:2222/hymeko/core.git?rev=92383b38a7c56c197300d9b85e81f637135a8743#92383b38a7c56c197300d9b85e81f637135a8743"
+source = "git+https://github.com/hymeko-framework/core.git?rev=aecfa9891537f976ad1d9f4a7be7c34e44f5bf66#aecfa9891537f976ad1d9f4a7be7c34e44f5bf66"
 dependencies = [
  "blake3",
  "ciborium",
@@ -867,7 +867,7 @@ dependencies = [
 [[package]]
 name = "parser"
 version = "0.1.0"
-source = "git+ssh://git@amaterasu.local:2222/hymeko/parser.git?branch=master#284c490d68232973a006bcba974279fed6f89ce8"
+source = "git+https://github.com/hymeko-framework/parser.git?rev=f11628591a8183586492807ecdf43c64e6d31c5f#f11628591a8183586492807ecdf43c64e6d31c5f"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
