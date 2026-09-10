@@ -486,6 +486,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hymeko_sbsh"
+version = "0.1.0"
+dependencies = [
+ "hymeko_core",
+ "hymeko_graph",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
