@@ -68,9 +68,8 @@ impl<'a> BoundsIndex<'a> {
                     add(boxes[i as usize]);
                 }
             } else {
-                // Copy child bounds before mutating the parent.
-                let children: Vec<_> = tree.children[c].iter().map(|&i| i as usize).collect();
-                for child in children {
+                for &child in &tree.children[c] {
+                    let child = child as usize;
                     for k in 0..3 {
                         extents[c].0[k] = extents[c].0[k].min(extents[child].0[k]);
                         extents[c].1[k] = extents[c].1[k].max(extents[child].1[k]);

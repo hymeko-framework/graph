@@ -204,6 +204,21 @@ fn dropping_empty_orthants_keeps_the_tree_sparse_without_losing_points() {
         "no point may be lost by pruning empty orthants"
     );
     assert_eq!(count(&dense), n);
+    for tree in [&sparse, &dense] {
+        assert_eq!(tree.members[0], ids);
+        for cell in 0..tree.n_cells() {
+            if tree.is_leaf(cell) {
+                continue;
+            }
+            let mut descendants: Vec<_> = tree.children[cell]
+                .iter()
+                .flat_map(|&child| tree.members[child as usize].iter().copied())
+                .collect();
+            descendants.sort_unstable();
+            assert_eq!(descendants, tree.members[cell]);
+        }
+        tree.verify_laminar().unwrap();
+    }
 }
 
 #[test]

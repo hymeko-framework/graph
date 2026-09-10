@@ -234,9 +234,10 @@ fn build_cell(
     tree.level.push(level);
     tree.parent.push(parent);
     tree.children.push(Vec::new());
-    tree.members.push(members.clone());
+    tree.members.push(members);
+    let members = &tree.members[me as usize];
 
-    if level >= cfg.max_depth || !rule.should_split(&lo, &hi, level, &members) {
+    if level >= cfg.max_depth || !rule.should_split(&lo, &hi, level, members) {
         return me;
     }
 
@@ -254,7 +255,7 @@ fn build_cell(
         return me;
     }
     let mut bins = vec![Vec::new(); 1usize << dim];
-    for &m in &members {
+    for &m in members {
         let p = &points[m as usize * dim..(m as usize + 1) * dim];
         if (0..dim).all(|d| p[d] >= lo[d] && p[d] < hi[d]) {
             let orthant = (0..dim).fold(0, |bits, d| bits | ((usize::from(p[d] >= mid[d])) << d));
@@ -263,6 +264,9 @@ fn build_cell(
     }
     let mut kids = Vec::new();
     for (orthant, child_members) in bins.into_iter().enumerate() {
+        if cfg.drop_empty && child_members.is_empty() {
+            continue;
+        }
         let mut clo = vec![0.0f64; dim];
         let mut chi = vec![0.0f64; dim];
         for d in 0..dim {
@@ -273,9 +277,6 @@ fn build_cell(
                 clo[d] = lo[d];
                 chi[d] = mid[d];
             }
-        }
-        if cfg.drop_empty && child_members.is_empty() {
-            continue;
         }
         let child = build_cell(
             dim,
