@@ -2,6 +2,31 @@
 
 use hymeko_sbsh::{CountSplit, OrthConfig, build_orthtree, point_bbox};
 
+#[test]
+fn leaf_lookup_uses_half_open_internal_faces_and_dropped_orthants() {
+    let tree = build_orthtree(
+        2,
+        &[0., 0.],
+        &[2., 2.],
+        &[0.25, 0.25, 1., 1., 1.75, 1.75],
+        &[0, 1, 2],
+        &CountSplit { max_per_cell: 1 },
+        &OrthConfig {
+            max_depth: 2,
+            drop_empty: true,
+        },
+    );
+    for (i, p) in [[0.25, 0.25], [1., 1.], [1.75, 1.75]].iter().enumerate() {
+        let cell = tree.leaf_of(p).unwrap();
+        assert!(tree.members[cell].contains(&(i as u32)));
+    }
+    assert!(tree.leaf_of(&[0.25, 1.75]).is_none());
+    assert!(tree.leaf_of(&[2.01, 2.]).is_none());
+    assert!(tree.leaf_of(&[f64::NAN, 0.]).is_none());
+    assert!(tree.members[tree.leaf_of(&[2., 2.]).unwrap()].contains(&2));
+    tree.verify_laminar().unwrap();
+}
+
 /// A deterministic point cloud in `dim` dimensions — no RNG dependency, reproducible everywhere.
 fn cloud(n: usize, dim: usize) -> Vec<f64> {
     (0..n * dim)

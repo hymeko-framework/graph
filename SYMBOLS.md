@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 555 public symbol(s).**
+**8 package(s), 557 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -79,7 +79,6 @@ _No public symbols._
 - `BergeStep` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BfsScratch` — `hymeko_graph/src/traversal.rs`
 - `BipartiteOnlyPruner` — `hymeko_graph/src/balance.rs`
-- `BoundsIndex` — `hymeko_graph/src/octree/bounds.rs`
 - `BuildOpts` — `hymeko_graph/src/incidence.rs`
 - `CartwrightHararyPruner` — `hymeko_graph/src/balance.rs`
 - `Cell` — `hymeko_graph/src/octree.rs`
@@ -287,7 +286,6 @@ _No public symbols._
 - `field` — `hymeko_graph/src/octree.rs`
 - `fir_cycle_forward` — `hymeko_graph/src/spine.rs`
 - `fir_cycle_scatter_mean` — `hymeko_graph/src/spine.rs`
-- `for_each_overlap` — `hymeko_graph/src/octree/bounds.rs`
 - `forman_kappa_4conn` — `hymeko_graph/src/quadtree.rs`
 - `fraction_negative` — `hymeko_graph/src/topk_cycles.rs`
 - `from_bool` — `hymeko_graph/src/pruner.rs`
@@ -356,7 +354,6 @@ _No public symbols._
 - `new` — `hymeko_graph/src/hyper_operator.rs`
 - `new` — `hymeko_graph/src/matroid/facade.rs`
 - `new` — `hymeko_graph/src/matroid/workspace.rs`
-- `new` — `hymeko_graph/src/octree/bounds.rs`
 - `new` — `hymeko_graph/src/pruner.rs`
 - `new` — `hymeko_graph/src/rand_lcg.rs`
 - `new` — `hymeko_graph/src/spine.rs`
@@ -601,6 +598,7 @@ _No public symbols._
 
 ### structs
 
+- `BoundsIndex` — `hymeko_sbsh/src/bounds.rs`
 - `CountSplit` — `hymeko_sbsh/src/orthtree.rs`
 - `ElimCost` — `hymeko_sbsh/src/width.rs`
 - `IrPositions` — `hymeko_sbsh/src/ir_positions.rs`
@@ -626,6 +624,9 @@ _No public symbols._
 - `decls` — `hymeko_sbsh/src/scene.rs`
 - `dim` — `hymeko_sbsh/src/scene.rs`
 - `elimination_cost` — `hymeko_sbsh/src/width.rs`
+- `for_each_in_region` — `hymeko_sbsh/src/bounds.rs`
+- `for_each_on_ray` — `hymeko_sbsh/src/bounds.rs`
+- `for_each_overlap` — `hymeko_sbsh/src/bounds.rs`
 - `from_attribute` — `hymeko_sbsh/src/ir_positions.rs`
 - `is_empty` — `hymeko_sbsh/src/ir_positions.rs`
 - `is_leaf` — `hymeko_sbsh/src/orthtree.rs`
@@ -633,6 +634,7 @@ _No public symbols._
 - `leaves` — `hymeko_sbsh/src/orthtree.rs`
 - `len` — `hymeko_sbsh/src/ir_positions.rs`
 - `n_cells` — `hymeko_sbsh/src/orthtree.rs`
+- `new` — `hymeko_sbsh/src/bounds.rs`
 - `objects_in_region` — `hymeko_sbsh/src/orthtree.rs`
 - `objects_in_region` — `hymeko_sbsh/src/scene.rs`
 - `order_min_degree` — `hymeko_sbsh/src/width.rs`

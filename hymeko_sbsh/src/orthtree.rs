@@ -135,14 +135,13 @@ impl OrthTree {
         }
         let mut c = 0usize;
         while !self.is_leaf(c) {
-            match self.children[c]
-                .iter()
-                .find(|&&ch| {
-                    let (lo,hi)=(self.cell_lo(ch as usize),self.cell_hi(ch as usize));
-                    (0..self.dim).all(|d|point[d]>=lo[d] &&
-                        (point[d]<hi[d] || (hi[d]==self.cell_hi(0)[d] && point[d]==hi[d])))
+            match self.children[c].iter().find(|&&ch| {
+                let (lo, hi) = (self.cell_lo(ch as usize), self.cell_hi(ch as usize));
+                (0..self.dim).all(|d| {
+                    point[d] >= lo[d]
+                        && (point[d] < hi[d] || (hi[d] == self.cell_hi(0)[d] && point[d] == hi[d]))
                 })
-            {
+            }) {
                 Some(&ch) => c = ch as usize,
                 None => return None, // no leaf in a dropped (empty) orthant
             }
@@ -242,22 +241,28 @@ fn build_cell(
     }
 
     // Identical coordinates cannot be separated by further subdivision.
-    if members.first().is_some_and(|&first| members.iter().all(|&m|
-        points[m as usize*dim..(m as usize+1)*dim] == points[first as usize*dim..(first as usize+1)*dim])) {
+    if members.first().is_some_and(|&first| {
+        members.iter().all(|&m| {
+            points[m as usize * dim..(m as usize + 1) * dim]
+                == points[first as usize * dim..(first as usize + 1) * dim]
+        })
+    }) {
         return me;
     }
-    let mid: Vec<f64> = (0..dim).map(|d| lo[d]*0.5 + hi[d]*0.5).collect();
-    if (0..dim).all(|d| mid[d]<=lo[d] || mid[d]>=hi[d]) {return me;}
-    let mut bins=vec![Vec::new();1usize<<dim];
+    let mid: Vec<f64> = (0..dim).map(|d| lo[d] * 0.5 + hi[d] * 0.5).collect();
+    if (0..dim).all(|d| mid[d] <= lo[d] || mid[d] >= hi[d]) {
+        return me;
+    }
+    let mut bins = vec![Vec::new(); 1usize << dim];
     for &m in &members {
-        let p=&points[m as usize*dim..(m as usize+1)*dim];
-        if (0..dim).all(|d|p[d]>=lo[d] && p[d]<hi[d]) {
-            let orthant=(0..dim).fold(0,|bits,d|bits|((usize::from(p[d]>=mid[d]))<<d));
+        let p = &points[m as usize * dim..(m as usize + 1) * dim];
+        if (0..dim).all(|d| p[d] >= lo[d] && p[d] < hi[d]) {
+            let orthant = (0..dim).fold(0, |bits, d| bits | ((usize::from(p[d] >= mid[d])) << d));
             bins[orthant].push(m);
         }
     }
     let mut kids = Vec::new();
-    for orthant in 0..(1usize << dim) {
+    for (orthant, child_members) in bins.into_iter().enumerate() {
         let mut clo = vec![0.0f64; dim];
         let mut chi = vec![0.0f64; dim];
         for d in 0..dim {
@@ -269,7 +274,6 @@ fn build_cell(
                 chi[d] = mid[d];
             }
         }
-        let child_members = std::mem::take(&mut bins[orthant]);
         if cfg.drop_empty && child_members.is_empty() {
             continue;
         }
