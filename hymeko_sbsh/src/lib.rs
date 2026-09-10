@@ -82,3 +82,7 @@ pub use ir_positions::IrPositions;
 pub use orthtree::{CountSplit, OrthConfig, OrthTree, SplitRule, build_orthtree, point_bbox};
 pub use scene::{SbshScene, SceneError};
 pub use width::{ElimCost, certificate_width, certificate_width_of, elimination_cost};
+
+/// Extent queries over the same SBSH spatial partition.
+pub mod bounds;
+pub use bounds::BoundsIndex;

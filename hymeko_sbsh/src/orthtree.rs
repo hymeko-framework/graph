@@ -137,10 +137,14 @@ impl OrthTree {
         while !self.is_leaf(c) {
             match self.children[c]
                 .iter()
-                .find(|&&ch| self.contains(ch as usize, point, true))
+                .find(|&&ch| {
+                    let (lo,hi)=(self.cell_lo(ch as usize),self.cell_hi(ch as usize));
+                    (0..self.dim).all(|d|point[d]>=lo[d] &&
+                        (point[d]<hi[d] || (hi[d]==self.cell_hi(0)[d] && point[d]==hi[d])))
+                })
             {
                 Some(&ch) => c = ch as usize,
-                None => break, // the point fell into a dropped (empty) orthant
+                None => return None, // no leaf in a dropped (empty) orthant
             }
         }
         Some(c)
@@ -237,7 +241,21 @@ fn build_cell(
         return me;
     }
 
-    let mid: Vec<f64> = (0..dim).map(|d| 0.5 * (lo[d] + hi[d])).collect();
+    // Identical coordinates cannot be separated by further subdivision.
+    if members.first().is_some_and(|&first| members.iter().all(|&m|
+        points[m as usize*dim..(m as usize+1)*dim] == points[first as usize*dim..(first as usize+1)*dim])) {
+        return me;
+    }
+    let mid: Vec<f64> = (0..dim).map(|d| lo[d]*0.5 + hi[d]*0.5).collect();
+    if (0..dim).all(|d| mid[d]<=lo[d] || mid[d]>=hi[d]) {return me;}
+    let mut bins=vec![Vec::new();1usize<<dim];
+    for &m in &members {
+        let p=&points[m as usize*dim..(m as usize+1)*dim];
+        if (0..dim).all(|d|p[d]>=lo[d] && p[d]<hi[d]) {
+            let orthant=(0..dim).fold(0,|bits,d|bits|((usize::from(p[d]>=mid[d]))<<d));
+            bins[orthant].push(m);
+        }
+    }
     let mut kids = Vec::new();
     for orthant in 0..(1usize << dim) {
         let mut clo = vec![0.0f64; dim];
@@ -251,16 +269,7 @@ fn build_cell(
                 chi[d] = mid[d];
             }
         }
-        let child_members: Vec<u32> = members
-            .iter()
-            .copied()
-            .filter(|&m| {
-                (0..dim).all(|d| {
-                    let p = points[m as usize * dim + d];
-                    p >= clo[d] && p < chi[d]
-                })
-            })
-            .collect();
+        let child_members = std::mem::take(&mut bins[orthant]);
         if cfg.drop_empty && child_members.is_empty() {
             continue;
         }
