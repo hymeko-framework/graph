@@ -450,7 +450,7 @@ dependencies = [
 [[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+https://github.com/hymeko-framework/core.git?rev=efcf2141bec9f11ac9b33651bd6b130cf843e511#efcf2141bec9f11ac9b33651bd6b130cf843e511"
+source = "git+ssh://git@192.168.1.228:2222/hymeko/core.git?rev=44383f32864841d3d8a794c4df0f99166724b95d#44383f32864841d3d8a794c4df0f99166724b95d"
 dependencies = [
  "blake3",
  "ciborium",
@@ -747,7 +747,7 @@ dependencies = [
 [[package]]
 name = "parser"
 version = "0.1.0"
-source = "git+https://github.com/hymeko-framework/parser.git?rev=f11628591a8183586492807ecdf43c64e6d31c5f#f11628591a8183586492807ecdf43c64e6d31c5f"
+source = "git+ssh://git@192.168.1.228:2222/hymeko/parser.git?rev=f11628591a8183586492807ecdf43c64e6d31c5f#f11628591a8183586492807ecdf43c64e6d31c5f"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
