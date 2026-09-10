@@ -5,3 +5,6 @@ benchmarks/target/
 # Cargo.lock is committed: the git dependencies are branches, so the lock is
 # the only record of which revisions a build actually used.
 __pycache__/
+
+# Task reports are archived to Samba after each task.
+reports/

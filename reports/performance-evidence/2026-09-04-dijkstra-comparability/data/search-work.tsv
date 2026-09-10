@@ -1,6 +1,0 @@
-process_run	run	workload	subject	expanded_nodes	expanded_arcs	resolved_incidences	pushes	pops	stale_pops	heuristic_evals	reopened
-operation_cell-path65k-dijkstra-t1	operation_cell-path65k-dijkstra-t1	path65k	dijkstra	65536	65535	65535	65536	65536	0	65535	0
-operation_cell-grid256-dijkstra-t1	operation_cell-grid256-dijkstra-t1	grid256	dijkstra	65536	130560	130560	65536	65536	0	65535	0
-operation_cell-sts1023-dijkstra-t1	operation_cell-sts1023-dijkstra-t1	sts1023	dijkstra	1023	174251	348502	1023	1023	0	1022	0
-operation_cell-random1e6-dijkstra-t1	operation_cell-random1e6-dijkstra-t1	random1e6	dijkstra	104301	186947	373894	118060	104301	0	118059	0
-operation_cell-map512-dijkstra-t1	operation_cell-map512-dijkstra-t1	map512	dijkstra	261736	521632	521632	261838	261838	102	261837	0

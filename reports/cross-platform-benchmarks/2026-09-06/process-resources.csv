@@ -1,4 +1,0 @@
-platform,processes,successful_cells,peak_rss_bytes,process_wall_seconds
-windows,177,58,278257664,465.7820000000065
-native,177,58,274321408,489.8311896631494
-arm64,177,58,290185216,644.9375621392392

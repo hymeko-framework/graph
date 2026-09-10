@@ -1,3 +1,0 @@
-map	V	E	nnz	dijkstra_us	astar_metric_us	astar_discrete_us	astar_combined_us	discrete_prep_us
-grid32x32	1024	1888	3776	65.50	82.50	98.70	100.60	29.70
-grid128x128	16384	32108	64216	1805.60	2108.40	2705.10	2656.00	849.50
