@@ -163,6 +163,7 @@ fn instrumented_search_matches_oracle() {
 // ---- the diagnosis table (release; --nocapture) ---------------------------------------------------
 
 #[test]
+#[ignore = "performance benchmark; opt in with --ignored --exact"]
 fn measure_heuristic_diagnosis() {
     println!("\n# P3.2 heuristic diagnosis: time (us) + work counters");
     println!(

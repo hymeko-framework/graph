@@ -543,7 +543,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 [[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+https://github.com/hymeko-framework/core.git?rev=aecfa9891537f976ad1d9f4a7be7c34e44f5bf66#aecfa9891537f976ad1d9f4a7be7c34e44f5bf66"
+source = "git+https://github.com/hymeko-framework/core.git?rev=efcf2141bec9f11ac9b33651bd6b130cf843e511#efcf2141bec9f11ac9b33651bd6b130cf843e511"
 dependencies = [
  "blake3",
  "ciborium",

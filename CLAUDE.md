@@ -1,3 +1,6 @@
+@AGENTS.md
+@../hymeko/docs/agent-contract/global.md
+
 # Claude Code — Operating Contract (`graph` repository)
 
 **This repository is the CANONICAL owner of the HyMeKo graph layer.** Decided 2026-08-30, after an

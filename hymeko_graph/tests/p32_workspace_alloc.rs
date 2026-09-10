@@ -50,6 +50,7 @@ fn cost() -> IncidenceWeightCost {
 /// allocate. But reuse is a large reduction versus a fresh workspace per query. Reaching a true zero-alloc
 /// warm path would need engine-side path-buffer reuse (a candidate optimization, not done here).
 #[test]
+#[ignore = "comparative allocation profile; opt in with --ignored --exact"]
 fn reused_workspace_reduces_allocation_vs_fresh() {
     let ir = ic::map_grid_ir(64, 64, &ic::map_obstacles(64, 64));
     let idx = build_incidence_index(&ir).unwrap();
@@ -110,6 +111,7 @@ fn reused_workspace_reduces_allocation_vs_fresh() {
 // ---- the workspace-reuse + batch table (release; --nocapture) -------------------------------------
 
 #[test]
+#[ignore = "performance benchmark; opt in with --ignored --exact"]
 fn measure_workspace_reuse_and_batch() {
     let ir = ic::map_grid_ir(128, 128, &ic::map_obstacles(128, 128));
     let idx = build_incidence_index(&ir).unwrap();

@@ -43,6 +43,7 @@ impl BergeHeuristic for ManhattanH {
 }
 
 #[test]
+#[ignore = "performance benchmark; opt in with --ignored --exact"]
 fn bench_informed_berge_search() {
     println!(
         "\n=== informed Berge search benchmark (us; median-of-9 warm; single-host PROVISIONAL) ==="

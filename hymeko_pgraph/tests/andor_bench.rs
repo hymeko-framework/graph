@@ -51,6 +51,7 @@ fn chain_src(n: usize) -> String {
 }
 
 #[test]
+#[ignore = "performance benchmark; opt in with --ignored --exact"]
 fn bench_andor_closure() {
     println!("\n=== AND/OR closure benchmark (us; median-of-9; single-host PROVISIONAL) ===");
     println!(

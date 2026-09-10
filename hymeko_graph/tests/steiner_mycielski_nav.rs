@@ -250,6 +250,7 @@ fn disconnected_target_has_no_path() {
 // ---- measurement pass (§7): cold construction vs warm search (run with --nocapture) ---------------
 
 #[test]
+#[ignore = "performance benchmark; opt in with --ignored --exact"]
 fn measure_navigation_matrix() {
     use std::time::Instant;
     println!("\n# P3 direct-Ir navigation measurement (medians; warm = post-index)");

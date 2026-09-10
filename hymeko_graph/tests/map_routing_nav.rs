@@ -263,6 +263,7 @@ fn transport_multiway_discrete_optimal() {
 // ---- measurement: warm A* per heuristic + reuse + discrete-prep break-even (--nocapture) -----------
 
 #[test]
+#[ignore = "performance benchmark; opt in with --ignored --exact"]
 fn measure_map_routing() {
     println!("\n# P3.1 map routing (release medians; warm = post-index, reused workspace)");
     println!(

@@ -119,6 +119,7 @@ fn run(name: &str, families: &[(&str, usize)], src: impl Fn(usize) -> String) {
 }
 
 #[test]
+#[ignore = "performance benchmark; opt in with --ignored --exact"]
 fn bench_perf_matrix() {
     println!(
         "\n=== P1.4 pgraph query performance matrix (us; median-of-9; single-host PROVISIONAL) ==="
