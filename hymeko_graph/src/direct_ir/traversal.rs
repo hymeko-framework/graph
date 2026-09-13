@@ -57,7 +57,13 @@ impl<'a, 'ir> HyperTraversal<'a, 'ir> {
         record_pred: bool,
     ) -> Result<(), DirectIrError> {
         let ir = self.index.ir();
-        for &arc in self.index.incident_arcs(node) {
+        // The entry coordinate, taken from the index's per-incidence arrays while it is known.
+        for (&arc, &entry_slot) in self
+            .index
+            .incident_arcs(node)
+            .iter()
+            .zip(self.index.incident_slots(node))
+        {
             if ws.arc_seen(arc) {
                 continue;
             }
@@ -85,7 +91,7 @@ impl<'a, 'ir> HyperTraversal<'a, 'ir> {
                 }
                 ws.discover_node(target);
                 if record_pred {
-                    ws.set_pred(target, node, arc, slot as u32);
+                    ws.set_pred(target, node, arc, entry_slot, slot as u32);
                 }
                 ws.push_frontier(target);
             }
@@ -171,18 +177,24 @@ impl<'a, 'ir> HyperTraversal<'a, 'ir> {
         let mut steps_rev: Vec<BergeStep> = Vec::new();
         let mut cur = goal_decl;
         while cur != start_decl {
-            let (pred_node, pred_arc, pred_slot) = ws.pred(cur);
+            let (pred_node, pred_arc, pred_entry_slot, pred_slot) = ws.pred(cur);
             if pred_arc.is_none() {
                 return Err(DirectIrError::PredecessorInconsistency { node: cur });
             }
             let node_id = decl_to_node(ir, cur)
                 .ok_or(DirectIrError::PredecessorInconsistency { node: cur })?;
+            // BOTH ends from their RECORDED coordinates; nothing is recovered by scanning `refs`.
+            let from = BergeIncidence::at(ir, pred_arc, pred_entry_slot)
+                .ok_or(DirectIrError::PredecessorInconsistency { node: cur })?;
             let iref = self.index.resolve(pred_arc, pred_slot);
             steps_rev.push(BergeStep {
                 arc: pred_arc,
-                slot: pred_slot,
-                sign: iref.sign,
-                node: node_id,
+                from,
+                to: BergeIncidence {
+                    node: node_id,
+                    slot: pred_slot,
+                    sign: iref.sign,
+                },
             });
             cur = pred_node;
         }
@@ -228,19 +240,64 @@ impl<'w, 'ir> NodeSet<'w, 'ir> {
     }
 }
 
-/// One alternating step of a Berge path: the `node` reached via `arc` at reference `slot`, with the
-/// incidence `sign`. The full incidence (weights, annotation, target) resolves from `(arc, slot)`
-/// through [`IncidenceIndex::resolve`]; nothing is dropped.
+/// One endpoint of a step, as an exact incidence coordinate.
+///
+/// `(arc, slot)` addresses one reference of a hyperarc, and `node` is the declaration that
+/// reference targets. The full incidence -- weights, annotation, target -- resolves from the
+/// step's `arc` and this `slot` through [`IncidenceIndex::resolve`]; nothing is dropped.
+///
+/// # `sign` is an incidence sign, not a direction
+///
+/// It is the sign of *this node* in *this arc*. Direction is carried by the ordered pair
+/// [`BergeStep::from`] -> [`BergeStep::to`] and by nothing else. Deriving one from the other would
+/// redefine a data attribute as a geometric one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BergeIncidence {
+    /// The node at this end of the step.
+    pub node: NodeId,
+    /// Its reference slot within the step's `arc` -- its exact incidence coordinate.
+    pub slot: u32,
+    /// Its incidence sign in that arc (`+1` / `-1` / `0`).
+    pub sign: i8,
+}
+
+impl BergeIncidence {
+    /// Resolve an incidence from its exact `(arc, slot)` coordinate.
+    ///
+    /// The **single** owner of that resolution: every producer calls it rather than reading
+    /// `refs[slot]` for itself, so the node and the sign of an endpoint can never be derived two
+    /// different ways.
+    ///
+    /// # Errors
+    /// `None` when the reference at that coordinate does not target a node, which the caller turns
+    /// into its own typed error.
+    #[must_use]
+    pub fn at(ir: &Ir, arc: HyperArcId, slot: u32) -> Option<Self> {
+        let sref = ir.arcs.get(arc.raw())?.refs.get(slot as usize)?;
+        Some(Self {
+            node: decl_to_node(ir, sref.target())?,
+            slot,
+            sign: sref.sign(),
+        })
+    }
+}
+
+/// One alternating step of a Berge path: the hyperedge `arc` entered at `from` and left at `to`.
+///
+/// # Why both ends are recorded
+///
+/// A node may occupy **more than one slot of one hyperedge**, so the entry coordinate cannot be
+/// recovered afterwards by scanning the arc's references -- a scan has no unique answer and
+/// first-match would be a guess. Every producer therefore records the entry coordinate at the
+/// moment it is still known, from the index's own per-incidence arrays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BergeStep {
-    /// The hyperedge (canonical arc) traversed into this step's node.
+    /// The hyperedge (canonical arc) this step traverses.
     pub arc: HyperArcId,
-    /// The reference slot of `node` within `arc` (its exact incidence coordinate).
-    pub slot: u32,
-    /// The incidence sign of `node` in `arc` (`+1` / `-1` / `0`).
-    pub sign: i8,
-    /// The node reached by this step.
-    pub node: NodeId,
+    /// The incidence the step entered the arc at.
+    pub from: BergeIncidence,
+    /// The incidence the step left the arc at -- the node this step reaches.
+    pub to: BergeIncidence,
 }
 
 /// A Berge path: a start node followed by alternating `(arc, node)` steps. Its length in
@@ -262,7 +319,7 @@ impl BergePath {
 
     /// The node sequence, `start` first.
     pub fn nodes(&self) -> impl Iterator<Item = NodeId> + '_ {
-        std::iter::once(self.start).chain(self.steps.iter().map(|s| s.node))
+        std::iter::once(self.start).chain(self.steps.iter().map(|s| s.to.node))
     }
 
     /// The hyperedges traversed, in order.

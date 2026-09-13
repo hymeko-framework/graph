@@ -14,7 +14,7 @@ use std::collections::HashSet;
 use hymeko::common::ids::{DeclId, HyperArcId, NodeId};
 use hymeko::ir::incidence::IncidenceIndex;
 
-use super::traversal::{BergePath, BergeStep};
+use super::traversal::{BergeIncidence, BergePath, BergeStep};
 use super::{BudgetKind, DirectIrError, decl_to_node, is_node, node_to_decl};
 
 /// Hard bounds on a combinatorial enumeration. All three are required; pick finite values.
@@ -176,7 +176,15 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
             return Ok(());
         }
         let ir = self.index.ir();
-        for &arc in self.index.incident_arcs(cur) {
+        // The entry coordinate comes from the index's own per-incidence arrays, which run parallel
+        // to `incident_arcs`. It is recorded while it is known: `cur` may occupy several slots of
+        // one arc, so recovering it afterwards by scanning `refs` has no unique answer.
+        for (&arc, &entry_slot) in self
+            .index
+            .incident_arcs(cur)
+            .iter()
+            .zip(self.index.incident_slots(cur))
+        {
             if self.used_arc[arc.raw()] {
                 continue;
             }
@@ -206,9 +214,22 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
                 };
                 self.steps.push(BergeStep {
                     arc,
-                    slot: slot as u32,
-                    sign,
-                    node: node_id,
+                    from: match BergeIncidence::at(ir, arc, entry_slot) {
+                        Some(i) => i,
+                        None => {
+                            self.used_arc[arc.raw()] = false;
+                            return Err(DirectIrError::TargetNotANode {
+                                arc,
+                                slot: entry_slot,
+                                target: ir.arcs[arc.raw()].refs[entry_slot as usize].target(),
+                            });
+                        }
+                    },
+                    to: BergeIncidence {
+                        node: node_id,
+                        slot: slot as u32,
+                        sign,
+                    },
                 });
                 self.on_path[target.raw()] = true;
 
@@ -246,7 +267,15 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
             return Ok(());
         }
         let ir = self.index.ir();
-        for &arc in self.index.incident_arcs(cur) {
+        // The entry coordinate comes from the index's own per-incidence arrays, which run parallel
+        // to `incident_arcs`. It is recorded while it is known: `cur` may occupy several slots of
+        // one arc, so recovering it afterwards by scanning `refs` has no unique answer.
+        for (&arc, &entry_slot) in self
+            .index
+            .incident_arcs(cur)
+            .iter()
+            .zip(self.index.incident_slots(cur))
+        {
             if self.used_arc[arc.raw()] {
                 continue;
             }
@@ -289,9 +318,22 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
                 };
                 self.steps.push(BergeStep {
                     arc,
-                    slot: slot as u32,
-                    sign,
-                    node: node_id,
+                    from: match BergeIncidence::at(ir, arc, entry_slot) {
+                        Some(i) => i,
+                        None => {
+                            self.used_arc[arc.raw()] = false;
+                            return Err(DirectIrError::TargetNotANode {
+                                arc,
+                                slot: entry_slot,
+                                target: ir.arcs[arc.raw()].refs[entry_slot as usize].target(),
+                            });
+                        }
+                    },
+                    to: BergeIncidence {
+                        node: node_id,
+                        slot: slot as u32,
+                        sign,
+                    },
                 });
                 self.on_path[target.raw()] = true;
                 self.dfs_cycles(target, start_decl)?;
@@ -314,7 +356,7 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
         let mut nodes: Vec<NodeId> = Vec::with_capacity(self.steps.len() + 1);
         nodes.push(self.start);
         for st in &self.steps {
-            nodes.push(st.node);
+            nodes.push(st.to.node);
         }
         let mut arcs: Vec<HyperArcId> = self.steps.iter().map(|s| s.arc).collect();
         arcs.push(closing_arc);
