@@ -210,7 +210,7 @@ fn measure_operation(
                     .expect("Dijkstra")
                     .map_or(0, |path| {
                         if strong_checksum {
-                            path.path_hash()
+                            path.path_hash().raw()
                         } else {
                             path.steps.len() as u64
                         }
@@ -232,7 +232,7 @@ fn measure_operation(
                 &mut workspace,
             )
             .expect("Dijkstra verification")
-            .map_or(0, |path| path.path_hash());
+            .map_or(0, |path| path.path_hash().raw());
             assert_eq!(verification, expected, "post-measurement path hash drift");
             assert_eq!(
                 workspace.stats(),
