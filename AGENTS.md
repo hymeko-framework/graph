@@ -13,3 +13,9 @@ Before editing files, creating/switching a branch, or creating a worktree,
 successfully fetch relevant remotes in every affected repository and compare the
 freshly fetched base under `global.md`. Reuse suitable checkouts and preserve user
 changes. If the sibling contract is absent, repair the loading chain before edits.
+
+Before finishing a task that creates or changes reports, read and follow the
+[shared report-storage and task-close policy](../hymeko/docs/agent-contract/modules/50-reporting.md).
+This is a binding instruction, including the shared archive command and its
+verification. It supersedes historical instructions that keep reports in Git.
+The provider owns the policy and tool; do not duplicate their implementation here.
