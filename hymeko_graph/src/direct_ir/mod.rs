@@ -58,11 +58,12 @@ pub use dual::{DualReach, dual_reachability};
 pub use informed::{
     BergeCost, BergeHeuristic, DirectedConsumerProducer, DirectedProducerConsumer,
     IncidenceWeightCost, InformedSearchError, InformedSearchWorkspace, MetricHeuristic,
-    MetricStepCost, PositionProvider, SearchStats, SignCompatible, TransitionPolicy, Undirected,
-    UnitCost, WeightedBergePath, ZeroHeuristic, astar_berge_path, dijkstra_berge_path,
+    MetricStepCost, OrientedMaterialisationDigest, PathHash, PositionProvider, SearchStats,
+    SignCompatible, TransitionPolicy, Undirected, UnitCost, WeightedBergePath, ZeroHeuristic,
+    astar_berge_path, dijkstra_berge_path,
 };
 pub use s_connect::{SComponentLabeling, s_connected_components};
-pub use traversal::{BergePath, BergeStep, HyperTraversal, NodeSet};
+pub use traversal::{BergeIncidence, BergePath, BergeStep, HyperTraversal, NodeSet};
 pub use workspace::TraversalWorkspace;
 
 /// A traversal over the canonical `Ir` could not complete. Ids-only, bounded, deterministic;

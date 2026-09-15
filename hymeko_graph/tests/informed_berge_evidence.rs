@@ -145,9 +145,11 @@ fn hash_berge_path(path: &BergePath) -> u64 {
     hash = fnv_mix(hash, &(path.start.raw() as u64).to_le_bytes());
     for step in &path.steps {
         hash = fnv_mix(hash, &(step.arc.raw() as u64).to_le_bytes());
-        hash = fnv_mix(hash, &step.slot.to_le_bytes());
-        hash = fnv_mix(hash, &i64::from(step.sign).to_le_bytes());
-        hash = fnv_mix(hash, &(step.node.raw() as u64).to_le_bytes());
+        // The same ARRIVAL quantities this evidence hash has always mixed; only the accessor path
+        // changed when the step gained its entry coordinate.
+        hash = fnv_mix(hash, &step.to.slot.to_le_bytes());
+        hash = fnv_mix(hash, &i64::from(step.to.sign).to_le_bytes());
+        hash = fnv_mix(hash, &(step.to.node.raw() as u64).to_le_bytes());
     }
     hash
 }
@@ -278,7 +280,7 @@ fn measure_weighted_query(
         let mut measured = |strong: bool| {
             query(&mut workspace).map_or(0, |path| {
                 if strong {
-                    path.path_hash()
+                    path.path_hash().raw()
                 } else {
                     (1_u64 << 63) ^ path.hyperedge_len() as u64
                 }
@@ -293,7 +295,7 @@ fn measure_weighted_query(
     let measured_stats = workspace.stats();
     let result = query(&mut workspace);
     assert_eq!(workspace.stats(), measured_stats, "search work drift");
-    let result_hash = result.as_ref().map_or(0, WeightedBergePath::path_hash);
+    let result_hash = result.as_ref().map_or(0, |p| p.path_hash().raw());
     assert_eq!(result_hash, expected, "weighted path hash drift");
     (measurement, measured_stats, result)
 }
@@ -338,7 +340,7 @@ fn emit_weighted_search<C, H>(
     let hops = result
         .as_ref()
         .map_or_else(|| "NA".to_string(), |path| path.hyperedge_len().to_string());
-    let path_hash = result.as_ref().map_or(0, WeightedBergePath::path_hash);
+    let path_hash = result.as_ref().map_or(0, |p| p.path_hash().raw());
     emit_result(
         run,
         section,
@@ -382,7 +384,7 @@ fn emit_dijkstra<C: hymeko_graph::direct_ir::BergeCost>(
     let hops = result
         .as_ref()
         .map_or_else(|| "NA".to_string(), |path| path.hyperedge_len().to_string());
-    let path_hash = result.as_ref().map_or(0, WeightedBergePath::path_hash);
+    let path_hash = result.as_ref().map_or(0, |p| p.path_hash().raw());
     emit_result(
         run,
         section,

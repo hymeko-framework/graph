@@ -11,7 +11,7 @@
 //!   `HyperArcId` space.
 //! - `frontier` / `discovered`: node-space FIFO and discovery buffer (primal traversal).
 //! - `arc_frontier` / `arc_discovered`: arc-space FIFO and discovery buffer (dual traversal).
-//! - predecessor arrays (`pred_node`/`pred_arc`/`pred_slot`): allocated lazily, only for path
+//! - predecessor arrays (`pred_node`/`pred_arc`/`pred_entry_slot`/`pred_slot`): allocated lazily, only for path
 //!   queries that reconstruct an alternating walk.
 
 use std::collections::VecDeque;
@@ -33,6 +33,9 @@ pub struct TraversalWorkspace {
     pred_node: Vec<DeclId>,
     pred_arc: Vec<HyperArcId>,
     pred_slot: Vec<u32>,
+    /// The slot the predecessor occupied in `pred_arc` -- the step's ENTRY coordinate, recorded
+    /// because the expansion is the last place it is known.
+    pred_entry_slot: Vec<u32>,
     pred_ready: bool,
 }
 
@@ -81,6 +84,7 @@ impl TraversalWorkspace {
             self.pred_node.resize(n_decls, DeclId::NONE);
             self.pred_arc.resize(n_decls, HyperArcId::NONE);
             self.pred_slot.resize(n_decls, 0);
+            self.pred_entry_slot.resize(n_decls, 0);
             self.pred_ready = true;
         }
     }
@@ -165,17 +169,30 @@ impl TraversalWorkspace {
     // ---- predecessors (path reconstruction) ----
 
     #[inline]
-    pub(crate) fn set_pred(&mut self, node: DeclId, pred_node: DeclId, arc: HyperArcId, slot: u32) {
+    pub(crate) fn set_pred(
+        &mut self,
+        node: DeclId,
+        pred_node: DeclId,
+        arc: HyperArcId,
+        entry_slot: u32,
+        slot: u32,
+    ) {
         let i = node.raw();
         self.pred_node[i] = pred_node;
         self.pred_arc[i] = arc;
+        self.pred_entry_slot[i] = entry_slot;
         self.pred_slot[i] = slot;
     }
 
     #[inline]
-    pub(crate) fn pred(&self, node: DeclId) -> (DeclId, HyperArcId, u32) {
+    pub(crate) fn pred(&self, node: DeclId) -> (DeclId, HyperArcId, u32, u32) {
         let i = node.raw();
-        (self.pred_node[i], self.pred_arc[i], self.pred_slot[i])
+        (
+            self.pred_node[i],
+            self.pred_arc[i],
+            self.pred_entry_slot[i],
+            self.pred_slot[i],
+        )
     }
 
     /// Current generation stamp (for tests exercising wrap).

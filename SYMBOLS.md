@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 557 public symbol(s).**
+**8 package(s), 563 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -75,6 +75,7 @@ _No public symbols._
 - `AstarScratch` — `hymeko_graph/src/traversal_heuristic.rs`
 - `BalanceScorer` — `hymeko_graph/src/topk_cycles.rs`
 - `BergeCycle` — `hymeko_graph/src/direct_ir/berge_enum.rs`
+- `BergeIncidence` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BergePath` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BergeStep` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BfsScratch` — `hymeko_graph/src/traversal.rs`
@@ -123,7 +124,9 @@ _No public symbols._
 - `NoOpPruner` — `hymeko_graph/src/pruner.rs`
 - `NodeSet` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `Octree` — `hymeko_graph/src/octree.rs`
+- `OrientedMaterialisationDigest` — `hymeko_graph/src/direct_ir/informed.rs`
 - `PathClosureSampler` — `hymeko_graph/src/path_closure.rs`
+- `PathHash` — `hymeko_graph/src/direct_ir/informed.rs`
 - `PrunerStats` — `hymeko_graph/src/pruner.rs`
 - `QuadtreeAnchors` — `hymeko_graph/src/quadtree.rs`
 - `QuadtreeConfig` — `hymeko_graph/src/quadtree.rs`
@@ -186,6 +189,7 @@ _No public symbols._
 - `assemble_clique` — `hymeko_graph/src/hyper_operator.rs`
 - `astar` — `hymeko_graph/src/traversal_heuristic.rs`
 - `astar_berge_path` — `hymeko_graph/src/direct_ir/informed.rs`
+- `at` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `auto` — `hymeko_graph/src/community.rs`
 - `balance` — `hymeko_graph/src/topk_cycles.rs`
 - `balance_ratio_per_community` — `hymeko_graph/src/community.rs`
@@ -372,6 +376,7 @@ _No public symbols._
 - `offer` — `hymeko_graph/src/matroid/levi.rs`
 - `offer` — `hymeko_graph/src/matroid/rank2.rs`
 - `offer` — `hymeko_graph/src/unsigned_cycles/sink.rs`
+- `oriented_materialisation_digest` — `hymeko_graph/src/direct_ir/informed.rs`
 - `par_batch_reachable_counts` — `hymeko_graph/src/direct_ir/batch.rs`
 - `patches` — `hymeko_graph/src/sphf.rs`
 - `path_hash` — `hymeko_graph/src/direct_ir/informed.rs`
@@ -381,6 +386,7 @@ _No public symbols._
 - `rank2_rank` — `hymeko_graph/src/matroid/rank2.rs`
 - `rank2_spanning_forest` — `hymeko_graph/src/matroid/rank2.rs`
 - `rank2_weighted_basis` — `hymeko_graph/src/matroid/rank2.rs`
+- `raw` — `hymeko_graph/src/direct_ir/informed.rs`
 - `reachable_nodes` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `reset` — `hymeko_graph/src/traversal.rs`
 - `reset` — `hymeko_graph/src/traversal_heuristic.rs`

@@ -42,7 +42,7 @@ use hymeko::common::ids::{DeclId, HyperArcId, NodeId};
 use hymeko::ir::incidence::{IncidenceIndex, IncidenceRef};
 use hymeko::ir::ir::{Ir, ValueR};
 
-use super::traversal::{BergeStep, HyperTraversal};
+use super::traversal::{BergeIncidence, BergeStep, HyperTraversal};
 use super::{DirectIrError, decl_to_node, is_node, node_to_decl};
 
 // =====================================================================================================
@@ -350,6 +350,36 @@ impl TransitionPolicy for SignCompatible {
 // Result + stats
 // =====================================================================================================
 
+/// The historical, **topological** path digest: arcs and arrival coordinates only.
+///
+/// A newtype, not a bare `u64`, so it cannot be compared with or stored as an
+/// [`OrientedMaterialisationDigest`]. Two digests that answer different questions must not be
+/// interchangeable by raw integer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PathHash(u64);
+
+impl PathHash {
+    /// The raw value, for a record or a wire format.
+    #[must_use]
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+/// The digest of a path's **oriented materialisation**: every step's arc, entry and exit.
+///
+/// Distinct from [`PathHash`] in type as well as in domain tag, for the same reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OrientedMaterialisationDigest(u64);
+
+impl OrientedMaterialisationDigest {
+    /// The raw value, for a record or a wire format.
+    #[must_use]
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
 /// A weighted Berge path: the alternating steps plus the optimal total cost. Each step resolves to a full
 /// [`IncidenceRef`] via `(arc, slot)`.
 #[derive(Debug, Clone, PartialEq)]
@@ -370,14 +400,24 @@ impl WeightedBergePath {
     }
     /// The node sequence, `start` first.
     pub fn nodes(&self) -> impl Iterator<Item = NodeId> + '_ {
-        std::iter::once(self.start).chain(self.steps.iter().map(|s| s.node))
+        std::iter::once(self.start).chain(self.steps.iter().map(|s| s.to.node))
     }
     /// A canonical, dependency-free FNV-1a-64 digest over `(arc, slot, sign, node)` steps + total-cost
     /// bits — pins the exact result for tests independent of transient timing. (FNV, not BLAKE3, to avoid
     /// adding a `hymeko_graph` dependency, which would be a core-manifest change; a 64-bit deterministic
     /// digest is sufficient to detect any path change.)
+    ///
+    /// # What this digest does NOT cover
+    ///
+    /// Only the **arrival** side of each step: `arc`, `to.slot`, `to.sign`, `to.node`. Two steps
+    /// that share an arc and a `to` but were entered at different slots hash **identically** here.
+    /// It is the historical, topological digest and must not be presented as the oriented step's
+    /// full identity -- [`Self::oriented_materialisation_digest`] is that.
+    ///
+    /// Its bytes are unchanged from the pre-orientation implementation, so every recorded v1 value
+    /// still reproduces.
     #[must_use]
-    pub fn path_hash(&self) -> u64 {
+    pub fn path_hash(&self) -> PathHash {
         let mut h: u64 = 0xcbf2_9ce4_8422_2325;
         let mut mix = |bytes: &[u8]| {
             for &b in bytes {
@@ -387,14 +427,46 @@ impl WeightedBergePath {
         };
         mix(b"HYMEKO-WEIGHTED-BERGE-PATH-v1");
         mix(&(self.start.raw() as u64).to_le_bytes());
+        // The SAME four quantities in the SAME order as v1: the arc and the step's ARRIVAL
+        // coordinate. Only the accessor path changed when the step gained its entry coordinate, so
+        // every historical hash is reproduced bit-for-bit.
         for s in &self.steps {
             mix(&(s.arc.raw() as u64).to_le_bytes());
-            mix(&s.slot.to_le_bytes());
-            mix(&i64::from(s.sign).to_le_bytes());
-            mix(&(s.node.raw() as u64).to_le_bytes());
+            mix(&s.to.slot.to_le_bytes());
+            mix(&i64::from(s.to.sign).to_le_bytes());
+            mix(&(s.to.node.raw() as u64).to_le_bytes());
         }
         mix(&self.total_cost.to_bits().to_le_bytes());
-        h
+        PathHash(h)
+    }
+
+    /// The digest of the path's **oriented materialisation**: start, then every step's `arc`,
+    /// `from` and `to`, then the cost bits.
+    ///
+    /// Separately domain-separated from [`Self::path_hash`], and a different type, so the two can
+    /// never be compared or stored as one another. Two steps sharing an arc and a `to` but entered
+    /// at different slots produce **different** values here -- which is the whole reason it exists.
+    #[must_use]
+    pub fn oriented_materialisation_digest(&self) -> OrientedMaterialisationDigest {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        let mut mix = |bytes: &[u8]| {
+            for &b in bytes {
+                h ^= u64::from(b);
+                h = h.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        };
+        mix(b"HYMEKO-ORIENTED-BERGE-MATERIALISATION-v1");
+        mix(&(self.start.raw() as u64).to_le_bytes());
+        for s in &self.steps {
+            mix(&(s.arc.raw() as u64).to_le_bytes());
+            for end in [s.from, s.to] {
+                mix(&(end.node.raw() as u64).to_le_bytes());
+                mix(&end.slot.to_le_bytes());
+                mix(&i64::from(end.sign).to_le_bytes());
+            }
+        }
+        mix(&self.total_cost.to_bits().to_le_bytes());
+        OrientedMaterialisationDigest(h)
     }
 }
 
@@ -494,6 +566,11 @@ pub struct InformedSearchWorkspace {
     pred_node: Vec<DeclId>,
     pred_arc: Vec<HyperArcId>,
     pred_slot: Vec<u32>,
+    /// The slot the predecessor occupied in `pred_arc` -- the step's ENTRY coordinate.
+    ///
+    /// Recorded because the expansion is the last place it is known: a node may occupy several
+    /// slots of one hyperedge, so the reconstruction cannot recover it by scanning `refs`.
+    pred_entry_slot: Vec<u32>,
     heap: BinaryHeap<Reverse<Entry>>,
     stats: SearchStats,
 }
@@ -519,6 +596,7 @@ impl InformedSearchWorkspace {
             self.pred_node.resize(n_decls, DeclId::NONE);
             self.pred_arc.resize(n_decls, HyperArcId::NONE);
             self.pred_slot.resize(n_decls, 0);
+            self.pred_entry_slot.resize(n_decls, 0);
         }
         if self.arc_active_gen.len() < n_arcs {
             self.arc_active_gen.resize(n_arcs, 0);
@@ -578,8 +656,16 @@ impl InformedSearchWorkspace {
         self.arc_entry_g[a.raw()] = entry_g;
     }
     #[inline]
-    fn set_pred(&mut self, node: DeclId, pred: DeclId, arc: HyperArcId, slot: u32) {
+    fn set_pred(
+        &mut self,
+        node: DeclId,
+        pred: DeclId,
+        arc: HyperArcId,
+        entry_slot: u32,
+        slot: u32,
+    ) {
         let i = node.raw();
+        self.pred_entry_slot[i] = entry_slot;
         self.pred_node[i] = pred;
         self.pred_arc[i] = arc;
         self.pred_slot[i] = slot;
@@ -712,7 +798,7 @@ where
                 let tentative = gu + c;
                 if tentative < ws.g(target) {
                     ws.set_g(target, tentative);
-                    ws.set_pred(target, node, arc, slot as u32);
+                    ws.set_pred(target, node, arc, entry_slot, slot as u32);
                     ws.stats.heuristic_evals += 1;
                     let f = tentative + finite_or_zero(heuristic.h(ir, target));
                     ws.heap.push(Reverse(Entry {
@@ -773,14 +859,23 @@ fn reconstruct(
         if pred_arc.is_none() {
             return Err(InformedSearchError::PredecessorInconsistency { node: cur });
         }
+        let pred_entry_slot = ws.pred_entry_slot[i];
         let node_id = decl_to_node(ir, cur)
+            .ok_or(InformedSearchError::PredecessorInconsistency { node: cur })?;
+        // BOTH ends from their RECORDED coordinates. Nothing is recovered by scanning `refs`, and
+        // the entry end is not inferred from `pred_node`: a node may sit in several slots of one
+        // arc, so only the coordinate the expansion stored identifies it.
+        let from = BergeIncidence::at(ir, pred_arc, pred_entry_slot)
             .ok_or(InformedSearchError::PredecessorInconsistency { node: cur })?;
         let iref = index.resolve(pred_arc, pred_slot);
         steps_rev.push(BergeStep {
             arc: pred_arc,
-            slot: pred_slot,
-            sign: iref.sign,
-            node: node_id,
+            from,
+            to: BergeIncidence {
+                node: node_id,
+                slot: pred_slot,
+                sign: iref.sign,
+            },
         });
         cur = pred_node;
     }
@@ -897,7 +992,9 @@ mod tests {
         // every step resolves to an exact incidence (arc,slot)
         for s in &p.steps {
             assert!(s.arc.raw() < ir.arcs.len());
-            assert!((s.slot as usize) < ir.arcs[s.arc.raw()].refs.len());
+            // BOTH coordinates must address a live reference of the same arc.
+            assert!((s.from.slot as usize) < ir.arcs[s.arc.raw()].refs.len());
+            assert!((s.to.slot as usize) < ir.arcs[s.arc.raw()].refs.len());
         }
     }
 

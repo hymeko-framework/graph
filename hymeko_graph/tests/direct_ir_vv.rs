@@ -111,15 +111,18 @@ fn berge_shortest_path_length_nodes_and_lossless_steps() {
             w.node("d").raw()
         ]
     );
-    // Each step resolves back to a full incidence via (arc, slot): nothing is dropped.
+    // Each END of each step resolves back to a full incidence via (arc, slot): nothing is dropped,
+    // and now that includes the entry coordinate.
     for step in &path.steps {
-        let iref = index.resolve(step.arc, step.slot);
-        assert_eq!(iref.sign, step.sign, "step sign matches the incidence");
-        assert_eq!(
-            iref.target,
-            ir.nodes[step.node.raw()].decl,
-            "step node matches target"
-        );
+        for end in [step.from, step.to] {
+            let iref = index.resolve(step.arc, end.slot);
+            assert_eq!(iref.sign, end.sign, "step sign matches the incidence");
+            assert_eq!(
+                iref.target,
+                ir.nodes[end.node.raw()].decl,
+                "step node matches target"
+            );
+        }
     }
 }
 
@@ -162,7 +165,7 @@ g {
         .expect("ok")
         .expect("a reaches b");
     let step = path.steps.last().expect("one step");
-    let iref = index.resolve(step.arc, step.slot);
+    let iref = index.resolve(step.arc, step.to.slot);
     // b is the reached node; a carries the weight -- the point is that the step's (arc,slot)
     // coordinate resolves to a live incidence whose weights are reachable (nothing was flattened
     // away by traversal). Verify the weighted incidence is visible through the same index.
