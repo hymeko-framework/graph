@@ -1,0 +1,605 @@
+//! **Graded signed cell topology, and the one owner of its width-`d` contractions.**
+//!
+//! A [`CellTopology`] is rank 0, the vertices, plus any number of **ranks** `k ≥ 1`. Each rank is
+//! a uniform-arity table of signed incidences into rank `k − 1`: a hyperedge is a rank-1 cell over
+//! vertices, a face a rank-2 cell over hyperedges, a hierarchy block a cell over its members.
+//! Arity may differ between ranks and is uniform within one.
+//!
+//! Degrees, [scale policies](ScalePolicy) and the [reverse incidence](RankCofaces) are derived
+//! read-only views, never a second source of truth.
+//!
+//! # The contraction contract
+//!
+//! [`RankIncidence`] is the borrowed form every kernel reads. Its `to_cell` and `to_lower` scales
+//! are separate because the signed hypergraph convolution uses `D^{-1/2}` in one direction and
+//! `D^{-1/2} / D` in the other. For a rank with arity `k`, sign `σ` and scales `s↑`, `s↓`:
+//!
+//! ```text
+//! lower_to_cell:  h[c]  = Σ_i σ[c,i] · s↑[v] · (1/k) · x[v]          v = members[c,i]
+//! cell_to_lower:  y[v]  = s↓[v] · Σ_{(c,i): members[c,i] = v} σ[c,i] · h[c]
+//! ```
+//!
+//! Each field row is `d` wide. **The accumulation order is part of the contract**: cell-major,
+//! members in declaration order, the per-lower scale applied after summing. The per-term weight is
+//! formed as `(σ · s↑) · (1/k)` before it multiplies the field. [`crate::hyper_operator`]
+//! documented this order first; its operator is now the `d = 1`, single-scale case of these
+//! kernels.
+
+/// Why a cell topology is not well formed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CellTopologyError {
+    /// A rank declared arity zero.
+    ZeroArity {
+        /// The rank being added.
+        rank: usize,
+    },
+    /// `members.len()` is not a multiple of the arity, or `signs.len()` differs from it.
+    ShapeMismatch {
+        /// The rank being added.
+        rank: usize,
+    },
+    /// A member names a lower cell that does not exist.
+    MemberOutOfRange {
+        /// The rank being added.
+        rank: usize,
+        /// Position in the flat member table.
+        at: usize,
+        /// The offending lower-cell index.
+        member: u32,
+    },
+    /// A rank was requested that the topology does not have.
+    NoSuchRank {
+        /// The requested rank.
+        rank: usize,
+    },
+}
+
+impl core::fmt::Display for CellTopologyError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::ZeroArity { rank } => write!(f, "rank {rank} has arity zero"),
+            Self::ShapeMismatch { rank } => {
+                write!(
+                    f,
+                    "rank {rank}: members/signs length must be n_cells * arity"
+                )
+            }
+            Self::MemberOutOfRange { rank, at, member } => write!(
+                f,
+                "rank {rank}: member {member} at position {at} names no lower cell"
+            ),
+            Self::NoSuchRank { rank } => write!(f, "the topology has no rank {rank}"),
+        }
+    }
+}
+
+impl std::error::Error for CellTopologyError {}
+
+/// One rank `k ≥ 1`: a uniform-arity signed incidence into rank `k − 1`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CellRank {
+    arity: usize,
+    members: Vec<u32>,
+    signs: Vec<f32>,
+}
+
+impl CellRank {
+    /// Members per cell.
+    #[must_use]
+    pub const fn arity(&self) -> usize {
+        self.arity
+    }
+
+    /// Cells in this rank.
+    #[must_use]
+    pub fn n_cells(&self) -> usize {
+        self.members.len() / self.arity
+    }
+
+    /// Flat `n_cells * arity` lower-cell indices.
+    #[must_use]
+    pub fn members(&self) -> &[u32] {
+        &self.members
+    }
+
+    /// Flat `n_cells * arity` incidence signs.
+    #[must_use]
+    pub fn signs(&self) -> &[f32] {
+        &self.signs
+    }
+}
+
+/// Graded signed cells: `n_vertices` rank-0 cells and ranks `1..=max_rank()`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CellTopology {
+    n_vertices: usize,
+    ranks: Vec<CellRank>,
+}
+
+impl CellTopology {
+    /// Rank 0 alone: `n_vertices` vertices and no higher cell.
+    #[must_use]
+    pub const fn vertices(n_vertices: usize) -> Self {
+        Self {
+            n_vertices,
+            ranks: Vec::new(),
+        }
+    }
+
+    /// Add the next rank, whose `members` index cells of the current top rank.
+    ///
+    /// # Errors
+    /// [`CellTopologyError`] for zero arity, a ragged or sign-mismatched table, or a member out of
+    /// range. Every member is checked.
+    pub fn with_rank(
+        mut self,
+        arity: usize,
+        members: Vec<u32>,
+        signs: Vec<f32>,
+    ) -> Result<Self, CellTopologyError> {
+        let rank = self.ranks.len() + 1;
+        if arity == 0 {
+            return Err(CellTopologyError::ZeroArity { rank });
+        }
+        if !members.len().is_multiple_of(arity) || signs.len() != members.len() {
+            return Err(CellTopologyError::ShapeMismatch { rank });
+        }
+        let n_lower = self.n_cells(rank - 1)?;
+        if let Some((at, &member)) = members
+            .iter()
+            .enumerate()
+            .find(|&(_, &m)| m as usize >= n_lower)
+        {
+            return Err(CellTopologyError::MemberOutOfRange { rank, at, member });
+        }
+        self.ranks.push(CellRank {
+            arity,
+            members,
+            signs,
+        });
+        Ok(self)
+    }
+
+    /// The highest rank present; 0 for vertices alone.
+    #[must_use]
+    pub fn max_rank(&self) -> usize {
+        self.ranks.len()
+    }
+
+    /// Cells of `rank`; rank 0 is the vertex count.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::NoSuchRank`] above [`Self::max_rank`].
+    pub fn n_cells(&self, rank: usize) -> Result<usize, CellTopologyError> {
+        match rank {
+            0 => Ok(self.n_vertices),
+            k => self.rank(k).map(CellRank::n_cells),
+        }
+    }
+
+    /// Rank `k ≥ 1`.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::NoSuchRank`] for rank 0 or above [`Self::max_rank`].
+    pub fn rank(&self, rank: usize) -> Result<&CellRank, CellTopologyError> {
+        rank.checked_sub(1)
+            .and_then(|index| self.ranks.get(index))
+            .ok_or(CellTopologyError::NoSuchRank { rank })
+    }
+
+    /// Per lower cell, how many incidences of `rank` name it. Duplicate members count every time.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::NoSuchRank`].
+    pub fn degrees(&self, rank: usize) -> Result<Vec<f32>, CellTopologyError> {
+        let cells = self.rank(rank)?;
+        let mut degrees = vec![0.0f32; self.n_cells(rank - 1)?];
+        for &member in &cells.members {
+            degrees[member as usize] += 1.0;
+        }
+        Ok(degrees)
+    }
+
+    /// The two scale vectors of `rank`, over its lower cells, from their degrees.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::NoSuchRank`].
+    pub fn scales(
+        &self,
+        rank: usize,
+        to_cell: ScalePolicy,
+        to_lower: ScalePolicy,
+    ) -> Result<RankScales, CellTopologyError> {
+        let degrees = self.degrees(rank)?;
+        Ok(RankScales {
+            to_cell: to_cell.apply(&degrees),
+            to_lower: to_lower.apply(&degrees),
+        })
+    }
+
+    /// The borrowed incidence of `rank` with the given scales.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::NoSuchRank`], or [`CellTopologyError::ShapeMismatch`] when a scale does
+    /// not have one entry per lower cell.
+    pub fn incidence<'a>(
+        &'a self,
+        rank: usize,
+        scales: &'a RankScales,
+    ) -> Result<RankIncidence<'a>, CellTopologyError> {
+        let cells = self.rank(rank)?;
+        let n_lower = self.n_cells(rank - 1)?;
+        if scales.to_cell.len() != n_lower || scales.to_lower.len() != n_lower {
+            return Err(CellTopologyError::ShapeMismatch { rank });
+        }
+        Ok(RankIncidence {
+            n_lower,
+            arity: cells.arity,
+            members: &cells.members,
+            signs: &cells.signs,
+            to_cell: &scales.to_cell,
+            to_lower: &scales.to_lower,
+        })
+    }
+
+    /// The reverse incidence of `rank`: for every lower cell, the cells that contain it.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::NoSuchRank`].
+    pub fn cofaces(&self, rank: usize) -> Result<RankCofaces, CellTopologyError> {
+        let cells = self.rank(rank)?;
+        Ok(RankCofaces::build(
+            &cells.members,
+            cells.arity,
+            self.n_cells(rank - 1)?,
+        ))
+    }
+}
+
+/// How a per-lower-cell scale derives from the degree.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScalePolicy {
+    /// `1` everywhere.
+    Unit,
+    /// `max(d, 1)^{-1/2}`.
+    InvSqrtDegree,
+    /// `max(d, 1)^{-1/2} / max(d, 1)`, the edge→vertex scale of the signed convolution.
+    InvSqrtDegreeOverDegree,
+}
+
+impl ScalePolicy {
+    /// The scale of every lower cell with these degrees.
+    ///
+    /// Written as the signed convolution's recorded formula: the degree is clamped to at least one,
+    /// and the over-degree form divides the inverse square root by the clamped degree. It is not
+    /// `d^{-3/2}` computed directly, which would round differently.
+    #[must_use]
+    pub fn apply(self, degrees: &[f32]) -> Vec<f32> {
+        degrees
+            .iter()
+            .map(|&degree| {
+                let clamped = degree.max(1.0);
+                match self {
+                    Self::Unit => 1.0,
+                    Self::InvSqrtDegree => clamped.powf(-0.5),
+                    Self::InvSqrtDegreeOverDegree => clamped.powf(-0.5) / clamped,
+                }
+            })
+            .collect()
+    }
+}
+
+/// The two scale vectors of one rank, owned.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RankScales {
+    /// Applied to each term of [`RankIncidence::lower_to_cell`].
+    pub to_cell: Vec<f32>,
+    /// Applied after summing in [`RankIncidence::cell_to_lower`].
+    pub to_lower: Vec<f32>,
+}
+
+/// One rank's signed incidence and scales, borrowed: what every contraction kernel reads.
+///
+/// # Invariants
+/// `members.len() == signs.len()` is a multiple of `arity`; every member is `< n_lower`;
+/// `to_cell.len() == to_lower.len() == n_lower`. [`CellTopology::incidence`] guarantees them;
+/// [`Self::new`] checks them for a caller that holds the tables itself.
+#[derive(Clone, Copy, Debug)]
+pub struct RankIncidence<'a> {
+    n_lower: usize,
+    arity: usize,
+    members: &'a [u32],
+    signs: &'a [f32],
+    to_cell: &'a [f32],
+    to_lower: &'a [f32],
+}
+
+impl<'a> RankIncidence<'a> {
+    /// A rank view over tables the caller holds.
+    ///
+    /// # Errors
+    /// [`CellTopologyError`] with `rank: 1`, since the view has no rank of its own, for any
+    /// violated invariant.
+    pub fn new(
+        n_lower: usize,
+        arity: usize,
+        members: &'a [u32],
+        signs: &'a [f32],
+        to_cell: &'a [f32],
+        to_lower: &'a [f32],
+    ) -> Result<Self, CellTopologyError> {
+        let rank = 1;
+        if arity == 0 {
+            return Err(CellTopologyError::ZeroArity { rank });
+        }
+        if !members.len().is_multiple_of(arity)
+            || signs.len() != members.len()
+            || to_cell.len() != n_lower
+            || to_lower.len() != n_lower
+        {
+            return Err(CellTopologyError::ShapeMismatch { rank });
+        }
+        if let Some((at, &member)) = members
+            .iter()
+            .enumerate()
+            .find(|&(_, &m)| m as usize >= n_lower)
+        {
+            return Err(CellTopologyError::MemberOutOfRange { rank, at, member });
+        }
+        Ok(Self {
+            n_lower,
+            arity,
+            members,
+            signs,
+            to_cell,
+            to_lower,
+        })
+    }
+
+    /// The same incidence with other signs, such as signs a model learns.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::ShapeMismatch`] when `signs` is not one per incidence.
+    pub fn with_signs(self, signs: &'a [f32]) -> Result<Self, CellTopologyError> {
+        if signs.len() != self.members.len() {
+            return Err(CellTopologyError::ShapeMismatch { rank: 1 });
+        }
+        Ok(Self { signs, ..self })
+    }
+
+    /// Lower cells.
+    #[must_use]
+    pub const fn n_lower(&self) -> usize {
+        self.n_lower
+    }
+
+    /// Cells.
+    #[must_use]
+    pub fn n_cells(&self) -> usize {
+        self.members.len() / self.arity
+    }
+
+    /// Members per cell.
+    #[must_use]
+    pub const fn arity(&self) -> usize {
+        self.arity
+    }
+
+    /// Flat member table.
+    #[must_use]
+    pub const fn members(&self) -> &'a [u32] {
+        self.members
+    }
+
+    /// Flat sign table.
+    #[must_use]
+    pub const fn signs(&self) -> &'a [f32] {
+        self.signs
+    }
+
+    fn inv_arity(&self) -> f32 {
+        1.0 / self.arity as f32
+    }
+
+    /// `(cell, member, weight_to_cell)` for every incidence, in contract order.
+    fn incidence_terms(self) -> impl Iterator<Item = (usize, usize, f32)> + 'a {
+        let inv_k = self.inv_arity();
+        self.members
+            .iter()
+            .zip(self.signs)
+            .enumerate()
+            .map(move |(at, (&member, &sign))| {
+                let v = member as usize;
+                (at / self.arity, v, sign * self.to_cell[v] * inv_k)
+            })
+    }
+
+    /// Signed scaled mean of each cell's members, `d` features wide: `(n_lower, d)` →
+    /// `(n_cells, d)`.
+    ///
+    /// # Panics
+    /// When `x.len() != n_lower * d`.
+    #[must_use]
+    pub fn lower_to_cell(&self, x: &[f32], d: usize) -> Vec<f32> {
+        assert_eq!(x.len(), self.n_lower * d, "x must be (n_lower, d)");
+        let mut h = vec![0.0f32; self.n_cells() * d];
+        for (c, v, w) in self.incidence_terms() {
+            accumulate(&mut h[c * d..c * d + d], w, &x[v * d..v * d + d]);
+        }
+        h
+    }
+
+    /// The adjoint of [`Self::lower_to_cell`]: `(n_cells, d)` → `(n_lower, d)`.
+    ///
+    /// # Panics
+    /// When `grad_h.len() != n_cells * d`.
+    #[must_use]
+    pub fn lower_to_cell_adjoint(&self, grad_h: &[f32], d: usize) -> Vec<f32> {
+        assert_eq!(
+            grad_h.len(),
+            self.n_cells() * d,
+            "grad_h must be (n_cells, d)"
+        );
+        let mut grad_x = vec![0.0f32; self.n_lower * d];
+        for (c, v, w) in self.incidence_terms() {
+            accumulate(&mut grad_x[v * d..v * d + d], w, &grad_h[c * d..c * d + d]);
+        }
+        grad_x
+    }
+
+    /// Signed sum of each lower cell's cofaces, scaled after summing: `(n_cells, d)` →
+    /// `(n_lower, d)`.
+    ///
+    /// # Panics
+    /// When `h.len() != n_cells * d`.
+    #[must_use]
+    pub fn cell_to_lower(&self, h: &[f32], d: usize) -> Vec<f32> {
+        assert_eq!(h.len(), self.n_cells() * d, "h must be (n_cells, d)");
+        let mut y = vec![0.0f32; self.n_lower * d];
+        for (at, (&member, &sign)) in self.members.iter().zip(self.signs).enumerate() {
+            let (c, v) = (at / self.arity, member as usize);
+            accumulate(&mut y[v * d..v * d + d], sign, &h[c * d..c * d + d]);
+        }
+        for (row, &scale) in y.chunks_mut(d.max(1)).zip(self.to_lower) {
+            for value in row {
+                *value *= scale;
+            }
+        }
+        y
+    }
+
+    /// The adjoint of [`Self::cell_to_lower`]: `(n_lower, d)` → `(n_cells, d)`.
+    ///
+    /// # Panics
+    /// When `grad_y.len() != n_lower * d`.
+    #[must_use]
+    pub fn cell_to_lower_adjoint(&self, grad_y: &[f32], d: usize) -> Vec<f32> {
+        assert_eq!(
+            grad_y.len(),
+            self.n_lower * d,
+            "grad_y must be (n_lower, d)"
+        );
+        let mut grad_h = vec![0.0f32; self.n_cells() * d];
+        for (at, (&member, &sign)) in self.members.iter().zip(self.signs).enumerate() {
+            let (c, v) = (at / self.arity, member as usize);
+            let w = sign * self.to_lower[v];
+            accumulate(&mut grad_h[c * d..c * d + d], w, &grad_y[v * d..v * d + d]);
+        }
+        grad_h
+    }
+
+    /// The gradient of [`Self::lower_to_cell`] with respect to the signs, one per incidence.
+    ///
+    /// # Panics
+    /// When `x` or `grad_h` does not have the forward's shape.
+    #[must_use]
+    pub fn lower_to_cell_sign_gradient(&self, x: &[f32], grad_h: &[f32], d: usize) -> Vec<f32> {
+        assert_eq!(x.len(), self.n_lower * d, "x must be (n_lower, d)");
+        assert_eq!(
+            grad_h.len(),
+            self.n_cells() * d,
+            "grad_h must be (n_cells, d)"
+        );
+        let inv_k = self.inv_arity();
+        self.members
+            .iter()
+            .enumerate()
+            .map(|(at, &member)| {
+                let (c, v) = (at / self.arity, member as usize);
+                dot(&grad_h[c * d..c * d + d], &x[v * d..v * d + d]) * self.to_cell[v] * inv_k
+            })
+            .collect()
+    }
+
+    /// The gradient of [`Self::cell_to_lower`] with respect to the signs, one per incidence.
+    ///
+    /// # Panics
+    /// When `h` or `grad_y` does not have the forward's shape.
+    #[must_use]
+    pub fn cell_to_lower_sign_gradient(&self, h: &[f32], grad_y: &[f32], d: usize) -> Vec<f32> {
+        assert_eq!(h.len(), self.n_cells() * d, "h must be (n_cells, d)");
+        assert_eq!(
+            grad_y.len(),
+            self.n_lower * d,
+            "grad_y must be (n_lower, d)"
+        );
+        self.members
+            .iter()
+            .enumerate()
+            .map(|(at, &member)| {
+                let (c, v) = (at / self.arity, member as usize);
+                dot(&h[c * d..c * d + d], &grad_y[v * d..v * d + d]) * self.to_lower[v]
+            })
+            .collect()
+    }
+}
+
+/// `out += w · x`, element by element.
+#[inline]
+fn accumulate(out: &mut [f32], w: f32, x: &[f32]) {
+    for (o, &xj) in out.iter_mut().zip(x) {
+        *o += w * xj;
+    }
+}
+
+/// `Σ a[j] · b[j]`, summed in index order.
+#[inline]
+fn dot(a: &[f32], b: &[f32]) -> f32 {
+    a.iter().zip(b).map(|(&x, &y)| x * y).sum()
+}
+
+/// The reverse incidence of one rank: for every lower cell, the ascending ids of the cells that
+/// contain it. A cell that names a member twice is listed twice.
+///
+/// # Invariants
+/// `offsets.len() == n_lower + 1`, non-decreasing, `offsets[n_lower] == cells.len()`, and every
+/// row sorted ascending.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RankCofaces {
+    offsets: Vec<u32>,
+    cells: Vec<u32>,
+}
+
+impl RankCofaces {
+    /// Counting sort over a flat member table: two passes and a prefix sum.
+    fn build(members: &[u32], arity: usize, n_lower: usize) -> Self {
+        let mut offsets = vec![0u32; n_lower + 1];
+        for &member in members {
+            offsets[member as usize + 1] += 1;
+        }
+        for v in 0..n_lower {
+            offsets[v + 1] += offsets[v];
+        }
+        let mut cells = vec![0u32; members.len()];
+        let mut cursor = offsets.clone();
+        for (cell, chunk) in members.chunks_exact(arity).enumerate() {
+            for &member in chunk {
+                let slot = &mut cursor[member as usize];
+                cells[*slot as usize] = cell as u32;
+                *slot += 1;
+            }
+        }
+        Self { offsets, cells }
+    }
+
+    /// Lower cells covered.
+    #[must_use]
+    pub fn n_lower(&self) -> usize {
+        self.offsets.len() - 1
+    }
+
+    /// The cells containing lower cell `v`, ascending.
+    ///
+    /// # Panics
+    /// When `v >= n_lower`.
+    #[must_use]
+    pub fn of(&self, v: usize) -> &[u32] {
+        &self.cells[self.offsets[v] as usize..self.offsets[v + 1] as usize]
+    }
+
+    /// The flat offsets and cell ids, for a caller that walks the CSR itself.
+    #[must_use]
+    pub fn parts(&self) -> (&[u32], &[u32]) {
+        (&self.offsets, &self.cells)
+    }
+}

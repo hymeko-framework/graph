@@ -91,6 +91,7 @@
 #![warn(missing_docs)]
 
 pub mod balance;
+pub mod cell_topology;
 pub mod color_coding;
 pub mod community;
 pub mod cycle_enum;

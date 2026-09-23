@@ -37,6 +37,8 @@
 //! applies `s_v` **after** summing, not per term. A consumer reproducing a recorded number depends
 //! on this; changing it is a numerical change, not a refactor.
 
+use crate::cell_topology::RankIncidence;
+
 /// Why a signed hypergraph is not well formed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HyperIncidenceError {
@@ -167,17 +169,22 @@ impl SignedHyperIncidence {
     /// Length `n_edges`. Accumulated edge-major, members in declaration order.
     pub fn node_to_edge(&self, x: &[f32]) -> Vec<f32> {
         assert_eq!(x.len(), self.n_nodes, "x must have one value per node");
-        let inv_k = 1.0 / self.arity as f32;
-        let mut h = vec![0.0f32; self.n_edges];
-        for (c, hc) in h.iter_mut().enumerate() {
-            let mut acc = 0.0f32;
-            for i in 0..self.arity {
-                let v = self.members[c * self.arity + i] as usize;
-                acc += self.signs[c * self.arity + i] * self.scale[v] * inv_k * x[v];
-            }
-            *hc = acc;
-        }
-        h
+        self.view().lower_to_cell(x, 1)
+    }
+
+    /// This operator as the `d = 1`, single-scale case of the rank kernels, which own the
+    /// arithmetic.
+    fn view(&self) -> RankIncidence<'_> {
+        // `new` validated every table this view reads, so the refusal is unreachable.
+        RankIncidence::new(
+            self.n_nodes,
+            self.arity,
+            &self.members,
+            &self.signs,
+            &self.scale,
+            &self.scale,
+        )
+        .expect("validated at construction")
     }
 
     /// `E h = k · Aᵀ h` — the hyperedge→node direction.
@@ -193,17 +200,7 @@ impl SignedHyperIncidence {
     /// part of the numerical contract, not an implementation detail.
     pub fn edge_to_node(&self, h: &[f32]) -> Vec<f32> {
         assert_eq!(h.len(), self.n_edges, "h must have one value per hyperedge");
-        let mut out = vec![0.0f32; self.n_nodes];
-        for (c, &hc) in h.iter().enumerate() {
-            for i in 0..self.arity {
-                let v = self.members[c * self.arity + i] as usize;
-                out[v] += self.signs[c * self.arity + i] * hc;
-            }
-        }
-        for (o, &sc) in out.iter_mut().zip(self.scale.iter()) {
-            *o *= sc;
-        }
-        out
+        self.view().cell_to_lower(h, 1)
     }
 
     /// The **star** normal operator applied matrix-free: `E(A x) + ρ x = k · Aᵀ(A x) + ρ x`.
