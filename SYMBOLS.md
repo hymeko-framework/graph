@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 563 public symbol(s).**
+**8 package(s), 594 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -83,6 +83,8 @@ _No public symbols._
 - `BuildOpts` — `hymeko_graph/src/incidence.rs`
 - `CartwrightHararyPruner` — `hymeko_graph/src/balance.rs`
 - `Cell` — `hymeko_graph/src/octree.rs`
+- `CellRank` — `hymeko_graph/src/cell_topology.rs`
+- `CellTopology` — `hymeko_graph/src/cell_topology.rs`
 - `CliffordFIR` — `hymeko_graph/src/spine.rs`
 - `ColorCodingSampler` — `hymeko_graph/src/color_coding.rs`
 - `CommunityAxiomPruner` — `hymeko_graph/src/community.rs`
@@ -130,6 +132,9 @@ _No public symbols._
 - `PrunerStats` — `hymeko_graph/src/pruner.rs`
 - `QuadtreeAnchors` — `hymeko_graph/src/quadtree.rs`
 - `QuadtreeConfig` — `hymeko_graph/src/quadtree.rs`
+- `RankCofaces` — `hymeko_graph/src/cell_topology.rs`
+- `RankIncidence` — `hymeko_graph/src/cell_topology.rs`
+- `RankScales` — `hymeko_graph/src/cell_topology.rs`
 - `Remesh` — `hymeko_graph/src/octree.rs`
 - `SComponentLabeling` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `SamplerScratch` — `hymeko_graph/src/cycle_sampler.rs`
@@ -160,6 +165,7 @@ _No public symbols._
 - `AxiomChoice` — `hymeko_graph/src/community.rs`
 - `BalanceMode` — `hymeko_graph/src/balance.rs`
 - `BudgetKind` — `hymeko_graph/src/direct_ir/mod.rs`
+- `CellTopologyError` — `hymeko_graph/src/cell_topology.rs`
 - `DirectIrError` — `hymeko_graph/src/direct_ir/mod.rs`
 - `EnumerationExecution` — `hymeko_graph/src/signed_tuples.rs`
 - `GradRequest` — `hymeko_graph/src/spine.rs`
@@ -171,6 +177,7 @@ _No public symbols._
 - `MultiEdgeSignResolution` — `hymeko_graph/src/signed_tuples.rs`
 - `PrunerDecision` — `hymeko_graph/src/pruner.rs`
 - `Role` — `hymeko_graph/src/sphf.rs`
+- `ScalePolicy` — `hymeko_graph/src/cell_topology.rs`
 - `Sign` — `hymeko_graph/src/signed_graph.rs`
 - `SignedTupleFamily` — `hymeko_graph/src/signed_tuples.rs`
 - `Sink` — `hymeko_graph/src/unsigned_cycles/sink.rs`
@@ -180,8 +187,10 @@ _No public symbols._
 - `accepted` — `hymeko_graph/src/matroid/levi.rs`
 - `accepted` — `hymeko_graph/src/matroid/rank2.rs`
 - `adapt` — `hymeko_graph/src/octree.rs`
+- `apply` — `hymeko_graph/src/cell_topology.rs`
 - `arcs` — `hymeko_graph/src/direct_ir/dual.rs`
 - `arcs` — `hymeko_graph/src/direct_ir/traversal.rs`
+- `arity` — `hymeko_graph/src/cell_topology.rs`
 - `arity` — `hymeko_graph/src/hyper_operator.rs`
 - `arity` — `hymeko_graph/src/signed_tuples.rs`
 - `arity` — `hymeko_graph/src/sphf.rs`
@@ -220,11 +229,15 @@ _No public symbols._
 - `build_quadtree` — `hymeko_graph/src/quadtree.rs`
 - `build_sign_lookup` — `hymeko_graph/src/signed_graph.rs`
 - `canonical_cycle` — `hymeko_graph/src/cycle_sampler.rs`
+- `cell_to_lower` — `hymeko_graph/src/cell_topology.rs`
+- `cell_to_lower_adjoint` — `hymeko_graph/src/cell_topology.rs`
+- `cell_to_lower_sign_gradient` — `hymeko_graph/src/cell_topology.rs`
 - `center` — `hymeko_graph/src/octree.rs`
 - `child_stats` — `hymeko_graph/src/pruner.rs`
 - `clifford_fir_backward` — `hymeko_graph/src/spine.rs`
 - `clifford_fir_backward_with` — `hymeko_graph/src/spine.rs`
 - `clifford_fir_forward` — `hymeko_graph/src/spine.rs`
+- `cofaces` — `hymeko_graph/src/cell_topology.rs`
 - `component_of` — `hymeko_graph/src/direct_ir/components.rs`
 - `component_of` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `components` — `hymeko_graph/src/sphf.rs`
@@ -236,6 +249,7 @@ _No public symbols._
 - `decls` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `degree` — `hymeko_graph/src/traversal.rs`
 - `degree_adaptive_m_v` — `hymeko_graph/src/topk_cycles.rs`
+- `degrees` — `hymeko_graph/src/cell_topology.rs`
 - `dense_matvec` — `hymeko_graph/src/hyper_operator.rs`
 - `dfs_from` — `hymeko_graph/src/unsigned_cycles/dfs.rs`
 - `dfs_from_pair` — `hymeko_graph/src/unsigned_cycles/dfs.rs`
@@ -303,6 +317,7 @@ _No public symbols._
 - `has_edge` — `hymeko_graph/src/unsigned_cycles/csr.rs`
 - `hyperedge_len` — `hymeko_graph/src/direct_ir/informed.rs`
 - `hyperedge_len` — `hymeko_graph/src/direct_ir/traversal.rs`
+- `incidence` — `hymeko_graph/src/cell_topology.rs`
 - `incidence` — `hymeko_graph/src/matroid/facade.rs`
 - `incidence_matrix` — `hymeko_graph/src/sphf.rs`
 - `index` — `hymeko_graph/src/direct_ir/traversal.rs`
@@ -336,20 +351,28 @@ _No public symbols._
 - `levi_rank` — `hymeko_graph/src/matroid/levi.rs`
 - `levi_spanning_basis` — `hymeko_graph/src/matroid/levi.rs`
 - `low_root` — `hymeko_graph/src/topk_cycles.rs`
+- `lower_to_cell` — `hymeko_graph/src/cell_topology.rs`
+- `lower_to_cell_adjoint` — `hymeko_graph/src/cell_topology.rs`
+- `lower_to_cell_sign_gradient` — `hymeko_graph/src/cell_topology.rs`
 - `make_identity_sink` — `hymeko_graph/src/unsigned_cycles/parallel.rs`
 - `make_thread_sink` — `hymeko_graph/src/unsigned_cycles/parallel.rs`
+- `max_rank` — `hymeko_graph/src/cell_topology.rs`
 - `mean_pool` — `hymeko_graph/src/spine.rs`
 - `member_edge` — `hymeko_graph/src/signed_tuples.rs`
 - `member_edges` — `hymeko_graph/src/signed_tuples.rs`
 - `member_signs` — `hymeko_graph/src/signed_tuples.rs`
+- `members` — `hymeko_graph/src/cell_topology.rs`
 - `members` — `hymeko_graph/src/hyper_operator.rs`
 - `merge_sinks` — `hymeko_graph/src/unsigned_cycles/parallel.rs`
 - `min_vertex_weight` — `hymeko_graph/src/topk_cycles.rs`
+- `n_cells` — `hymeko_graph/src/cell_topology.rs`
 - `n_edges` — `hymeko_graph/src/hyper_operator.rs`
 - `n_edges` — `hymeko_graph/src/signed_graph.rs`
+- `n_lower` — `hymeko_graph/src/cell_topology.rs`
 - `n_nodes` — `hymeko_graph/src/hyper_operator.rs`
 - `neighbours` — `hymeko_graph/src/traversal.rs`
 - `neighbours` — `hymeko_graph/src/unsigned_cycles/csr.rs`
+- `new` — `hymeko_graph/src/cell_topology.rs`
 - `new` — `hymeko_graph/src/cycle_sampler.rs`
 - `new` — `hymeko_graph/src/direct_ir/berge_enum.rs`
 - `new` — `hymeko_graph/src/direct_ir/informed.rs`
@@ -372,17 +395,20 @@ _No public symbols._
 - `node_to_edge` — `hymeko_graph/src/hyper_operator.rs`
 - `nodes` — `hymeko_graph/src/direct_ir/informed.rs`
 - `nodes` — `hymeko_graph/src/direct_ir/traversal.rs`
+- `of` — `hymeko_graph/src/cell_topology.rs`
 - `of` — `hymeko_graph/src/sphf.rs`
 - `offer` — `hymeko_graph/src/matroid/levi.rs`
 - `offer` — `hymeko_graph/src/matroid/rank2.rs`
 - `offer` — `hymeko_graph/src/unsigned_cycles/sink.rs`
 - `oriented_materialisation_digest` — `hymeko_graph/src/direct_ir/informed.rs`
 - `par_batch_reachable_counts` — `hymeko_graph/src/direct_ir/batch.rs`
+- `parts` — `hymeko_graph/src/cell_topology.rs`
 - `patches` — `hymeko_graph/src/sphf.rs`
 - `path_hash` — `hymeko_graph/src/direct_ir/informed.rs`
 - `per_vertex` — `hymeko_graph/src/topk_cycles.rs`
 - `ports` — `hymeko_graph/src/sphf.rs`
 - `push` — `hymeko_graph/src/topk_cycles.rs`
+- `rank` — `hymeko_graph/src/cell_topology.rs`
 - `rank2_rank` — `hymeko_graph/src/matroid/rank2.rs`
 - `rank2_spanning_forest` — `hymeko_graph/src/matroid/rank2.rs`
 - `rank2_weighted_basis` — `hymeko_graph/src/matroid/rank2.rs`
@@ -399,9 +425,11 @@ _No public symbols._
 - `same_component` — `hymeko_graph/src/direct_ir/components.rs`
 - `same_component` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `scale` — `hymeko_graph/src/hyper_operator.rs`
+- `scales` — `hymeko_graph/src/cell_topology.rs`
 - `sign` — `hymeko_graph/src/sphf.rs`
 - `sign_product_abs` — `hymeko_graph/src/topk_cycles.rs`
 - `signed_mean` — `hymeko_graph/src/spine.rs`
+- `signs` — `hymeko_graph/src/cell_topology.rs`
 - `signs` — `hymeko_graph/src/hyper_operator.rs`
 - `snapshot` — `hymeko_graph/src/pruner.rs`
 - `sort_by_score_desc` — `hymeko_graph/src/topk_cycles.rs`
@@ -410,11 +438,14 @@ _No public symbols._
 - `stats` — `hymeko_graph/src/direct_ir/informed.rs`
 - `targets` — `hymeko_graph/src/sphf.rs`
 - `tiered_m_v_by_degree` — `hymeko_graph/src/topk_cycles.rs`
+- `vertices` — `hymeko_graph/src/cell_topology.rs`
 - `volume` — `hymeko_graph/src/octree.rs`
 - `with` — `hymeko_graph/src/pruner.rs`
 - `with_capacity` — `hymeko_graph/src/topk_cycles.rs`
 - `with_capacity` — `hymeko_graph/src/traversal.rs`
 - `with_capacity` — `hymeko_graph/src/traversal_heuristic.rs`
+- `with_rank` — `hymeko_graph/src/cell_topology.rs`
+- `with_signs` — `hymeko_graph/src/cell_topology.rs`
 - `within` — `hymeko_graph/src/sphf.rs`
 - `zero_grad` — `hymeko_graph/src/spine.rs`
 
