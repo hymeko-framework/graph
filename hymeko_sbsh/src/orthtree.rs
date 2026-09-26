@@ -19,21 +19,68 @@
 //! and `hi[c*dim .. c*dim+dim]` (exclusive-high). Cold connectivity (`parent`, `children`,
 //! `members`) sits beside the hot coordinate arrays.
 //!
+//! # The coordinate type is a parameter
+//!
+//! Coordinates are any [`Coordinate`]: `f64` (the default, and the scene tier's) or `f32` (a
+//! consumer whose point buffers are single precision). The structure, the split and the bounding
+//! box are written once over the trait; `f64` stays the default type argument, so
+//! `OrthTree`, `SplitRule` and `build_orthtree` over `f64` buffers read exactly as before.
+//!
 //! # The laminar invariant
 //!
 //! Children nest inside their parent and are pairwise disjoint, so the cell family is *laminar*.
 //! That is what makes the spatial side of an SBSH an alpha-acyclic hypertree of width 1, and it
 //! is checkable rather than assumed: see [`OrthTree::verify_laminar`].
 
+/// The coordinate arithmetic the orthtree needs: ordering, the midpoint `lo·½ + hi·½`, and the
+/// padding of a bounding box.
+///
+/// Implemented for `f32` and `f64`. The midpoint is written `lo * HALF + hi * HALF` for both, so a
+/// tree over coordinates both types represent exactly splits at the same places.
+pub trait Coordinate:
+    Copy
+    + PartialOrd
+    + core::fmt::Debug
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+{
+    /// Zero.
+    const ZERO: Self;
+    /// One half: the midpoint weight, and the half-width a degenerate axis is widened by.
+    const HALF: Self;
+    /// The smaller of two coordinates.
+    fn min(self, other: Self) -> Self;
+    /// The larger of two coordinates.
+    fn max(self, other: Self) -> Self;
+}
+
+macro_rules! coordinate {
+    ($($t:ty),*) => {$(
+        impl Coordinate for $t {
+            const ZERO: Self = 0.0;
+            const HALF: Self = 0.5;
+            fn min(self, other: Self) -> Self {
+                <$t>::min(self, other)
+            }
+            fn max(self, other: Self) -> Self {
+                <$t>::max(self, other)
+            }
+        }
+    )*};
+}
+
+coordinate!(f32, f64);
+
 /// How a cell decides to subdivide.
 ///
 /// `should_split` sees the cell box `[lo, hi)` (each `dim` long), its `level`, and the indices of
 /// the points currently inside it. The build ANDs this with the universal `level < max_depth`
 /// cap, so a rule need only encode its *content* criterion.
-pub trait SplitRule {
+pub trait SplitRule<T: Coordinate = f64> {
     /// True iff the cell `[lo, hi)` at depth `level` holding `members` should subdivide,
     /// subject to the build's `max_depth` cap.
-    fn should_split(&self, lo: &[f64], hi: &[f64], level: u32, members: &[u32]) -> bool;
+    fn should_split(&self, lo: &[T], hi: &[T], level: u32, members: &[u32]) -> bool;
 }
 
 /// Subdivide while a cell holds more than `max_per_cell` points — the scene rule.
@@ -43,8 +90,8 @@ pub struct CountSplit {
     pub max_per_cell: usize,
 }
 
-impl SplitRule for CountSplit {
-    fn should_split(&self, _lo: &[f64], _hi: &[f64], _level: u32, members: &[u32]) -> bool {
+impl<T: Coordinate> SplitRule<T> for CountSplit {
+    fn should_split(&self, _lo: &[T], _hi: &[T], _level: u32, members: &[u32]) -> bool {
         members.len() > self.max_per_cell
     }
 }
@@ -70,13 +117,13 @@ impl Default for OrthConfig {
 
 /// A built N-dimensional orthtree. Leaves are the finest patches of the SBSH partition.
 #[derive(Clone, Debug)]
-pub struct OrthTree {
+pub struct OrthTree<T: Coordinate = f64> {
     /// Ambient dimension (2 = quadtree, 3 = octree, ...).
     pub dim: usize,
     /// Inclusive-low corner of each cell, flat `n_cells * dim`.
-    pub lo: Vec<f64>,
+    pub lo: Vec<T>,
     /// Exclusive-high corner of each cell, flat `n_cells * dim`.
-    pub hi: Vec<f64>,
+    pub hi: Vec<T>,
     /// Depth of each cell (root = 0).
     pub level: Vec<u32>,
     /// Parent cell index, or `-1` for the root.
@@ -87,19 +134,19 @@ pub struct OrthTree {
     pub members: Vec<Vec<u32>>,
 }
 
-impl OrthTree {
+impl<T: Coordinate> OrthTree<T> {
     /// Number of cells, internal and leaf.
     pub fn n_cells(&self) -> usize {
         self.level.len()
     }
 
     /// Cell `c`'s inclusive-low corner.
-    pub fn cell_lo(&self, c: usize) -> &[f64] {
+    pub fn cell_lo(&self, c: usize) -> &[T] {
         &self.lo[c * self.dim..(c + 1) * self.dim]
     }
 
     /// Cell `c`'s exclusive-high corner.
-    pub fn cell_hi(&self, c: usize) -> &[f64] {
+    pub fn cell_hi(&self, c: usize) -> &[T] {
         &self.hi[c * self.dim..(c + 1) * self.dim]
     }
 
@@ -116,7 +163,7 @@ impl OrthTree {
     /// Does cell `c` contain `point` under half-open `[lo, hi)` semantics? With `inclusive_far`
     /// the exclusive-high face is treated as inclusive, so a point exactly on the outer boundary
     /// of the root is not lost.
-    pub fn contains(&self, c: usize, point: &[f64], inclusive_far: bool) -> bool {
+    pub fn contains(&self, c: usize, point: &[T], inclusive_far: bool) -> bool {
         let (lo, hi) = (self.cell_lo(c), self.cell_hi(c));
         (0..self.dim).all(|d| {
             point[d] >= lo[d] && (point[d] < hi[d] || (inclusive_far && point[d] <= hi[d]))
@@ -128,7 +175,7 @@ impl OrthTree {
     ///
     /// # Preconditions
     /// `point.len() == self.dim`.
-    pub fn leaf_of(&self, point: &[f64]) -> Option<usize> {
+    pub fn leaf_of(&self, point: &[T]) -> Option<usize> {
         debug_assert_eq!(point.len(), self.dim);
         if !self.contains(0, point, true) {
             return None;
@@ -150,7 +197,7 @@ impl OrthTree {
     }
 
     /// Does cell `c`'s box overlap the query box `[qlo, qhi)`?
-    fn box_intersects(&self, c: usize, qlo: &[f64], qhi: &[f64]) -> bool {
+    fn box_intersects(&self, c: usize, qlo: &[T], qhi: &[T]) -> bool {
         let (lo, hi) = (self.cell_lo(c), self.cell_hi(c));
         (0..self.dim).all(|d| lo[d] < qhi[d] && qlo[d] < hi[d])
     }
@@ -161,7 +208,7 @@ impl OrthTree {
     /// # Preconditions
     /// `points.len() == n_points * dim`; `qlo.len() == qhi.len() == dim`; the tree was built over
     /// these same `points`.
-    pub fn objects_in_region(&self, points: &[f64], qlo: &[f64], qhi: &[f64]) -> Vec<u32> {
+    pub fn objects_in_region(&self, points: &[T], qlo: &[T], qhi: &[T]) -> Vec<u32> {
         let mut out = Vec::new();
         let mut stack = vec![0usize];
         while let Some(c) = stack.pop() {
@@ -216,17 +263,17 @@ impl OrthTree {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_cell(
+fn build_cell<T: Coordinate>(
     dim: usize,
-    lo: Vec<f64>,
-    hi: Vec<f64>,
+    lo: Vec<T>,
+    hi: Vec<T>,
     level: u32,
     members: Vec<u32>,
     parent: i32,
-    points: &[f64],
-    rule: &dyn SplitRule,
+    points: &[T],
+    rule: &dyn SplitRule<T>,
     cfg: &OrthConfig,
-    tree: &mut OrthTree,
+    tree: &mut OrthTree<T>,
 ) -> u32 {
     let me = tree.level.len() as u32;
     tree.lo.extend_from_slice(&lo);
@@ -250,7 +297,9 @@ fn build_cell(
     }) {
         return me;
     }
-    let mid: Vec<f64> = (0..dim).map(|d| lo[d] * 0.5 + hi[d] * 0.5).collect();
+    let mid: Vec<T> = (0..dim)
+        .map(|d| lo[d] * T::HALF + hi[d] * T::HALF)
+        .collect();
     if (0..dim).all(|d| mid[d] <= lo[d] || mid[d] >= hi[d]) {
         return me;
     }
@@ -267,8 +316,8 @@ fn build_cell(
         if cfg.drop_empty && child_members.is_empty() {
             continue;
         }
-        let mut clo = vec![0.0f64; dim];
-        let mut chi = vec![0.0f64; dim];
+        let mut clo = vec![T::ZERO; dim];
+        let mut chi = vec![T::ZERO; dim];
         for d in 0..dim {
             if orthant & (1 << d) != 0 {
                 clo[d] = mid[d];
@@ -308,15 +357,15 @@ fn build_cell(
 /// # Postconditions
 /// Cell 0 is the root (`parent == -1`, `level == 0`); the family is laminar
 /// ([`OrthTree::verify_laminar`]).
-pub fn build_orthtree(
+pub fn build_orthtree<T: Coordinate>(
     dim: usize,
-    root_lo: &[f64],
-    root_hi: &[f64],
-    points: &[f64],
+    root_lo: &[T],
+    root_hi: &[T],
+    points: &[T],
     member_ids: &[u32],
-    rule: &dyn SplitRule,
+    rule: &dyn SplitRule<T>,
     cfg: &OrthConfig,
-) -> OrthTree {
+) -> OrthTree<T> {
     assert_eq!(root_lo.len(), dim, "root_lo must have `dim` coordinates");
     assert_eq!(root_hi.len(), dim, "root_hi must have `dim` coordinates");
     assert!(dim > 0, "an orthtree needs at least one dimension");
@@ -352,7 +401,7 @@ pub fn build_orthtree(
 ///
 /// # Preconditions
 /// `points.len() == n_points * dim` with `n_points >= 1`.
-pub fn point_bbox(points: &[f64], dim: usize, pad: f64) -> (Vec<f64>, Vec<f64>) {
+pub fn point_bbox<T: Coordinate>(points: &[T], dim: usize, pad: T) -> (Vec<T>, Vec<T>) {
     assert!(dim > 0, "an orthtree needs at least one dimension");
     assert!(!points.is_empty() && points.len().is_multiple_of(dim));
     let n = points.len() / dim;
@@ -367,12 +416,12 @@ pub fn point_bbox(points: &[f64], dim: usize, pad: f64) -> (Vec<f64>, Vec<f64>) 
     }
     for d in 0..dim {
         let span = hi[d] - lo[d];
-        if span <= 0.0 {
-            lo[d] -= 0.5;
-            hi[d] += 0.5;
+        if span <= T::ZERO {
+            lo[d] = lo[d] - T::HALF;
+            hi[d] = hi[d] + T::HALF;
         } else {
-            lo[d] -= pad * span;
-            hi[d] += pad * span;
+            lo[d] = lo[d] - pad * span;
+            hi[d] = hi[d] + pad * span;
         }
     }
     (lo, hi)

@@ -69,7 +69,8 @@
 //!
 //! One code path covers every dimension. A **quadtree** is `dim = 2` (`2^2 = 4` orthants); an
 //! **octree** is `dim = 3` (`2^3 = 8`); higher dimensions work unchanged and are the reason the
-//! type is not named after either. Coordinates are `f64` throughout, matching
+//! type is not named after either. The orthtree is generic over its [`Coordinate`] type (`f64`
+//! by default, or `f32`). The scene and its IR binding are `f64`, matching
 //! [`hymeko_graph::direct_ir::PositionProvider`], so binding a scene to the IR needs no lossy
 //! conversion at the boundary.
 
@@ -79,7 +80,9 @@ pub mod scene;
 pub mod width;
 
 pub use ir_positions::IrPositions;
-pub use orthtree::{CountSplit, OrthConfig, OrthTree, SplitRule, build_orthtree, point_bbox};
+pub use orthtree::{
+    Coordinate, CountSplit, OrthConfig, OrthTree, SplitRule, build_orthtree, point_bbox,
+};
 pub use scene::{SbshScene, SceneError};
 pub use width::{ElimCost, certificate_width, certificate_width_of, elimination_cost};
 

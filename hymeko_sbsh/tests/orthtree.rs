@@ -250,3 +250,75 @@ fn a_degenerate_axis_still_yields_a_usable_root_box() {
         3
     );
 }
+
+/// The coordinate type is a parameter. Over coordinates both `f32` and `f64` represent exactly, the
+/// two builds split at the same places: the same cells, levels, parents, children and members, and
+/// boxes equal after widening.
+#[test]
+fn an_f32_tree_is_the_f64_tree_over_exact_coordinates() {
+    for dim in 1..=3usize {
+        // Quarter-integer coordinates on a small lattice: exact in both precisions.
+        let n = 60u32;
+        let wide: Vec<f64> = (0..n as usize * dim)
+            .map(|i| ((i * 7 + 3) % 29) as f64 * 0.25)
+            .collect();
+        let narrow: Vec<f32> = wide.iter().map(|&v| v as f32).collect();
+        let ids: Vec<u32> = (0..n).collect();
+        let rule = CountSplit { max_per_cell: 3 };
+        let cfg = OrthConfig::default();
+        let (lo, hi) = point_bbox(&wide, dim, 0.0);
+        let (lo32, hi32) = point_bbox(&narrow, dim, 0.0);
+        assert_eq!(lo32, lo.iter().map(|&v| v as f32).collect::<Vec<_>>());
+        assert_eq!(hi32, hi.iter().map(|&v| v as f32).collect::<Vec<_>>());
+        let a = build_orthtree(dim, &lo, &hi, &wide, &ids, &rule, &cfg);
+        let b = build_orthtree(dim, &lo32, &hi32, &narrow, &ids, &rule, &cfg);
+        b.verify_laminar().unwrap();
+        assert_eq!(
+            (&a.level, &a.parent, &a.children, &a.members),
+            (&b.level, &b.parent, &b.children, &b.members),
+            "dim {dim}"
+        );
+        let widen = |v: &[f32]| v.iter().map(|&x| f64::from(x)).collect::<Vec<_>>();
+        assert_eq!(a.lo, widen(&b.lo), "dim {dim}");
+        assert_eq!(a.hi, widen(&b.hi), "dim {dim}");
+        for p in 0..n as usize {
+            assert_eq!(
+                a.leaf_of(&wide[p * dim..(p + 1) * dim]),
+                b.leaf_of(&narrow[p * dim..(p + 1) * dim])
+            );
+        }
+    }
+}
+
+/// A caller's own rule is written once for every coordinate type it supports.
+#[test]
+fn a_split_rule_can_be_generic_over_the_coordinate() {
+    struct Wider<T>(T);
+    impl<T: hymeko_sbsh::Coordinate> hymeko_sbsh::SplitRule<T> for Wider<T> {
+        fn should_split(&self, lo: &[T], hi: &[T], _level: u32, members: &[u32]) -> bool {
+            members.len() > 1 && hi[0] - lo[0] > self.0
+        }
+    }
+    let pts = [0.0f32, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0];
+    let ids: Vec<u32> = (0..8).collect();
+    let (lo, hi) = point_bbox(&pts, 1, 0.0);
+    let coarse = build_orthtree(
+        1,
+        &lo,
+        &hi,
+        &pts,
+        &ids,
+        &Wider(4.0f32),
+        &OrthConfig::default(),
+    );
+    let fine = build_orthtree(
+        1,
+        &lo,
+        &hi,
+        &pts,
+        &ids,
+        &Wider(1.0f32),
+        &OrthConfig::default(),
+    );
+    assert!(coarse.leaves().len() < fine.leaves().len());
+}
