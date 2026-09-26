@@ -415,14 +415,14 @@ pub fn clifford_fir_forward(
 pub enum GradRequest {
     /// Filter coefficients only (`∇a`, `∇b`).
     ///
-    /// Peak heap is `O(threads · k)` — the worker accumulators hold `2k` floats
+    /// Peak heap is `O(FIR_CHUNKS · k)` — the chunk accumulators hold `2k` floats
     /// each. This is what a training step wants when the input features are data
     /// rather than parameters.
     ParamsOnly,
     /// Filter coefficients **and** the feature gradient `∇X`.
     ///
-    /// Peak heap is `O(threads · n_vertices · d)`: correctness requires one
-    /// private `∇X` accumulator per worker to avoid atomic contention on hub
+    /// Peak heap is `O(FIR_CHUNKS · n_vertices · d)`: correctness requires one
+    /// private `∇X` accumulator per chunk to avoid atomic contention on hub
     /// vertices. Ask for this only when `∇X` is actually consumed.
     Full,
 }
@@ -443,12 +443,23 @@ pub struct FirBackward {
     pub grad_fir: CliffordFIR,
 }
 
-/// One worker's slice of the accumulation.
+/// The cycle partition of [`clifford_fir_backward_with`]: this many contiguous chunks, each with
+/// private accumulators, reduced in chunk order.
+///
+/// **A constant, not `rayon::current_num_threads()`.** Float addition is not associative, so a
+/// partition that followed the thread count made every gradient depend on the machine the backward
+/// ran on. With a fixed partition the pool changes only *who* runs a chunk, never *what* is summed:
+/// the result is bit-identical on any thread count. 16 is the partition the consumers' recorded
+/// pins were produced under (16 threads on the reference host), so it moves none of them; Nagare's
+/// fused backward reads this constant to stay equal to this kernel.
+pub const FIR_CHUNKS: usize = 16;
+
+/// One chunk's slice of the accumulation.
 ///
 /// `grad_features` is empty for [`GradRequest::ParamsOnly`] and never touched:
 /// the `FULL` const generic on [`accumulate_chunk`] removes the branch at
 /// monomorphisation, so the lean path costs nothing for the field's existence.
-struct ThreadAccum {
+struct ChunkAccum {
     grad_features: Vec<f32>,
     grad_a: Vec<f32>,
     grad_b: Vec<f32>,
@@ -475,7 +486,7 @@ fn accumulate_chunk<const FULL: bool>(
     fir: &CliffordFIR,
     grad_out: &[f32],
     range: core::ops::Range<usize>,
-    acc: &mut ThreadAccum,
+    acc: &mut ChunkAccum,
 ) {
     let k = batch.k;
     for ci in range {
@@ -530,18 +541,18 @@ fn accumulate_chunk<const FULL: bool>(
 /// has not matched the code for some time. Corrected 2026-08-16.)
 ///
 /// # Cost
-/// [`GradRequest::ParamsOnly`] allocates `O(threads · k)`;
-/// [`GradRequest::Full`] allocates `O(threads · n_vertices · d)` and pays a
+/// [`GradRequest::ParamsOnly`] allocates `O(FIR_CHUNKS · k)`;
+/// [`GradRequest::Full`] allocates `O(FIR_CHUNKS · n_vertices · d)` and pays a
 /// serial reduction of the same size. At Slashdot shape
 /// (`n_vertices = 82_140`, `d = 32`) that is 10 MiB **per worker**, which is why
 /// the training path must not ask for it — see
 /// `reports/2026-08-16-nagare-cpu-memory-benchmark.md` §6b-bis.
 ///
 /// # Determinism
-/// Both modes use the same chunking and the same fixed-order reduction, so
-/// `∇a`/`∇b` are bit-identical between them at equal thread count. Results do
-/// depend on the thread count through that reduction order — a pre-existing
-/// property of this kernel, unchanged here.
+/// Both modes use the same [`FIR_CHUNKS`] partition and the same chunk-order
+/// reduction, so `∇a`/`∇b` are bit-identical between them, and every gradient is
+/// bit-identical on any thread count. Until 2026-09-27 the partition was the
+/// thread count, and results depended on it.
 ///
 /// # Panics
 /// If `fir.k() != batch.k`, `features.len() != n_vertices * d`, or
@@ -562,15 +573,14 @@ pub fn clifford_fir_backward_with(
     assert_eq!(grad_out.len(), n_cycles * d);
 
     let full = req == GradRequest::Full;
-    // Per-worker accumulators avoid atomic contention on hub vertices.
-    // Reduced in index order at the end, which keeps the result reproducible
-    // for a given thread count.
-    let n_threads = rayon::current_num_threads().max(1);
-    let cycles_per_thread = n_cycles.div_ceil(n_threads);
+    // Per-chunk accumulators avoid atomic contention on hub vertices. Reduced
+    // in chunk order at the end over a fixed partition, which keeps the result
+    // the same on any thread count.
+    let cycles_per_chunk = n_cycles.div_ceil(FIR_CHUNKS);
 
-    let mut accums: Vec<ThreadAccum> = (0..n_threads)
-        .map(|_| ThreadAccum {
-            // The lean path allocates nothing per worker beyond 2k floats.
+    let mut accums: Vec<ChunkAccum> = (0..FIR_CHUNKS)
+        .map(|_| ChunkAccum {
+            // The lean path allocates nothing per chunk beyond 2k floats.
             grad_features: if full {
                 vec![0.0f32; n_vertices * d]
             } else {
@@ -583,8 +593,8 @@ pub fn clifford_fir_backward_with(
 
     use rayon::prelude::IntoParallelRefMutIterator;
     accums.par_iter_mut().enumerate().for_each(|(t, acc)| {
-        let start = (t * cycles_per_thread).min(n_cycles);
-        let end = ((t + 1) * cycles_per_thread).min(n_cycles);
+        let start = (t * cycles_per_chunk).min(n_cycles);
+        let end = ((t + 1) * cycles_per_chunk).min(n_cycles);
         if full {
             accumulate_chunk::<true>(batch, features, d, fir, grad_out, start..end, acc);
         } else {
@@ -592,7 +602,7 @@ pub fn clifford_fir_backward_with(
         }
     });
 
-    // Reduce per-worker accumulators, in index order.
+    // Reduce the chunk accumulators, in chunk order.
     let mut grad_a = vec![0.0f32; k];
     let mut grad_b = vec![0.0f32; k];
     let mut grad_features = full.then(|| vec![0.0f32; n_vertices * d]);
@@ -887,6 +897,35 @@ mod tests {
         let out2 = fir_cycle_forward(&batch, &features, 50, 8, &fir);
         for (a, b) in out1.iter().zip(out2.iter()) {
             assert!((a - b).abs() < 1e-7);
+        }
+    }
+
+    /// The partition is [`FIR_CHUNKS`], not the thread count, so every gradient of both modes is
+    /// bit-identical on 1, 4 and 16 threads.
+    #[test]
+    fn backward_is_bit_identical_on_any_thread_count() {
+        let (batch, features, fir, grad_out, n, d) = grad_fixture();
+        let bits = |v: &[f32]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        let run = |threads: usize| {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .expect("a thread pool");
+            pool.install(|| {
+                [GradRequest::Full, GradRequest::ParamsOnly].map(|req| {
+                    let out =
+                        clifford_fir_backward_with(&batch, &features, n, d, &fir, &grad_out, req);
+                    (
+                        out.grad_features.as_deref().map(bits),
+                        bits(&out.grad_fir.a),
+                        bits(&out.grad_fir.b),
+                    )
+                })
+            })
+        };
+        let one = run(1);
+        for threads in [4, 16] {
+            assert_eq!(run(threads), one, "{threads} threads");
         }
     }
 
