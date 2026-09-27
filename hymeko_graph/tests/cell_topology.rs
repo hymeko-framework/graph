@@ -6,6 +6,9 @@ use hymeko_graph::cell_topology::{
 };
 use hymeko_graph::hyper_operator::SignedHyperIncidence;
 
+mod cell_rank_common;
+use cell_rank_common as fresh;
+
 fn fingerprint(values: &[f32]) -> u64 {
     values.iter().fold(0xcbf2_9ce4_8422_2325, |h, v| {
         v.to_bits()
@@ -98,27 +101,27 @@ fn the_rank_kernels_reproduce_the_recorded_message_kernels() {
     let (h, rest) = rest.split_at(5 * d);
     let (grad_x, grad_h) = rest.split_at(7 * d);
     assert_eq!(
-        fingerprint(&view.lower_to_cell(x, d)),
+        fingerprint(&fresh::lower_to_cell(view, x, d)),
         0xfbb4_853d_c21d_6443
     );
     assert_eq!(
-        fingerprint(&view.lower_to_cell_adjoint(grad_h, d)),
+        fingerprint(&fresh::lower_to_cell_adjoint(view, grad_h, d)),
         0x4825_4e09_a671_4ad4
     );
     assert_eq!(
-        fingerprint(&view.cell_to_lower(h, d)),
+        fingerprint(&fresh::cell_to_lower(view, h, d)),
         0x459b_d0c3_49d8_530a
     );
     assert_eq!(
-        fingerprint(&view.cell_to_lower_adjoint(grad_x, d)),
+        fingerprint(&fresh::cell_to_lower_adjoint(view, grad_x, d)),
         0x27ab_dd31_7615_5363
     );
     assert_eq!(
-        fingerprint(&view.lower_to_cell_sign_gradient(x, grad_h, d)),
+        fingerprint(&fresh::lower_to_cell_sign_gradient(view, x, grad_h, d)),
         0x2b3d_4da3_44b0_30ec
     );
     assert_eq!(
-        fingerprint(&view.cell_to_lower_sign_gradient(h, grad_x, d)),
+        fingerprint(&fresh::cell_to_lower_sign_gradient(view, h, grad_x, d)),
         0x2cab_7fb4_025d_de91
     );
 }
@@ -133,18 +136,18 @@ fn every_column_of_a_wide_contraction_is_the_scalar_contraction() {
     let d = 4;
     let x = inputs(11, 7 * d);
     let h = inputs(12, 5 * d);
-    let wide_up = view.lower_to_cell(&x, d);
-    let wide_down = view.cell_to_lower(&h, d);
+    let wide_up = fresh::lower_to_cell(view, &x, d);
+    let wide_down = fresh::cell_to_lower(view, &h, d);
     for j in 0..d {
         let column = |field: &[f32]| field.iter().skip(j).step_by(d).copied().collect::<Vec<_>>();
         let bits = |v: Vec<f32>| v.iter().map(|f| f.to_bits()).collect::<Vec<_>>();
         assert_eq!(
             bits(column(&wide_up)),
-            bits(view.lower_to_cell(&column(&x), 1))
+            bits(fresh::lower_to_cell(view, &column(&x), 1))
         );
         assert_eq!(
             bits(column(&wide_down)),
-            bits(view.cell_to_lower(&column(&h), 1))
+            bits(fresh::cell_to_lower(view, &column(&h), 1))
         );
     }
 }
@@ -166,12 +169,12 @@ fn the_adjoints_are_adjoint() {
     let (h, g_lower) = (inputs(23, 5 * d), inputs(24, 7 * d));
     let close = |a: f64, b: f64| (a - b).abs() <= 1e-5 * a.abs().max(b.abs()).max(1.0);
     assert!(close(
-        inner(&view.lower_to_cell(&x, d), &g_cell),
-        inner(&x, &view.lower_to_cell_adjoint(&g_cell, d))
+        inner(&fresh::lower_to_cell(view, &x, d), &g_cell),
+        inner(&x, &fresh::lower_to_cell_adjoint(view, &g_cell, d))
     ));
     assert!(close(
-        inner(&view.cell_to_lower(&h, d), &g_lower),
-        inner(&h, &view.cell_to_lower_adjoint(&g_lower, d))
+        inner(&fresh::cell_to_lower(view, &h, d), &g_lower),
+        inner(&h, &fresh::cell_to_lower_adjoint(view, &g_lower, d))
     ));
 }
 
@@ -183,8 +186,8 @@ fn the_sign_gradients_match_central_differences() {
     let d = 2;
     let (x, g_cell) = (inputs(31, 7 * d), inputs(32, 5 * d));
     let (h, g_lower) = (inputs(33, 5 * d), inputs(34, 7 * d));
-    let up_grad = base.lower_to_cell_sign_gradient(&x, &g_cell, d);
-    let down_grad = base.cell_to_lower_sign_gradient(&h, &g_lower, d);
+    let up_grad = fresh::lower_to_cell_sign_gradient(base, &x, &g_cell, d);
+    let down_grad = fresh::cell_to_lower_sign_gradient(base, &h, &g_lower, d);
     let eps = 1e-2f32;
     for at in 0..MEMBERS.len() {
         let loss = |delta: f32, up: bool| {
@@ -192,9 +195,9 @@ fn the_sign_gradients_match_central_differences() {
             signs[at] += delta;
             let view = base.with_signs(&signs).expect("same length");
             if up {
-                inner(&view.lower_to_cell(&x, d), &g_cell)
+                inner(&fresh::lower_to_cell(view, &x, d), &g_cell)
             } else {
-                inner(&view.cell_to_lower(&h, d), &g_lower)
+                inner(&fresh::cell_to_lower(view, &h, d), &g_lower)
             }
         };
         for (up, analytic) in [(true, up_grad[at]), (false, down_grad[at])] {
