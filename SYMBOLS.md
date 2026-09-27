@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 595 public symbol(s).**
+**8 package(s), 596 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -632,6 +632,7 @@ _No public symbols._
 ### traits
 
 - `Coordinate` — `hymeko_sbsh/src/orthtree.rs`
+- `RealCoordinate` — `hymeko_sbsh/src/orthtree.rs`
 - `SplitRule` — `hymeko_sbsh/src/orthtree.rs`
 
 ### structs

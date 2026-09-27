@@ -322,3 +322,76 @@ fn a_split_rule_can_be_generic_over_the_coordinate() {
     );
     assert!(coarse.leaves().len() < fine.leaves().len());
 }
+
+/// A lattice coordinate splits at the floor midpoint, without the overflow `(lo + hi) / 2` has, and
+/// a unit side cannot be halved. The float midpoint is unchanged.
+#[test]
+fn a_lattice_coordinate_splits_at_the_floor_midpoint() {
+    use hymeko_sbsh::Coordinate;
+    assert_eq!(<u32 as Coordinate>::midpoint(0, 11), 5);
+    assert_eq!(<usize as Coordinate>::midpoint(2, 5), 3);
+    assert_eq!(<u64 as Coordinate>::midpoint(7, 8), 7);
+    assert_eq!(
+        <u32 as Coordinate>::midpoint(u32::MAX - 3, u32::MAX),
+        u32::MAX - 2
+    );
+    assert_eq!(<f64 as Coordinate>::midpoint(2.0, 5.0), 3.5);
+    assert_eq!(<f32 as Coordinate>::midpoint(2.0, 5.0), 3.5);
+}
+
+/// A raster over an integer lattice, with every orthant kept: cells have integer corners at the
+/// floor midpoints, no cell is without volume, and the leaves tile the grid exactly, including
+/// where a unit side stops one axis from halving while the other still can.
+#[test]
+fn a_lattice_raster_tree_tiles_the_grid_with_integer_cells() {
+    struct Always;
+    impl hymeko_sbsh::SplitRule<usize> for Always {
+        fn should_split(&self, _lo: &[usize], _hi: &[usize], _level: u32, _m: &[u32]) -> bool {
+            true
+        }
+    }
+    let (w, h) = (11usize, 3usize);
+    let tree = build_orthtree(
+        2,
+        &[0, 0],
+        &[w, h],
+        &[],
+        &[],
+        &Always,
+        &OrthConfig {
+            max_depth: 6,
+            drop_empty: false,
+        },
+    );
+    tree.verify_laminar().unwrap();
+    let kids = &tree.children[0];
+    assert_eq!(kids.len(), 4);
+    let top = kids[3] as usize;
+    assert_eq!(
+        (tree.cell_lo(top), tree.cell_hi(top)),
+        (&[5, 1][..], &[11, 3][..])
+    );
+    for c in 0..tree.n_cells() {
+        assert!(
+            (0..2).all(|d| tree.cell_lo(c)[d] < tree.cell_hi(c)[d]),
+            "cell {c} has no volume: {:?}..{:?}",
+            tree.cell_lo(c),
+            tree.cell_hi(c)
+        );
+    }
+    let mut cover = vec![0u32; w * h];
+    for c in tree.leaves() {
+        let (lo, hi) = (tree.cell_lo(c), tree.cell_hi(c));
+        for y in lo[1]..hi[1] {
+            for x in lo[0]..hi[0] {
+                cover[y * w + x] += 1;
+            }
+        }
+    }
+    assert!(cover.iter().all(|&n| n == 1), "leaves must tile the grid");
+    assert_eq!(
+        tree.leaves().len(),
+        w * h,
+        "depth 6 reaches single lattice points"
+    );
+}

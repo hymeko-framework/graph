@@ -21,10 +21,12 @@
 //!
 //! # The coordinate type is a parameter
 //!
-//! Coordinates are any [`Coordinate`]: `f64` (the default, and the scene tier's) or `f32` (a
-//! consumer whose point buffers are single precision). The structure, the split and the bounding
-//! box are written once over the trait; `f64` stays the default type argument, so
-//! `OrthTree`, `SplitRule` and `build_orthtree` over `f64` buffers read exactly as before.
+//! Coordinates are any [`Coordinate`]: `f64` (the default, and the scene tier's), `f32` (a
+//! consumer whose point buffers are single precision), or an unsigned integer (a **lattice** tree,
+//! whose cells stay on the integer grid, as a pixel raster's must). The structure and the split
+//! are written once over the trait; `f64` stays the default type argument, so `OrthTree`,
+//! `SplitRule` and `build_orthtree` over `f64` buffers read exactly as before. Only the bounding
+//! box needs a coordinate that can be halved, so [`point_bbox`] asks for [`RealCoordinate`].
 //!
 //! # The laminar invariant
 //!
@@ -32,11 +34,12 @@
 //! That is what makes the spatial side of an SBSH an alpha-acyclic hypertree of width 1, and it
 //! is checkable rather than assumed: see [`OrthTree::verify_laminar`].
 
-/// The coordinate arithmetic the orthtree needs: ordering, the midpoint `lo·½ + hi·½`, and the
-/// padding of a bounding box.
+/// The coordinate arithmetic the orthtree needs: ordering, the midpoint a cell splits at, and the
+/// extremes of a bounding box.
 ///
-/// Implemented for `f32` and `f64`. The midpoint is written `lo * HALF + hi * HALF` for both, so a
-/// tree over coordinates both types represent exactly splits at the same places.
+/// Implemented for `f32` and `f64`, whose midpoint is `lo * ½ + hi * ½`, so a tree over coordinates
+/// both types represent exactly splits at the same places; and for `u32`, `u64` and `usize`, whose
+/// midpoint is the floor `lo + (hi - lo) / 2`, so every cell of a lattice tree has integer corners.
 pub trait Coordinate:
     Copy
     + PartialOrd
@@ -47,19 +50,35 @@ pub trait Coordinate:
 {
     /// Zero.
     const ZERO: Self;
-    /// One half: the midpoint weight, and the half-width a degenerate axis is widened by.
-    const HALF: Self;
+    /// Where the cell `[lo, hi)` splits on one axis.
+    ///
+    /// # Preconditions
+    /// `lo < hi`.
+    ///
+    /// # Postconditions
+    /// `lo <= mid <= hi`. `mid == lo` or `mid == hi` means the axis cannot be halved: a unit
+    /// lattice side (always `mid == lo`), or two adjacent floats.
+    fn midpoint(lo: Self, hi: Self) -> Self;
     /// The smaller of two coordinates.
     fn min(self, other: Self) -> Self;
     /// The larger of two coordinates.
     fn max(self, other: Self) -> Self;
 }
 
-macro_rules! coordinate {
+/// A coordinate that can be halved: what widening a degenerate bounding-box axis needs.
+/// Implemented for `f32` and `f64`.
+pub trait RealCoordinate: Coordinate {
+    /// One half: the midpoint weight, and the half-width a degenerate axis is widened by.
+    const HALF: Self;
+}
+
+macro_rules! real_coordinate {
     ($($t:ty),*) => {$(
         impl Coordinate for $t {
             const ZERO: Self = 0.0;
-            const HALF: Self = 0.5;
+            fn midpoint(lo: Self, hi: Self) -> Self {
+                lo * Self::HALF + hi * Self::HALF
+            }
             fn min(self, other: Self) -> Self {
                 <$t>::min(self, other)
             }
@@ -67,10 +86,35 @@ macro_rules! coordinate {
                 <$t>::max(self, other)
             }
         }
+
+        impl RealCoordinate for $t {
+            const HALF: Self = 0.5;
+        }
     )*};
 }
 
-coordinate!(f32, f64);
+macro_rules! lattice_coordinate {
+    ($($t:ty),*) => {$(
+        impl Coordinate for $t {
+            const ZERO: Self = 0;
+            fn midpoint(lo: Self, hi: Self) -> Self {
+                debug_assert!(lo < hi);
+                // `hi - lo` cannot underflow under the precondition, and `lo + (hi - lo) / 2` never
+                // exceeds `hi`, so the floor midpoint is overflow-free where `(lo + hi) / 2` is not.
+                lo + (hi - lo) / 2
+            }
+            fn min(self, other: Self) -> Self {
+                Ord::min(self, other)
+            }
+            fn max(self, other: Self) -> Self {
+                Ord::max(self, other)
+            }
+        }
+    )*};
+}
+
+real_coordinate!(f32, f64);
+lattice_coordinate!(u32, u64, usize);
 
 /// How a cell decides to subdivide.
 ///
@@ -102,7 +146,8 @@ pub struct OrthConfig {
     /// Maximum subdivision depth. The root is level 0.
     pub max_depth: u32,
     /// Drop orthants containing no points. On for point trees (the tree stays sparse); off keeps
-    /// the full `2^dim` fan-out at every internal cell.
+    /// every orthant of positive volume at every internal cell (the full `2^dim` fan-out unless
+    /// an axis cannot be halved).
     pub drop_empty: bool,
 }
 
@@ -297,9 +342,7 @@ fn build_cell<T: Coordinate>(
     }) {
         return me;
     }
-    let mid: Vec<T> = (0..dim)
-        .map(|d| lo[d] * T::HALF + hi[d] * T::HALF)
-        .collect();
+    let mid: Vec<T> = (0..dim).map(|d| T::midpoint(lo[d], hi[d])).collect();
     if (0..dim).all(|d| mid[d] <= lo[d] || mid[d] >= hi[d]) {
         return me;
     }
@@ -326,6 +369,11 @@ fn build_cell<T: Coordinate>(
                 clo[d] = lo[d];
                 chi[d] = mid[d];
             }
+        }
+        // An axis that cannot be halved (`mid` on a face) leaves half its orthants without volume.
+        // They hold no points either, so a cell only splits along the axes that can be halved.
+        if (0..dim).any(|d| clo[d] >= chi[d]) {
+            continue;
         }
         let child = build_cell(
             dim,
@@ -401,7 +449,7 @@ pub fn build_orthtree<T: Coordinate>(
 ///
 /// # Preconditions
 /// `points.len() == n_points * dim` with `n_points >= 1`.
-pub fn point_bbox<T: Coordinate>(points: &[T], dim: usize, pad: T) -> (Vec<T>, Vec<T>) {
+pub fn point_bbox<T: RealCoordinate>(points: &[T], dim: usize, pad: T) -> (Vec<T>, Vec<T>) {
     assert!(dim > 0, "an orthtree needs at least one dimension");
     assert!(!points.is_empty() && points.len().is_multiple_of(dim));
     let n = points.len() / dim;
