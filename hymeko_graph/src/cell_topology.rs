@@ -57,13 +57,25 @@ enum SignTable {
 
 impl SignTable {
     /// The bit form when every sign is exactly `+1` or `-1`, the `f32` form otherwise.
+    ///
+    /// One pass, a word at a time and without a branch per sign: a sign is `±1` exactly when its
+    /// bits without the sign bit are `1.0`'s, and its sign bit is the bit stored.
     fn from_values(signs: Vec<f32>) -> Self {
-        if !signs.iter().all(|&s| s == 1.0 || s == -1.0) {
-            return Self::Values(signs);
-        }
+        const MAGNITUDE: u32 = 0x7fff_ffff;
+        const ONE: u32 = 0x3f80_0000;
         let mut negative = vec![0u64; signs.len().div_ceil(64)];
-        for (at, _) in signs.iter().enumerate().filter(|&(_, &s)| s < 0.0) {
-            negative[at / 64] |= 1 << (at % 64);
+        for (word, chunk) in negative.iter_mut().zip(signs.chunks(64)) {
+            let mut unit = true;
+            let mut bits = 0u64;
+            for (i, s) in chunk.iter().enumerate() {
+                let raw = s.to_bits();
+                unit &= raw & MAGNITUDE == ONE;
+                bits |= u64::from(raw >> 31) << i;
+            }
+            if !unit {
+                return Self::Values(signs);
+            }
+            *word = bits;
         }
         Self::Unit {
             negative,
@@ -174,13 +186,11 @@ impl SignLookup for &[f32] {
 struct UnitBits<'a>(&'a [u64]);
 
 impl SignLookup for UnitBits<'_> {
+    /// `±1.0` built from the stored bit: `1.0`'s bits with the sign bit set for `-1`, no branch.
     #[inline]
     fn sign(self, at: usize) -> f32 {
-        if (self.0[at / 64] >> (at % 64)) & 1 == 1 {
-            -1.0
-        } else {
-            1.0
-        }
+        let bit = ((self.0[at / 64] >> (at % 64)) & 1) as u32;
+        f32::from_bits(0x3f80_0000 | (bit << 31))
     }
 }
 
