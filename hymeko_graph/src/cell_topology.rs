@@ -596,20 +596,23 @@ impl<'a> RankIncidence<'a> {
     }
 
     /// Signed scaled mean of each cell's members, `d` features wide: `(n_lower, d)` →
-    /// `(n_cells, d)`. Parallel over blocks of cells; each row is summed in member order, so the
-    /// result is the same bits on any number of threads.
+    /// `(n_cells, d)`, written into `out`. Parallel over blocks of cells; each row is summed in
+    /// member order, so the result is the same bits on any number of threads.
+    ///
+    /// Every kernel of a view writes into a buffer its caller owns: `out`'s previous contents are
+    /// ignored, so a caller may reuse one buffer across calls.
     ///
     /// # Panics
-    /// When `x.len() != n_lower * d`.
-    #[must_use]
-    pub fn lower_to_cell(&self, x: &[f32], d: usize) -> Vec<f32> {
+    /// When `x.len() != n_lower * d` or `out.len() != n_cells * d`.
+    pub fn lower_to_cell(&self, x: &[f32], d: usize, out: &mut [f32]) {
         assert_eq!(x.len(), self.n_lower * d, "x must be (n_lower, d)");
-        with_sign_lookup!(self.signs, |s| self.lower_to_cell_by(s, x, d))
+        assert_eq!(out.len(), self.n_cells() * d, "out must be (n_cells, d)");
+        with_sign_lookup!(self.signs, |s| self.lower_to_cell_by(s, x, d, out));
     }
 
-    fn lower_to_cell_by<S: SignLookup>(&self, s: S, x: &[f32], d: usize) -> Vec<f32> {
+    fn lower_to_cell_by<S: SignLookup>(&self, s: S, x: &[f32], d: usize, out: &mut [f32]) {
         let inv_k = self.inv_arity();
-        self.per_cell(d, |c, row| {
+        self.per_cell(d, out, |c, row| {
             for at in c * self.arity..(c + 1) * self.arity {
                 let v = self.members[at] as usize;
                 accumulate(
@@ -621,28 +624,36 @@ impl<'a> RankIncidence<'a> {
         })
     }
 
-    /// The adjoint of [`Self::lower_to_cell`]: `(n_cells, d)` → `(n_lower, d)`.
+    /// The adjoint of [`Self::lower_to_cell`]: `(n_cells, d)` → `(n_lower, d)`, written into
+    /// `out`.
     ///
     /// # Panics
-    /// When `grad_h.len() != n_cells * d`.
-    #[must_use]
-    pub fn lower_to_cell_adjoint(&self, grad_h: &[f32], d: usize) -> Vec<f32> {
+    /// When `grad_h.len() != n_cells * d` or `out.len() != n_lower * d`.
+    pub fn lower_to_cell_adjoint(&self, grad_h: &[f32], d: usize, out: &mut [f32]) {
         assert_eq!(
             grad_h.len(),
             self.n_cells() * d,
             "grad_h must be (n_cells, d)"
         );
-        with_sign_lookup!(self.signs, |s| self.lower_to_cell_adjoint_by(s, grad_h, d))
+        assert_eq!(out.len(), self.n_lower * d, "out must be (n_lower, d)");
+        with_sign_lookup!(self.signs, |s| {
+            self.lower_to_cell_adjoint_by(s, grad_h, d, out);
+        });
     }
 
-    fn lower_to_cell_adjoint_by<S: SignLookup>(&self, s: S, grad_h: &[f32], d: usize) -> Vec<f32> {
+    fn lower_to_cell_adjoint_by<S: SignLookup>(
+        &self,
+        s: S,
+        grad_h: &[f32],
+        d: usize,
+        grad_x: &mut [f32],
+    ) {
         let inv_k = self.inv_arity();
-        let mut grad_x = vec![0.0f32; self.n_lower * d];
+        grad_x.fill(0.0);
         self.for_each_incidence(s, |c, v, sign| {
             let w = sign * self.to_cell[v] * inv_k;
             accumulate(&mut grad_x[v * d..v * d + d], w, &grad_h[c * d..c * d + d]);
         });
-        grad_x
     }
 
     /// Every incidence in member order as `(cell, lower cell, sign)`, walked cell by cell so the
@@ -659,18 +670,18 @@ impl<'a> RankIncidence<'a> {
     }
 
     /// Signed sum of each lower cell's cofaces, scaled after summing: `(n_cells, d)` →
-    /// `(n_lower, d)`.
+    /// `(n_lower, d)`, written into `out`.
     ///
     /// # Panics
-    /// When `h.len() != n_cells * d`.
-    #[must_use]
-    pub fn cell_to_lower(&self, h: &[f32], d: usize) -> Vec<f32> {
+    /// When `h.len() != n_cells * d` or `out.len() != n_lower * d`.
+    pub fn cell_to_lower(&self, h: &[f32], d: usize, out: &mut [f32]) {
         assert_eq!(h.len(), self.n_cells() * d, "h must be (n_cells, d)");
-        with_sign_lookup!(self.signs, |s| self.cell_to_lower_by(s, h, d))
+        assert_eq!(out.len(), self.n_lower * d, "out must be (n_lower, d)");
+        with_sign_lookup!(self.signs, |s| self.cell_to_lower_by(s, h, d, out));
     }
 
-    fn cell_to_lower_by<S: SignLookup>(&self, s: S, h: &[f32], d: usize) -> Vec<f32> {
-        let mut y = vec![0.0f32; self.n_lower * d];
+    fn cell_to_lower_by<S: SignLookup>(&self, s: S, h: &[f32], d: usize, y: &mut [f32]) {
+        y.fill(0.0);
         self.for_each_incidence(s, |c, v, sign| {
             accumulate(&mut y[v * d..v * d + d], sign, &h[c * d..c * d + d]);
         });
@@ -679,26 +690,34 @@ impl<'a> RankIncidence<'a> {
                 *value *= scale;
             }
         }
-        y
     }
 
-    /// The adjoint of [`Self::cell_to_lower`]: `(n_lower, d)` → `(n_cells, d)`. Parallel over
-    /// blocks of cells, each row summed in member order: the same bits on any number of threads.
+    /// The adjoint of [`Self::cell_to_lower`]: `(n_lower, d)` → `(n_cells, d)`, written into
+    /// `out`. Parallel over blocks of cells, each row summed in member order: the same bits on any
+    /// number of threads.
     ///
     /// # Panics
-    /// When `grad_y.len() != n_lower * d`.
-    #[must_use]
-    pub fn cell_to_lower_adjoint(&self, grad_y: &[f32], d: usize) -> Vec<f32> {
+    /// When `grad_y.len() != n_lower * d` or `out.len() != n_cells * d`.
+    pub fn cell_to_lower_adjoint(&self, grad_y: &[f32], d: usize, out: &mut [f32]) {
         assert_eq!(
             grad_y.len(),
             self.n_lower * d,
             "grad_y must be (n_lower, d)"
         );
-        with_sign_lookup!(self.signs, |s| self.cell_to_lower_adjoint_by(s, grad_y, d))
+        assert_eq!(out.len(), self.n_cells() * d, "out must be (n_cells, d)");
+        with_sign_lookup!(self.signs, |s| {
+            self.cell_to_lower_adjoint_by(s, grad_y, d, out);
+        });
     }
 
-    fn cell_to_lower_adjoint_by<S: SignLookup>(&self, s: S, grad_y: &[f32], d: usize) -> Vec<f32> {
-        self.per_cell(d, |c, row| {
+    fn cell_to_lower_adjoint_by<S: SignLookup>(
+        &self,
+        s: S,
+        grad_y: &[f32],
+        d: usize,
+        out: &mut [f32],
+    ) {
+        self.per_cell(d, out, |c, row| {
             for at in c * self.arity..(c + 1) * self.arity {
                 let v = self.members[at] as usize;
                 accumulate(
@@ -710,67 +729,83 @@ impl<'a> RankIncidence<'a> {
         })
     }
 
-    /// An `(n_cells, d)` field whose row `c` is written by `row(c, ..)` alone, computed over fixed
-    /// blocks of [`CELLS_PER_TASK`] cells in parallel.
-    fn per_cell(&self, d: usize, row: impl Fn(usize, &mut [f32]) + Sync) -> Vec<f32> {
-        let mut field = vec![0.0f32; self.n_cells() * d];
+    /// Fills the `(n_cells, d)` field `field`: row `c` is zeroed and then written by `row(c, ..)`
+    /// alone, over fixed blocks of [`CELLS_PER_TASK`] cells in parallel. The task that computes a
+    /// row is the first to touch it.
+    fn per_cell(&self, d: usize, field: &mut [f32], row: impl Fn(usize, &mut [f32]) + Sync) {
         if d == 0 {
-            return field;
+            return;
         }
         field
             .par_chunks_mut(CELLS_PER_TASK * d)
             .enumerate()
             .for_each(|(task, block)| {
                 for (offset, out) in block.chunks_mut(d).enumerate() {
+                    out.fill(0.0);
                     row(task * CELLS_PER_TASK + offset, out);
                 }
             });
-        field
     }
 
-    /// The gradient of [`Self::lower_to_cell`] with respect to the signs, one per incidence.
+    /// The gradient of [`Self::lower_to_cell`] with respect to the signs, one per incidence,
+    /// written into `out`.
     ///
     /// # Panics
-    /// When `x` or `grad_h` does not have the forward's shape.
-    #[must_use]
-    pub fn lower_to_cell_sign_gradient(&self, x: &[f32], grad_h: &[f32], d: usize) -> Vec<f32> {
+    /// When `x` or `grad_h` does not have the forward's shape, or `out` does not hold one value
+    /// per incidence.
+    pub fn lower_to_cell_sign_gradient(
+        &self,
+        x: &[f32],
+        grad_h: &[f32],
+        d: usize,
+        out: &mut [f32],
+    ) {
         assert_eq!(x.len(), self.n_lower * d, "x must be (n_lower, d)");
         assert_eq!(
             grad_h.len(),
             self.n_cells() * d,
             "grad_h must be (n_cells, d)"
         );
+        assert_eq!(
+            out.len(),
+            self.members.len(),
+            "out must be one per incidence"
+        );
         let inv_k = self.inv_arity();
-        self.members
-            .iter()
-            .enumerate()
-            .map(|(at, &member)| {
-                let (c, v) = (at / self.arity, member as usize);
-                dot(&grad_h[c * d..c * d + d], &x[v * d..v * d + d]) * self.to_cell[v] * inv_k
-            })
-            .collect()
+        for (at, (value, &member)) in out.iter_mut().zip(self.members).enumerate() {
+            let (c, v) = (at / self.arity, member as usize);
+            *value = dot(&grad_h[c * d..c * d + d], &x[v * d..v * d + d]) * self.to_cell[v] * inv_k;
+        }
     }
 
-    /// The gradient of [`Self::cell_to_lower`] with respect to the signs, one per incidence.
+    /// The gradient of [`Self::cell_to_lower`] with respect to the signs, one per incidence,
+    /// written into `out`.
     ///
     /// # Panics
-    /// When `h` or `grad_y` does not have the forward's shape.
-    #[must_use]
-    pub fn cell_to_lower_sign_gradient(&self, h: &[f32], grad_y: &[f32], d: usize) -> Vec<f32> {
+    /// When `h` or `grad_y` does not have the forward's shape, or `out` does not hold one value
+    /// per incidence.
+    pub fn cell_to_lower_sign_gradient(
+        &self,
+        h: &[f32],
+        grad_y: &[f32],
+        d: usize,
+        out: &mut [f32],
+    ) {
         assert_eq!(h.len(), self.n_cells() * d, "h must be (n_cells, d)");
         assert_eq!(
             grad_y.len(),
             self.n_lower * d,
             "grad_y must be (n_lower, d)"
         );
-        self.members
-            .iter()
-            .enumerate()
-            .map(|(at, &member)| {
-                let (c, v) = (at / self.arity, member as usize);
-                dot(&h[c * d..c * d + d], &grad_y[v * d..v * d + d]) * self.to_lower[v]
-            })
-            .collect()
+        assert_eq!(
+            out.len(),
+            self.members.len(),
+            "out must be one per incidence"
+        );
+        for (at, (value, &member)) in out.iter_mut().zip(self.members).enumerate() {
+            let (c, v) = (at / self.arity, member as usize);
+            *value = dot(&h[c * d..c * d + d], &grad_y[v * d..v * d + d]) * self.to_lower[v];
+        }
     }
 }
 

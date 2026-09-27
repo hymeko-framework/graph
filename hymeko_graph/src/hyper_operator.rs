@@ -169,7 +169,9 @@ impl SignedHyperIncidence {
     /// Length `n_edges`. Accumulated edge-major, members in declaration order.
     pub fn node_to_edge(&self, x: &[f32]) -> Vec<f32> {
         assert_eq!(x.len(), self.n_nodes, "x must have one value per node");
-        self.view().lower_to_cell(x, 1)
+        let mut h = vec![0.0f32; self.n_edges];
+        self.view().lower_to_cell(x, 1, &mut h);
+        h
     }
 
     /// This operator as the `d = 1`, single-scale case of the rank kernels, which own the
@@ -200,7 +202,9 @@ impl SignedHyperIncidence {
     /// part of the numerical contract, not an implementation detail.
     pub fn edge_to_node(&self, h: &[f32]) -> Vec<f32> {
         assert_eq!(h.len(), self.n_edges, "h must have one value per hyperedge");
-        self.view().cell_to_lower(h, 1)
+        let mut y = vec![0.0f32; self.n_nodes];
+        self.view().cell_to_lower(h, 1, &mut y);
+        y
     }
 
     /// The **star** normal operator applied matrix-free: `E(A x) + ρ x = k · Aᵀ(A x) + ρ x`.

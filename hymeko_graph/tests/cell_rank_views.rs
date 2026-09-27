@@ -8,6 +8,9 @@
 
 use hymeko_graph::cell_topology::{CellTopology, RankIncidence, RankScales, ScalePolicy};
 
+mod cell_rank_common;
+use cell_rank_common as fresh;
+
 mod oracle {
     pub struct Rank<'a> {
         pub n_lower: usize,
@@ -222,10 +225,10 @@ fn the_kernels_are_the_frozen_serial_kernels_in_both_forms_on_any_thread_count()
             for (form, view) in [("unit", unit), ("values", values)] {
                 let got = pool.install(|| {
                     [
-                        view.lower_to_cell(&x, d),
-                        view.lower_to_cell_adjoint(&h, d),
-                        view.cell_to_lower(&h, d),
-                        view.cell_to_lower_adjoint(&x, d),
+                        fresh::lower_to_cell(view, &x, d),
+                        fresh::lower_to_cell_adjoint(view, &h, d),
+                        fresh::cell_to_lower(view, &h, d),
+                        fresh::cell_to_lower_adjoint(view, &x, d),
                     ]
                 });
                 for (kernel, (g, w)) in got.iter().zip(&want).enumerate() {
@@ -251,6 +254,77 @@ fn a_zero_width_field_is_empty() {
         .scales(1, ScalePolicy::Unit, ScalePolicy::Unit)
         .expect("scales");
     let view = topology.incidence(1, &scales).expect("a view");
-    assert!(view.lower_to_cell(&[], 0).is_empty());
-    assert!(view.cell_to_lower_adjoint(&[], 0).is_empty());
+    assert!(fresh::lower_to_cell(view, &[], 0).is_empty());
+    assert!(fresh::cell_to_lower_adjoint(view, &[], 0).is_empty());
+}
+
+/// A caller may reuse one buffer: the second call into a buffer the first one filled gives the
+/// same bits as a fresh buffer, for every kernel.
+#[test]
+fn a_reused_buffer_gives_the_bits_of_a_fresh_one() {
+    let (members, signs) = fixture(600);
+    let topology = CellTopology::vertices(97)
+        .with_rank(5, members, signs)
+        .expect("a valid rank");
+    let scales = topology
+        .scales(
+            1,
+            ScalePolicy::InvSqrtDegree,
+            ScalePolicy::InvSqrtDegreeOverDegree,
+        )
+        .expect("scales");
+    let view = topology.incidence(1, &scales).expect("a view");
+    let d = 3;
+    let (x1, x2) = (field(97 * d, 11), field(97 * d, 12));
+    let (h1, h2) = (field(600 * d, 13), field(600 * d, 14));
+    let mut cells = vec![0.0f32; 600 * d];
+    let mut lower = vec![0.0f32; 97 * d];
+    let mut per_incidence = vec![0.0f32; 600 * 5];
+    view.lower_to_cell(&x1, d, &mut cells);
+    view.lower_to_cell(&x2, d, &mut cells);
+    assert_eq!(bits(&cells), bits(&fresh::lower_to_cell(view, &x2, d)));
+    view.cell_to_lower_adjoint(&x1, d, &mut cells);
+    view.cell_to_lower_adjoint(&x2, d, &mut cells);
+    assert_eq!(
+        bits(&cells),
+        bits(&fresh::cell_to_lower_adjoint(view, &x2, d))
+    );
+    view.cell_to_lower(&h1, d, &mut lower);
+    view.cell_to_lower(&h2, d, &mut lower);
+    assert_eq!(bits(&lower), bits(&fresh::cell_to_lower(view, &h2, d)));
+    view.lower_to_cell_adjoint(&h1, d, &mut lower);
+    view.lower_to_cell_adjoint(&h2, d, &mut lower);
+    assert_eq!(
+        bits(&lower),
+        bits(&fresh::lower_to_cell_adjoint(view, &h2, d))
+    );
+    view.lower_to_cell_sign_gradient(&x1, &h1, d, &mut per_incidence);
+    view.lower_to_cell_sign_gradient(&x2, &h2, d, &mut per_incidence);
+    assert_eq!(
+        bits(&per_incidence),
+        bits(&fresh::lower_to_cell_sign_gradient(view, &x2, &h2, d))
+    );
+    view.cell_to_lower_sign_gradient(&h1, &x1, d, &mut per_incidence);
+    view.cell_to_lower_sign_gradient(&h2, &x2, d, &mut per_incidence);
+    assert_eq!(
+        bits(&per_incidence),
+        bits(&fresh::cell_to_lower_sign_gradient(view, &h2, &x2, d))
+    );
+}
+
+/// An output of the wrong shape is refused, not written past or left partly stale.
+#[test]
+#[should_panic(expected = "out must be (n_cells, d)")]
+fn an_output_of_the_wrong_shape_is_refused() {
+    let (members, signs) = fixture(4);
+    let topology = CellTopology::vertices(97)
+        .with_rank(5, members, signs)
+        .expect("valid");
+    let scales = topology
+        .scales(1, ScalePolicy::Unit, ScalePolicy::Unit)
+        .expect("scales");
+    let view = topology.incidence(1, &scales).expect("a view");
+    let x = field(97 * 2, 1);
+    let mut short = vec![0.0f32; 4 * 2 - 1];
+    view.lower_to_cell(&x, 2, &mut short);
 }
