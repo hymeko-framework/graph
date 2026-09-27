@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 596 public symbol(s).**
+**8 package(s), 605 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -145,6 +145,7 @@ _No public symbols._
 - `SignedGraph` — `hymeko_graph/src/signed_graph.rs`
 - `SignedHyperIncidence` — `hymeko_graph/src/hyper_operator.rs`
 - `SignedHypergraph` — `hymeko_graph/src/sphf.rs`
+- `Signs` — `hymeko_graph/src/cell_topology.rs`
 - `StatsSnapshot` — `hymeko_graph/src/pruner.rs`
 - `TopKBuilder` — `hymeko_graph/src/topk_cycles.rs`
 - `TopKCyclesBatch` — `hymeko_graph/src/topk_cycles.rs`
@@ -195,6 +196,7 @@ _No public symbols._
 - `arity` — `hymeko_graph/src/signed_tuples.rs`
 - `arity` — `hymeko_graph/src/sphf.rs`
 - `as_i8` — `hymeko_graph/src/signed_graph.rs`
+- `as_values` — `hymeko_graph/src/cell_topology.rs`
 - `assemble_clique` — `hymeko_graph/src/hyper_operator.rs`
 - `astar` — `hymeko_graph/src/traversal_heuristic.rs`
 - `astar_berge_path` — `hymeko_graph/src/direct_ir/informed.rs`
@@ -311,6 +313,7 @@ _No public symbols._
 - `from_i8` — `hymeko_graph/src/signed_graph.rs`
 - `from_ir` — `hymeko_graph/src/octree.rs`
 - `from_parts` — `hymeko_graph/src/signed_graph.rs`
+- `get` — `hymeko_graph/src/cell_topology.rs`
 - `global` — `hymeko_graph/src/topk_cycles.rs`
 - `global_bb` — `hymeko_graph/src/topk_cycles.rs`
 - `has_edge` — `hymeko_graph/src/traversal.rs`
@@ -326,6 +329,7 @@ _No public symbols._
 - `into_vec_topkcycle` — `hymeko_graph/src/topk_cycles.rs`
 - `ir` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `is_accept` — `hymeko_graph/src/pruner.rs`
+- `is_empty` — `hymeko_graph/src/cell_topology.rs`
 - `is_empty` — `hymeko_graph/src/direct_ir/dual.rs`
 - `is_empty` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `is_empty` — `hymeko_graph/src/quadtree.rs`
@@ -334,12 +338,15 @@ _No public symbols._
 - `is_empty` — `hymeko_graph/src/topk_walks.rs`
 - `is_reproducible` — `hymeko_graph/src/signed_tuples.rs`
 - `is_reproducible_under_cap` — `hymeko_graph/src/signed_tuples.rs`
+- `is_unit` — `hymeko_graph/src/cell_topology.rs`
+- `iter` — `hymeko_graph/src/cell_topology.rs`
 - `k` — `hymeko_graph/src/spine.rs`
 - `label` — `hymeko_graph/src/signed_tuples.rs`
 - `label_propagation` — `hymeko_graph/src/community.rs`
 - `labels` — `hymeko_graph/src/direct_ir/components.rs`
 - `labels` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `lcg_for_batch` — `hymeko_graph/src/cycle_sampler.rs`
+- `len` — `hymeko_graph/src/cell_topology.rs`
 - `len` — `hymeko_graph/src/direct_ir/dual.rs`
 - `len` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `len` — `hymeko_graph/src/quadtree.rs`
@@ -436,8 +443,10 @@ _No public symbols._
 - `sources` — `hymeko_graph/src/sphf.rs`
 - `star_matvec` — `hymeko_graph/src/hyper_operator.rs`
 - `stats` — `hymeko_graph/src/direct_ir/informed.rs`
+- `stored_bytes` — `hymeko_graph/src/cell_topology.rs`
 - `targets` — `hymeko_graph/src/sphf.rs`
 - `tiered_m_v_by_degree` — `hymeko_graph/src/topk_cycles.rs`
+- `to_vec` — `hymeko_graph/src/cell_topology.rs`
 - `vertices` — `hymeko_graph/src/cell_topology.rs`
 - `volume` — `hymeko_graph/src/octree.rs`
 - `with` — `hymeko_graph/src/pruner.rs`
