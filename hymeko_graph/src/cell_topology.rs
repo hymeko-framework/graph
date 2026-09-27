@@ -173,21 +173,12 @@ impl<'a> Signs<'a> {
 /// How a kernel reads a sign; chosen once per call, so the inner loop does not branch on the form.
 trait SignLookup: Copy + Send + Sync {
     fn sign(self, at: usize) -> f32;
-
-    /// The signs `first .. first + out.len()` into `out`, `first` a multiple of 64 and at most 64
-    /// of them: a serial walk decodes a word at a time instead of a bit per incidence.
-    fn decode(self, first: usize, out: &mut [f32]);
 }
 
 impl SignLookup for &[f32] {
     #[inline]
     fn sign(self, at: usize) -> f32 {
         self[at]
-    }
-
-    #[inline]
-    fn decode(self, first: usize, out: &mut [f32]) {
-        out.copy_from_slice(&self[first..first + out.len()]);
     }
 }
 
@@ -200,16 +191,6 @@ impl SignLookup for UnitBits<'_> {
     fn sign(self, at: usize) -> f32 {
         let bit = ((self.0[at / 64] >> (at % 64)) & 1) as u32;
         f32::from_bits(0x3f80_0000 | (bit << 31))
-    }
-
-    #[inline]
-    fn decode(self, first: usize, out: &mut [f32]) {
-        debug_assert!(first.is_multiple_of(64) && out.len() <= 64);
-        let word = self.0[first / 64];
-        for (i, sign) in out.iter_mut().enumerate() {
-            let bit = ((word >> i) & 1) as u32;
-            *sign = f32::from_bits(0x3f80_0000 | (bit << 31));
-        }
     }
 }
 
@@ -664,16 +645,15 @@ impl<'a> RankIncidence<'a> {
         grad_x
     }
 
-    /// Every incidence in member order as `(cell, lower cell, sign)`, the signs decoded 64 at a
-    /// time. The walk of the two serial kernels: their order is the contract's, unchanged.
+    /// Every incidence in member order as `(cell, lower cell, sign)`, walked cell by cell so the
+    /// cell index is counted, not divided out of the position. The walk of the two serial kernels:
+    /// their order is the contract's, unchanged.
     fn for_each_incidence<S: SignLookup>(&self, s: S, mut visit: impl FnMut(usize, usize, f32)) {
-        let mut signs = [0.0f32; 64];
-        for (block, members) in self.members.chunks(64).enumerate() {
-            let first = block * 64;
-            let signs = &mut signs[..members.len()];
-            s.decode(first, signs);
-            for (i, (&member, &sign)) in members.iter().zip(signs.iter()).enumerate() {
-                visit((first + i) / self.arity, member as usize, sign);
+        // `arity >= 1`: both constructors refuse arity zero.
+        for (c, members) in self.members.chunks_exact(self.arity).enumerate() {
+            let first = c * self.arity;
+            for (i, &member) in members.iter().enumerate() {
+                visit(c, member as usize, s.sign(first + i));
             }
         }
     }
