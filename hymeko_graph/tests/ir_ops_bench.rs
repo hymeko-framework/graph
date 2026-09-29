@@ -1,7 +1,7 @@
 //! P3.4 §12A — the unified canonical-Ir construction / manipulation operation matrix. Every operation
 //! uses only **public, sanctioned** APIs (`Ir::default`, `preallocate_from_index`, `push_decl`,
 //! `bind_node_decl`, `push_anonymous_arc`, the public `nodes`/`arcs` fields the whole suite builds
-//! through, `Clone`, `canonical_program_hash`). A thread-local counting allocator gives allocs/op and
+//! through, `Clone`, `Canon::structure`). A thread-local counting allocator gives allocs/op and
 //! bytes/op; timing gives latency/op and throughput; scaling is read across sizes. The Ir is **append-
 //! only** on this revision — canonical deletion and in-place transactional update have no public API and
 //! are reported NOT IMPLEMENTED rather than faked.
@@ -13,7 +13,7 @@ use std::cell::Cell;
 use std::time::Instant;
 
 use hymeko::common::ids::{DeclId, NodeId, SymId};
-use hymeko::ir::canonical_hash::{CanonHashCfg, canonical_program_hash};
+use hymeko::ir::canonical_hash::{Canon, CanonHashCfg};
 use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR};
 use hymeko::resolution::interner::Interner;
 
@@ -248,7 +248,7 @@ fn measure_ir_ops() {
             it.intern("n"); // SymId(0) — every generator decl is named with this placeholder
             let cfg = CanonHashCfg::default();
             let ns = best_ns(if n > 20000 { 5 } else { 30 }, || {
-                std::hint::black_box(canonical_program_hash(cfg, &ir, &it));
+                std::hint::black_box(Canon::new(&ir, &it).structure(cfg));
             });
             emit(
                 &mut rows,
@@ -258,7 +258,7 @@ fn measure_ir_ops() {
                 0.0,
                 0.0,
                 0,
-                "canonical_program_hash",
+                "Canon::structure",
             );
         }
     }
