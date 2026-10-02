@@ -18,12 +18,9 @@
 //! compact `decl_to_record` slot. Construction now goes through the public API —
 //! `push_decl` (append a declaration + a NONE dispatch slot) and the checked
 //! `bind_{node,edge,arc}_decl` mutators — and reads through `as_{node,edge,arc}`.
-//! Because `bind_*_decl` refuses re-binding a declaration to a *different* record
-//! (a `debug_assert!` panic in test builds), a storage fault can no longer be a
-//! post-hoc mutation of a valid IR: it must be baked in as the declaration's
-//! first-and-only binding. Each such fault therefore builds a fresh IR via
-//! [`Pg::build`] carrying exactly one [`Perturb`]; every other fault (a corrupt
-//! *record*, not a corrupt *binding*) stays a mutation of the valid baseline.
+//! The binders reject invalid kinds, record indices and backlinks in every build.
+//! Faults are injected after valid binding by corrupting the record storage;
+//! missing mappings are still represented by leaving a slot unbound.
 
 use std::collections::BTreeMap;
 
@@ -49,14 +46,8 @@ fn decl_node(name: SymId, kind: DeclKind) -> DeclNode {
     }
 }
 
-/// A single storage perturbation, applied to exactly one declaration *at build
-/// time*.
-///
-/// The compact dispatch binder (`bind_*_decl`) refuses re-binding a declaration
-/// to a different record, so a mapping fault cannot be a mutation of a valid IR —
-/// it must be the declaration's first binding. Each mapping-fault test builds a
-/// fresh baseline through [`Pg::build`] with one of these; [`Perturb::None`]
-/// reproduces the well-formed baseline through the identical builder.
+/// One deliberate storage fault. Dangling mappings are created by truncating
+/// their record table after construction, never by bypassing the checked binder.
 #[derive(Clone, Copy)]
 enum Perturb {
     /// Well-formed: bind every declaration to its real record.
@@ -64,21 +55,17 @@ enum Perturb {
     /// Leave `decl`'s node-dispatch slot NONE — the old `decl_to_node[decl] = None`.
     UnmappedNode(DeclId),
     /// Bind `decl` to a node id with no record — the old `decl_to_node[decl] = Some(<absent>)`.
-    NodeRecord(DeclId, NodeId),
+    NodeRecord(DeclId),
     /// Leave `decl`'s edge-dispatch slot NONE — the old `decl_to_edge[decl] = None`.
     UnmappedEdge(DeclId),
     /// Bind `decl` to an edge id with no record — the old `decl_to_edge[decl] = Some(<absent>)`.
-    EdgeRecord(DeclId, EdgeId),
+    EdgeRecord(DeclId),
 }
 
 /// Bind a Node declaration's dispatch slot, honoring a perturbation aimed at it.
 fn bind_node(ir: &mut Ir, d: DeclId, nid: NodeId, perturb: Perturb) {
     match perturb {
         Perturb::UnmappedNode(x) if x == d => {} // leave the slot NONE
-        Perturb::NodeRecord(x, forced) if x == d => {
-            ir.bind_node_decl(d, forced)
-                .expect("bind perturbed node slot");
-        }
         _ => ir.bind_node_decl(d, nid).expect("bind node slot"),
     }
 }
@@ -87,10 +74,6 @@ fn bind_node(ir: &mut Ir, d: DeclId, nid: NodeId, perturb: Perturb) {
 fn bind_edge(ir: &mut Ir, d: DeclId, eid: EdgeId, perturb: Perturb) {
     match perturb {
         Perturb::UnmappedEdge(x) if x == d => {} // leave the slot NONE
-        Perturb::EdgeRecord(x, forced) if x == d => {
-            ir.bind_edge_decl(d, forced)
-                .expect("bind perturbed edge slot");
-        }
         _ => ir.bind_edge_decl(d, eid).expect("bind edge slot"),
     }
 }
@@ -188,6 +171,11 @@ impl Pg {
         pg.set_isa_base(MAT_P, PRODUCT);
         // unit u: arc  -A +P
         pg.add_unit_arc(UNIT_U, &[(MAT_A, -1), (MAT_P, 1)]);
+        match perturb {
+            Perturb::NodeRecord(d) => pg.ir.nodes.truncate(pg.node_of[&d].raw()),
+            Perturb::EdgeRecord(d) => pg.ir.edges.truncate(pg.edge_of[&d].raw()),
+            _ => {}
+        }
         pg
     }
 
@@ -313,12 +301,12 @@ fn missing_node_mapping_is_typed() {
 #[test]
 fn mapped_but_missing_node_record_is_typed() {
     // A maps to a node id for which no record exists.
-    let pg = Pg::build(Perturb::NodeRecord(MAT_A, NodeId::new(999)));
+    let pg = Pg::build(Perturb::NodeRecord(MAT_A));
     assert_eq!(
         pg.ir_err(),
         IrReadError::MissingNodeRecord {
             decl: MAT_A,
-            node: NodeId::new(999)
+            node: NodeId::new(3)
         }
     );
 }
@@ -350,12 +338,12 @@ fn missing_edge_mapping_is_typed() {
 #[test]
 fn mapped_but_missing_edge_record_is_typed() {
     // u maps to an edge id for which no record exists.
-    let pg = Pg::build(Perturb::EdgeRecord(UNIT_U, EdgeId::new(777)));
+    let pg = Pg::build(Perturb::EdgeRecord(UNIT_U));
     assert_eq!(
         pg.ir_err(),
         IrReadError::MissingEdgeRecord {
             decl: UNIT_U,
-            edge: EdgeId::new(777)
+            edge: EdgeId::new(1)
         }
     );
 }
@@ -817,9 +805,10 @@ fn unit_arc_refs_reports_an_edge_backlink_mismatch_without_isa() {
     ir.bind_edge_decl(DeclId::new(3), e_proc)
         .expect("bind edge slot");
     let e_u = EdgeId::new(ir.edges.len());
-    ir.edges.push(EdgeRec::new(DeclId::new(99), Vec::new())); // wrong back-link
+    ir.edges.push(EdgeRec::new(DeclId::new(4), Vec::new()));
     ir.bind_edge_decl(DeclId::new(4), e_u)
         .expect("bind edge slot");
+    ir.edges[e_u.raw()].decl = DeclId::new(99); // corrupt after valid binding
 
     match lower_resolved(&ir, &it) {
         Err(MetaResolveError::Ir(IrReadError::EdgeBacklinkMismatch { decl, record_decl })) => {
