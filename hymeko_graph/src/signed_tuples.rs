@@ -537,6 +537,218 @@ pub fn enumerate_signed_tuples(
     }
 }
 
+// =====================================================================================
+// Closing walks
+// =====================================================================================
+
+/// How [`enumerate_closing_walks`] samples and signs.
+///
+/// Its own struct rather than an [`EnumerationRequest`]: the cap here is **per pair**, and the
+/// execution needs no contract, since every pair's sample is independent and the result is
+/// byte-identical whatever the thread count. A field with a different meaning under the same name
+/// would be the plausible-wrong-answer case the request struct exists to prevent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClosingWalkRequest {
+    /// Walks kept per pair; `None` keeps every walk. Above the cap a pair keeps a uniform reservoir
+    /// sample, seeded by [`Self::seed`] and the pair's own vertices.
+    pub per_pair_cap: Option<usize>,
+    /// Seed of the reservoirs.
+    pub seed: u64,
+    /// How parallel edges collapse when a walk steps over a vertex pair.
+    pub resolution: MultiEdgeSignResolution,
+}
+
+/// The signed walks that close each of a list of vertex pairs, grouped by pair in the order given.
+///
+/// The walks of pair `p` are `pair_offsets[p]..pair_offsets[p + 1]` (in walks, not vertices); each
+/// runs from the pair's `u` to its `v` over `length` edges and carries the
+/// [`SignedTupleFamily::Walk`] member signs of its own edges. No walk traverses its pair: the pair's
+/// sign is what the walks are evidence for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ClosingWalks {
+    /// Edges per walk.
+    pub length: usize,
+    /// Member vertex ids, flat `(n_walks, length + 1)`.
+    pub vertices: Vec<u32>,
+    /// Member signs, flat `(n_walks, length + 1)`, parallel to `vertices`.
+    pub member_signs: Vec<i8>,
+    /// Walk offsets per pair, `pairs.len() + 1` entries.
+    pub pair_offsets: Vec<usize>,
+    /// Walks whose edges could not all be resolved, and were therefore dropped.
+    pub dropped: usize,
+    /// The request that produced this set.
+    pub request: ClosingWalkRequest,
+}
+
+impl ClosingWalks {
+    /// The family each walk belongs to, and with it the member-sign rule.
+    pub fn family(&self) -> SignedTupleFamily {
+        SignedTupleFamily::Walk { len: self.length }
+    }
+
+    /// Walks retained over every pair.
+    pub fn n_walks(&self) -> usize {
+        self.pair_offsets.last().copied().unwrap_or(0)
+    }
+
+    /// The walk indices of pair `p`.
+    pub fn of_pair(&self, p: usize) -> std::ops::Range<usize> {
+        self.pair_offsets[p]..self.pair_offsets[p + 1]
+    }
+}
+
+/// Enumerate, for every pair `(u, v)` of `pairs`, the simple walks `u -> w_1 -> … -> v` of `length`
+/// edges over the `visible` edges of `graph`, traversed undirected: the cycles each pair would
+/// close, without the pair's own edge.
+///
+/// The `visible` subset is applied before enumeration, as in [`enumerate_signed_tuples`]: an edge
+/// outside it is not traversable. A walk's intermediate vertices are distinct and outside `{u, v}`,
+/// and `length >= 2`, so no walk traverses its own pair.
+///
+/// # Preconditions
+/// `length >= 2`; every pair has `u != v`, both `< graph.n_nodes`; every entry of `visible` indexes
+/// `graph.edges`; `per_pair_cap`, when given, is non-zero.
+///
+/// # Postconditions
+/// `pair_offsets.len() == pairs.len() + 1`, and each pair's walks are sorted lexicographically by
+/// their vertices. Without a cap they are every such walk; with one, at most the cap, a uniform
+/// sample. The result is byte-identical for equal inputs whatever the rayon pool: each pair's sample
+/// depends only on the request, the pair and the graph.
+///
+/// # Panics
+/// When a precondition on `length` or a pair does not hold.
+pub fn enumerate_closing_walks(
+    graph: &SignedGraph,
+    visible: &[u32],
+    pairs: &[(u32, u32)],
+    length: usize,
+    request: ClosingWalkRequest,
+) -> ClosingWalks {
+    use rayon::prelude::*;
+
+    assert!(length >= 2, "a closing walk has at least two edges");
+    assert!(request.per_pair_cap != Some(0), "a zero cap keeps nothing");
+    let n_nodes = graph.n_nodes as usize;
+    for &(u, v) in pairs {
+        assert!(u != v, "a closing walk joins two distinct vertices");
+        assert!(
+            (u as usize) < n_nodes && (v as usize) < n_nodes,
+            "pair vertices index the graph"
+        );
+    }
+    let visible_edges: Vec<(u32, u32)> = visible.iter().map(|&e| graph.edges[e as usize]).collect();
+    let (row_ptr, col_idx) = crate::unsigned_cycles::build_csr(&visible_edges, n_nodes, false);
+    let resolver = SignResolver::build(graph, visible, request.resolution);
+    let family = SignedTupleFamily::Walk { len: length };
+
+    let per_pair: Vec<(Vec<u32>, Vec<i8>, usize)> = pairs
+        .par_iter()
+        .map(|&(u, v)| {
+            let walks = PairWalks {
+                row_ptr: &row_ptr,
+                col_idx: &col_idx,
+                length,
+                u,
+                v,
+            }
+            .sample(request);
+            let (mut vertices, mut signs, mut dropped) = (Vec::new(), Vec::new(), 0);
+            for walk in walks.chunks_exact(length + 1) {
+                let edge_signs: Option<Vec<i8>> = family
+                    .member_edges(walk)
+                    .map(|(from, to)| resolver.sign_of(from, to))
+                    .collect();
+                match edge_signs {
+                    Some(edge_signs) => {
+                        vertices.extend_from_slice(walk);
+                        signs.extend(family.member_signs(&edge_signs));
+                    }
+                    None => dropped += 1,
+                }
+            }
+            (vertices, signs, dropped)
+        })
+        .collect();
+
+    let mut pair_offsets = Vec::with_capacity(pairs.len() + 1);
+    pair_offsets.push(0usize);
+    let (mut vertices, mut member_signs, mut dropped) = (Vec::new(), Vec::new(), 0);
+    for (walk_vertices, walk_signs, walk_dropped) in per_pair {
+        let kept = walk_vertices.len() / (length + 1);
+        pair_offsets.push(pair_offsets[pair_offsets.len() - 1] + kept);
+        vertices.extend(walk_vertices);
+        member_signs.extend(walk_signs);
+        dropped += walk_dropped;
+    }
+    ClosingWalks {
+        length,
+        vertices,
+        member_signs,
+        pair_offsets,
+        dropped,
+        request,
+    }
+}
+
+/// One pair's walk search over an undirected CSR.
+struct PairWalks<'a> {
+    row_ptr: &'a [u32],
+    col_idx: &'a [u32],
+    length: usize,
+    u: u32,
+    v: u32,
+}
+
+impl PairWalks<'_> {
+    /// The pair's walks, flat `(n, length + 1)` and sorted, sampled to the request's cap.
+    fn sample(&self, request: ClosingWalkRequest) -> Vec<u32> {
+        let stride = self.length + 1;
+        let mut kept: Vec<u32> = Vec::new();
+        let mut seen = 0u64;
+        // The pair's own stream: its sample does not depend on where the pair sits in the list.
+        let mut rng = crate::rand_lcg::Lcg::new(
+            request.seed ^ ((u64::from(self.u) << 32) | u64::from(self.v)),
+        );
+        let mut path = vec![self.u];
+        self.extend(&mut path, &mut |walk: &[u32]| {
+            match request.per_pair_cap {
+                Some(cap) if seen as usize >= cap => {
+                    // Algorithm R: walk `seen` replaces a kept walk with probability cap / (seen + 1).
+                    let slot = (rng.next_u64() % (seen + 1)) as usize;
+                    if slot < cap {
+                        kept[slot * stride..(slot + 1) * stride].copy_from_slice(walk);
+                    }
+                }
+                _ => kept.extend_from_slice(walk),
+            }
+            seen += 1;
+        });
+        let mut walks: Vec<&[u32]> = kept.chunks_exact(stride).collect();
+        walks.sort_unstable();
+        walks.concat()
+    }
+
+    /// Extend `path` (which starts at `u`) by every admissible vertex, reporting each complete walk.
+    fn extend(&self, path: &mut Vec<u32>, report: &mut dyn FnMut(&[u32])) {
+        let last = *path.last().expect("a path starts at its pair's u");
+        if path.len() == self.length {
+            if crate::unsigned_cycles::has_edge(self.row_ptr, self.col_idx, last, self.v) {
+                path.push(self.v);
+                report(path);
+                path.pop();
+            }
+            return;
+        }
+        for &w in crate::unsigned_cycles::neighbours(self.row_ptr, self.col_idx, last) {
+            if w != self.v && !path.contains(&w) {
+                path.push(w);
+                self.extend(path, report);
+                path.pop();
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1051,5 +1263,170 @@ mod tests {
             reduced.dropped, 0,
             "invisible edges are never traversed, so nothing is dropped"
         );
+    }
+
+    // --- closing walks -----------------------------------------------------------------
+
+    /// Seven vertices with a hub (0), a square 0-1-2-3, a pendant 6 and a chord 1-3; edge 7 (1-4)
+    /// stays invisible.
+    fn closing_graph() -> SignedGraph {
+        SignedGraph::from_parts(
+            7,
+            &[0, 1, 2, 3, 0, 0, 1, 1, 4, 3, 5],
+            &[1, 2, 3, 0, 4, 5, 3, 4, 5, 5, 6],
+            &[1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1],
+        )
+    }
+
+    fn closing_visible() -> Vec<u32> {
+        (0..11u32).filter(|&e| e != 7).collect()
+    }
+
+    fn closing_request(cap: Option<usize>) -> ClosingWalkRequest {
+        ClosingWalkRequest {
+            per_pair_cap: cap,
+            seed: 11,
+            resolution: MultiEdgeSignResolution::FirstOccurrenceForwardThenReverse,
+        }
+    }
+
+    /// Every simple walk of `length` edges from `u` to `v` over the visible edges, intermediate
+    /// vertices outside the pair: a brute force over vertex sequences, the independent reference.
+    fn brute_force(
+        g: &SignedGraph,
+        visible: &[u32],
+        (u, v): (u32, u32),
+        length: usize,
+    ) -> Vec<Vec<u32>> {
+        let adjacent = |a: u32, b: u32| {
+            visible.iter().any(|&e| {
+                let (x, y) = g.edges[e as usize];
+                (x, y) == (a, b) || (x, y) == (b, a)
+            })
+        };
+        let inner: Vec<u32> = (0..g.n_nodes).filter(|&w| w != u && w != v).collect();
+        let mut walks = Vec::new();
+        let mut sequence = vec![0usize; length - 1];
+        let total = inner.len().pow((length - 1) as u32);
+        for code in 0..total {
+            let mut c = code;
+            for slot in sequence.iter_mut() {
+                *slot = c % inner.len();
+                c /= inner.len();
+            }
+            let mut walk = vec![u];
+            walk.extend(sequence.iter().map(|&i| inner[i]));
+            walk.push(v);
+            let distinct = (1..length).all(|i| !walk[1..i].contains(&walk[i]));
+            if distinct && walk.windows(2).all(|w| adjacent(w[0], w[1])) {
+                walks.push(walk);
+            }
+        }
+        walks.sort();
+        walks
+    }
+
+    /// The walks closing each pair are exactly the brute force's, for two and three edges; none
+    /// traverses its pair or the invisible edge, and every walk carries the Walk rule's signs of
+    /// its own edges.
+    #[test]
+    fn closing_walks_are_every_simple_path_between_the_pair() {
+        let g = closing_graph();
+        let visible = closing_visible();
+        let pairs = [(1, 3), (0, 2), (4, 1), (6, 2)];
+        for length in [2, 3] {
+            let walks =
+                enumerate_closing_walks(&g, &visible, &pairs, length, closing_request(None));
+            assert_eq!(walks.pair_offsets.len(), pairs.len() + 1);
+            for (p, &pair) in pairs.iter().enumerate() {
+                let got: Vec<Vec<u32>> = walks
+                    .of_pair(p)
+                    .map(|w| walks.vertices[w * (length + 1)..(w + 1) * (length + 1)].to_vec())
+                    .collect();
+                assert_eq!(
+                    got,
+                    brute_force(&g, &visible, pair, length),
+                    "{pair:?} at {length}"
+                );
+                for walk in &got {
+                    assert!(
+                        walk.windows(2)
+                            .all(|e| (e[0], e[1]) != pair && (e[1], e[0]) != pair)
+                    );
+                    assert!(
+                        walk.windows(2)
+                            .all(|e| (e[0], e[1]) != (1, 4) && (e[0], e[1]) != (4, 1))
+                    );
+                }
+            }
+            for (w, walk) in walks.vertices.chunks_exact(length + 1).enumerate() {
+                let edge_signs: Vec<i8> = walk
+                    .windows(2)
+                    .map(|e| {
+                        let k = (0..g.edges.len())
+                            .find(|&k| g.edges[k] == (e[0], e[1]) || g.edges[k] == (e[1], e[0]))
+                            .expect("a walk steps over a graph edge");
+                        g.signs[k]
+                    })
+                    .collect();
+                assert_eq!(
+                    &walks.member_signs[w * (length + 1)..(w + 1) * (length + 1)],
+                    walks.family().member_signs(&edge_signs).as_slice()
+                );
+            }
+            assert_eq!(walks.dropped, 0);
+        }
+    }
+
+    /// A capped pair keeps at most the cap, a subset of its walks, the same bytes on a second call,
+    /// at one and at four threads, and wherever the pair sits in the list.
+    #[test]
+    fn a_capped_closing_walk_sample_is_reproducible() {
+        let g = closing_graph();
+        let visible = closing_visible();
+        let full = enumerate_closing_walks(&g, &visible, &[(0, 2)], 2, closing_request(None));
+        assert!(full.n_walks() > 1, "the fixture has walks to sample");
+        let cap = full.n_walks() - 1;
+        let run = |threads: usize, pairs: &[(u32, u32)]| {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .expect("a pool")
+                .install(|| {
+                    enumerate_closing_walks(&g, &visible, pairs, 2, closing_request(Some(cap)))
+                })
+        };
+        let one = run(1, &[(0, 2), (1, 3)]);
+        assert_eq!(one, run(4, &[(0, 2), (1, 3)]));
+        assert_eq!(one.of_pair(0).len(), cap);
+        let moved = run(1, &[(1, 3), (0, 2)]);
+        let walks = |w: &ClosingWalks, p: usize| {
+            w.vertices[w.of_pair(p).start * 3..w.of_pair(p).end * 3].to_vec()
+        };
+        assert_eq!(
+            walks(&one, 0),
+            walks(&moved, 1),
+            "a pair's sample is its own"
+        );
+        let all = walks(&full, 0);
+        for walk in walks(&one, 0).chunks_exact(3) {
+            assert!(all.chunks_exact(3).any(|w| w == walk));
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "at least two edges")]
+    fn a_closing_walk_of_one_edge_is_refused() {
+        let g = closing_graph();
+        let _ =
+            enumerate_closing_walks(&g, &closing_visible(), &[(1, 3)], 1, closing_request(None));
+    }
+
+    #[test]
+    #[should_panic(expected = "two distinct vertices")]
+    fn a_closing_walk_of_a_vertex_to_itself_is_refused() {
+        let g = closing_graph();
+        let _ =
+            enumerate_closing_walks(&g, &closing_visible(), &[(2, 2)], 2, closing_request(None));
     }
 }

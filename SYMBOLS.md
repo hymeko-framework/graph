@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 605 public symbol(s).**
+**8 package(s), 611 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -86,6 +86,8 @@ _No public symbols._
 - `CellRank` — `hymeko_graph/src/cell_topology.rs`
 - `CellTopology` — `hymeko_graph/src/cell_topology.rs`
 - `CliffordFIR` — `hymeko_graph/src/spine.rs`
+- `ClosingWalkRequest` — `hymeko_graph/src/signed_tuples.rs`
+- `ClosingWalks` — `hymeko_graph/src/signed_tuples.rs`
 - `ColorCodingSampler` — `hymeko_graph/src/color_coding.rs`
 - `CommunityAxiomPruner` — `hymeko_graph/src/community.rs`
 - `ComponentLabeling` — `hymeko_graph/src/direct_ir/components.rs`
@@ -267,6 +269,7 @@ _No public symbols._
 - `ensure_capacity` — `hymeko_graph/src/direct_ir/workspace.rs`
 - `enumerate_berge_cycles` — `hymeko_graph/src/direct_ir/berge_enum.rs`
 - `enumerate_berge_paths` — `hymeko_graph/src/direct_ir/berge_enum.rs`
+- `enumerate_closing_walks` — `hymeko_graph/src/signed_tuples.rs`
 - `enumerate_color_coded` — `hymeko_graph/src/color_coding.rs`
 - `enumerate_cycles_ordered` — `hymeko_graph/src/traversal_heuristic.rs`
 - `enumerate_cycles_ordered_noprune` — `hymeko_graph/src/traversal_heuristic.rs`
@@ -303,6 +306,7 @@ _No public symbols._
 - `enumerate_walks` — `hymeko_graph/src/walks_unsigned.rs`
 - `extend_reject_rate` — `hymeko_graph/src/pruner.rs`
 - `faces` — `hymeko_graph/src/octree.rs`
+- `family` — `hymeko_graph/src/signed_tuples.rs`
 - `field` — `hymeko_graph/src/octree.rs`
 - `fir_cycle_forward` — `hymeko_graph/src/spine.rs`
 - `fir_cycle_scatter_mean` — `hymeko_graph/src/spine.rs`
@@ -377,6 +381,7 @@ _No public symbols._
 - `n_edges` — `hymeko_graph/src/signed_graph.rs`
 - `n_lower` — `hymeko_graph/src/cell_topology.rs`
 - `n_nodes` — `hymeko_graph/src/hyper_operator.rs`
+- `n_walks` — `hymeko_graph/src/signed_tuples.rs`
 - `neighbours` — `hymeko_graph/src/traversal.rs`
 - `neighbours` — `hymeko_graph/src/unsigned_cycles/csr.rs`
 - `new` — `hymeko_graph/src/cell_topology.rs`
@@ -404,6 +409,7 @@ _No public symbols._
 - `nodes` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `of` — `hymeko_graph/src/cell_topology.rs`
 - `of` — `hymeko_graph/src/sphf.rs`
+- `of_pair` — `hymeko_graph/src/signed_tuples.rs`
 - `offer` — `hymeko_graph/src/matroid/levi.rs`
 - `offer` — `hymeko_graph/src/matroid/rank2.rs`
 - `offer` — `hymeko_graph/src/unsigned_cycles/sink.rs`
