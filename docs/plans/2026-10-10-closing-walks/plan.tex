@@ -65,5 +65,20 @@ consumes it by revision. Merging to \texttt{main} follows Nagare's next \texttt{
 $L=3$. It is measured on Bitcoin-Alpha (24\,186 queries) through Nagare before any campaign.
 \paragraph{Rollback.} Delete the branch; nothing on \texttt{main} changes.
 
+\section*{Amendment 1 (2026-10-10 13:5x) --- anchored walks: closing, open, transitive}
+The user (13:4x): ``vezess\"unk be open \'es transitive utakat is''. \texttt{enumerate\_closing\_walks} becomes
+\texttt{enumerate\_anchored\_walks} over a sealed \texttt{AnchoredWalk}. One function and one result type; the
+closing-only form is replaced on this unmerged branch, not kept beside it.
+\begin{itemize}
+\item \texttt{Closing \{ members \}}: the cycle the pair's edge closes, as before.
+\item \texttt{Open \{ edges \}}: the pair's edge at one end, $edges-1$ visible edges leaving $u$ or $v$.
+\item \texttt{Transitive \{ edges \}}: the pair's edge inside, $a\ge1$ visible edges ending at $u$ and $b\ge1$ leaving
+  $v$.
+\end{itemize}
+Members are stored pair first, $(u, v, \dots)$. The member signs are the walk parity over the path, the pair's edge,
+unknown, counting as no negative incidence; for a closing walk that is the cycle parity with its wrapping edge
+masked. Tests: all six shapes (closing 3/4, open 2/3, transitive 3/4) equal a brute force over vertex sequences,
+members and signs; the capped sample is reproducible; too-short shapes are refused.
+
 \input{plan.tikz}
 \end{document}

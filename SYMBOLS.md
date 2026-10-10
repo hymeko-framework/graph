@@ -71,6 +71,8 @@ _No public symbols._
 
 ### structs
 
+- `AnchoredWalkRequest` — `hymeko_graph/src/signed_tuples.rs`
+- `AnchoredWalks` — `hymeko_graph/src/signed_tuples.rs`
 - `AndFilter` — `hymeko_graph/src/vertex_filter.rs`
 - `AstarScratch` — `hymeko_graph/src/traversal_heuristic.rs`
 - `BalanceScorer` — `hymeko_graph/src/topk_cycles.rs`
@@ -86,8 +88,6 @@ _No public symbols._
 - `CellRank` — `hymeko_graph/src/cell_topology.rs`
 - `CellTopology` — `hymeko_graph/src/cell_topology.rs`
 - `CliffordFIR` — `hymeko_graph/src/spine.rs`
-- `ClosingWalkRequest` — `hymeko_graph/src/signed_tuples.rs`
-- `ClosingWalks` — `hymeko_graph/src/signed_tuples.rs`
 - `ColorCodingSampler` — `hymeko_graph/src/color_coding.rs`
 - `CommunityAxiomPruner` — `hymeko_graph/src/community.rs`
 - `ComponentLabeling` — `hymeko_graph/src/direct_ir/components.rs`
@@ -165,6 +165,7 @@ _No public symbols._
 
 ### enums
 
+- `AnchoredWalk` — `hymeko_graph/src/signed_tuples.rs`
 - `AxiomChoice` — `hymeko_graph/src/community.rs`
 - `BalanceMode` — `hymeko_graph/src/balance.rs`
 - `BudgetKind` — `hymeko_graph/src/direct_ir/mod.rs`
@@ -267,9 +268,9 @@ _No public symbols._
 - `edge_to_node` — `hymeko_graph/src/hyper_operator.rs`
 - `emit_reject_rate` — `hymeko_graph/src/pruner.rs`
 - `ensure_capacity` — `hymeko_graph/src/direct_ir/workspace.rs`
+- `enumerate_anchored_walks` — `hymeko_graph/src/signed_tuples.rs`
 - `enumerate_berge_cycles` — `hymeko_graph/src/direct_ir/berge_enum.rs`
 - `enumerate_berge_paths` — `hymeko_graph/src/direct_ir/berge_enum.rs`
-- `enumerate_closing_walks` — `hymeko_graph/src/signed_tuples.rs`
 - `enumerate_color_coded` — `hymeko_graph/src/color_coding.rs`
 - `enumerate_cycles_ordered` — `hymeko_graph/src/traversal_heuristic.rs`
 - `enumerate_cycles_ordered_noprune` — `hymeko_graph/src/traversal_heuristic.rs`
@@ -306,7 +307,6 @@ _No public symbols._
 - `enumerate_walks` — `hymeko_graph/src/walks_unsigned.rs`
 - `extend_reject_rate` — `hymeko_graph/src/pruner.rs`
 - `faces` — `hymeko_graph/src/octree.rs`
-- `family` — `hymeko_graph/src/signed_tuples.rs`
 - `field` — `hymeko_graph/src/octree.rs`
 - `fir_cycle_forward` — `hymeko_graph/src/spine.rs`
 - `fir_cycle_scatter_mean` — `hymeko_graph/src/spine.rs`
