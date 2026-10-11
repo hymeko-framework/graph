@@ -377,7 +377,7 @@ pub fn multi_component_ir(comps: usize, m: usize, k: usize) -> Ir {
 /// resolved-incidence count grows.
 pub fn dup_heavy_ir(m: usize, k: usize) -> Ir {
     let mut ir = window_ir(m, k, false, SignMode::AllPlus);
-    let dup: Vec<ArcRec> = ir.arcs.clone();
+    let dup: Vec<ArcRec> = ir.arcs.to_vec();
     ir.arcs.extend(dup);
     ir
 }
