@@ -160,6 +160,55 @@ impl Default for OrthConfig {
     }
 }
 
+/// A laminar family of cells: one root, every cell's children nested inside it and pairwise
+/// disjoint, so the cells holding a point form one chain from the root. A family states its
+/// structure; the queries every such family answers the same way are provided.
+pub trait Laminar {
+    /// What a cell holds.
+    type Point: ?Sized;
+
+    /// The root cell, `None` for an empty family.
+    fn root(&self) -> Option<usize>;
+
+    /// Cell `cell`'s children.
+    fn children_of(&self, cell: usize) -> &[u32];
+
+    /// Whether cell `cell` holds `point`.
+    fn holds(&self, cell: usize, point: &Self::Point) -> bool;
+
+    /// The cells holding `point`, root first, written into `path` (cleared first): each cell the
+    /// child of the one before that holds the point, until no child does. Laminarity makes that
+    /// child unique. Empty when the root does not hold the point.
+    ///
+    /// The point-location query of a hierarchical partition: a point a sparse family has no leaf
+    /// for still has its chain down to the deepest cell that holds it.
+    fn path_into(&self, point: &Self::Point, path: &mut Vec<usize>) {
+        path.clear();
+        let Some(mut cell) = self.root().filter(|&root| self.holds(root, point)) else {
+            return;
+        };
+        loop {
+            path.push(cell);
+            match self
+                .children_of(cell)
+                .iter()
+                .map(|&child| child as usize)
+                .find(|&child| self.holds(child, point))
+            {
+                Some(child) => cell = child,
+                None => return,
+            }
+        }
+    }
+
+    /// [`Self::path_into`] into a new vector.
+    fn path(&self, point: &Self::Point) -> Vec<usize> {
+        let mut path = Vec::new();
+        self.path_into(point, &mut path);
+        path
+    }
+}
+
 /// A built N-dimensional orthtree. Leaves are the finest patches of the SBSH partition.
 #[derive(Clone, Debug)]
 pub struct OrthTree<T: Coordinate = f64> {
@@ -177,6 +226,29 @@ pub struct OrthTree<T: Coordinate = f64> {
     pub children: Vec<Vec<u32>>,
     /// Point indices inside each cell.
     pub members: Vec<Vec<u32>>,
+}
+
+/// A cell holds a point inside its half-open box `[lo, hi)`, its far face included where that face
+/// is the root's: a point on the root's outer boundary is held, by the root and by every cell
+/// that shares that face.
+impl<T: Coordinate> Laminar for OrthTree<T> {
+    type Point = [T];
+
+    fn root(&self) -> Option<usize> {
+        (self.n_cells() > 0).then_some(0)
+    }
+
+    fn children_of(&self, cell: usize) -> &[u32] {
+        &self.children[cell]
+    }
+
+    fn holds(&self, cell: usize, point: &[T]) -> bool {
+        debug_assert_eq!(point.len(), self.dim);
+        let (lo, hi, far) = (self.cell_lo(cell), self.cell_hi(cell), self.cell_hi(0));
+        (0..self.dim).all(|d| {
+            point[d] >= lo[d] && (point[d] < hi[d] || (hi[d] == far[d] && point[d] == hi[d]))
+        })
+    }
 }
 
 impl<T: Coordinate> OrthTree<T> {
@@ -215,30 +287,17 @@ impl<T: Coordinate> OrthTree<T> {
         })
     }
 
-    /// Descend from the root to the leaf containing `point`, the root's outer face inclusive.
-    /// `None` if the point lies outside the root box.
+    /// The leaf holding `point`: the last cell of its [`Laminar::path`] when that cell is a leaf.
+    /// `None` if the point lies outside the root box, or in an orthant a sparse tree dropped.
     ///
     /// # Preconditions
     /// `point.len() == self.dim`.
     pub fn leaf_of(&self, point: &[T]) -> Option<usize> {
         debug_assert_eq!(point.len(), self.dim);
-        if !self.contains(0, point, true) {
-            return None;
-        }
-        let mut c = 0usize;
-        while !self.is_leaf(c) {
-            match self.children[c].iter().find(|&&ch| {
-                let (lo, hi) = (self.cell_lo(ch as usize), self.cell_hi(ch as usize));
-                (0..self.dim).all(|d| {
-                    point[d] >= lo[d]
-                        && (point[d] < hi[d] || (hi[d] == self.cell_hi(0)[d] && point[d] == hi[d]))
-                })
-            }) {
-                Some(&ch) => c = ch as usize,
-                None => return None, // no leaf in a dropped (empty) orthant
-            }
-        }
-        Some(c)
+        self.path(point)
+            .last()
+            .copied()
+            .filter(|&c| self.is_leaf(c))
     }
 
     /// Does cell `c`'s box overlap the query box `[qlo, qhi)`?

@@ -1,6 +1,6 @@
 //! The orthtree across dimensions, and the laminar invariant the width-1 backbone rests on.
 
-use hymeko_sbsh::{CountSplit, OrthConfig, build_orthtree, point_bbox};
+use hymeko_sbsh::{CountSplit, Laminar, OrthConfig, build_orthtree, point_bbox};
 
 #[test]
 fn leaf_lookup_uses_half_open_internal_faces_and_dropped_orthants() {
@@ -24,7 +24,61 @@ fn leaf_lookup_uses_half_open_internal_faces_and_dropped_orthants() {
     assert!(tree.leaf_of(&[2.01, 2.]).is_none());
     assert!(tree.leaf_of(&[f64::NAN, 0.]).is_none());
     assert!(tree.members[tree.leaf_of(&[2., 2.]).unwrap()].contains(&2));
+    // The dropped orthant has no leaf, but its point still has its chain: the root alone.
+    assert_eq!(tree.path(&[0.25, 1.75]), vec![0]);
+    assert!(tree.path(&[2.01, 2.]).is_empty());
     tree.verify_laminar().unwrap();
+}
+
+/// The path is every cell that holds the point, root first: over a sparse 3-D tree and query
+/// points inside, on the far face, in dropped orthants and outside, it equals the brute-force set
+/// in level order, each cell the parent of the next, and `leaf_of` is its last cell exactly when
+/// that cell is a leaf.
+#[test]
+fn a_path_is_every_cell_holding_its_point() {
+    let dim = 3;
+    let points = cloud(200, dim);
+    let (lo, hi) = point_bbox(&points, dim, 0.0);
+    let ids: Vec<u32> = (0..200).collect();
+    let tree = build_orthtree(
+        dim,
+        &lo,
+        &hi,
+        &points,
+        &ids,
+        &CountSplit { max_per_cell: 4 },
+        &OrthConfig {
+            max_depth: 5,
+            drop_empty: true,
+        },
+    );
+    let mut queries: Vec<Vec<f64>> = cloud(150, dim)
+        .chunks(dim)
+        .map(|q| q.iter().map(|x| x * 1.1 - 0.4).collect())
+        .collect();
+    queries.push(hi.clone());
+    queries.extend(points.chunks(dim).take(20).map(<[f64]>::to_vec));
+    let mut reused = Vec::new();
+    let (mut inside, mut stopped) = (0, 0);
+    for q in &queries {
+        let path = tree.path(q);
+        let mut holding: Vec<usize> = (0..tree.n_cells()).filter(|&c| tree.holds(c, q)).collect();
+        holding.sort_by_key(|&c| tree.level[c]);
+        assert_eq!(path, holding, "{q:?}");
+        for pair in path.windows(2) {
+            assert_eq!(tree.parent[pair[1]], pair[0] as i32);
+        }
+        tree.path_into(q, &mut reused);
+        assert_eq!(reused, path);
+        let leaf = path.last().copied().filter(|&c| tree.is_leaf(c));
+        assert_eq!(tree.leaf_of(q), leaf);
+        inside += usize::from(!path.is_empty());
+        stopped += usize::from(!path.is_empty() && leaf.is_none());
+    }
+    assert!(
+        inside > 20 && stopped > 0,
+        "the queries reach both cases: {inside}, {stopped}"
+    );
 }
 
 /// A deterministic point cloud in `dim` dimensions — no RNG dependency, reproducible everywhere.
