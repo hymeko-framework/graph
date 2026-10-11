@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 605 public symbol(s).**
+**8 package(s), 614 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -74,6 +74,8 @@ _No public symbols._
 - `AndFilter` — `hymeko_graph/src/vertex_filter.rs`
 - `AstarScratch` — `hymeko_graph/src/traversal_heuristic.rs`
 - `BalanceScorer` — `hymeko_graph/src/topk_cycles.rs`
+- `BatchGas` — `hymeko_graph/src/neural_gas/mod.rs`
+- `BatchGasConfig` — `hymeko_graph/src/neural_gas/mod.rs`
 - `BergeCycle` — `hymeko_graph/src/direct_ir/berge_enum.rs`
 - `BergeIncidence` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BergePath` — `hymeko_graph/src/direct_ir/traversal.rs`
@@ -147,6 +149,7 @@ _No public symbols._
 - `SignedHypergraph` — `hymeko_graph/src/sphf.rs`
 - `Signs` — `hymeko_graph/src/cell_topology.rs`
 - `StatsSnapshot` — `hymeko_graph/src/pruner.rs`
+- `StepReceipt` — `hymeko_graph/src/neural_gas/mod.rs`
 - `TopKBuilder` — `hymeko_graph/src/topk_cycles.rs`
 - `TopKCyclesBatch` — `hymeko_graph/src/topk_cycles.rs`
 - `TopKWalksBatch` — `hymeko_graph/src/topk_walks.rs`
@@ -169,6 +172,7 @@ _No public symbols._
 - `CellTopologyError` — `hymeko_graph/src/cell_topology.rs`
 - `DirectIrError` — `hymeko_graph/src/direct_ir/mod.rs`
 - `EnumerationExecution` — `hymeko_graph/src/signed_tuples.rs`
+- `GasError` — `hymeko_graph/src/neural_gas/mod.rs`
 - `GradRequest` — `hymeko_graph/src/spine.rs`
 - `HyperIncidenceError` — `hymeko_graph/src/hyper_operator.rs`
 - `IncidenceOutput` — `hymeko_graph/src/incidence.rs`
@@ -301,6 +305,7 @@ _No public symbols._
 - `enumerate_top_k_walks` — `hymeko_graph/src/topk_walks.rs`
 - `enumerate_top_k_walks_batch` — `hymeko_graph/src/topk_walks.rs`
 - `enumerate_walks` — `hymeko_graph/src/walks_unsigned.rs`
+- `errors` — `hymeko_graph/src/neural_gas/mod.rs`
 - `extend_reject_rate` — `hymeko_graph/src/pruner.rs`
 - `faces` — `hymeko_graph/src/octree.rs`
 - `field` — `hymeko_graph/src/octree.rs`
@@ -316,6 +321,7 @@ _No public symbols._
 - `get` — `hymeko_graph/src/cell_topology.rs`
 - `global` — `hymeko_graph/src/topk_cycles.rs`
 - `global_bb` — `hymeko_graph/src/topk_cycles.rs`
+- `graph` — `hymeko_graph/src/neural_gas/mod.rs`
 - `has_edge` — `hymeko_graph/src/traversal.rs`
 - `has_edge` — `hymeko_graph/src/unsigned_cycles/csr.rs`
 - `hyperedge_len` — `hymeko_graph/src/direct_ir/informed.rs`
@@ -388,6 +394,7 @@ _No public symbols._
 - `new` — `hymeko_graph/src/hyper_operator.rs`
 - `new` — `hymeko_graph/src/matroid/facade.rs`
 - `new` — `hymeko_graph/src/matroid/workspace.rs`
+- `new` — `hymeko_graph/src/neural_gas/mod.rs`
 - `new` — `hymeko_graph/src/pruner.rs`
 - `new` — `hymeko_graph/src/rand_lcg.rs`
 - `new` — `hymeko_graph/src/spine.rs`
@@ -414,6 +421,7 @@ _No public symbols._
 - `path_hash` — `hymeko_graph/src/direct_ir/informed.rs`
 - `per_vertex` — `hymeko_graph/src/topk_cycles.rs`
 - `ports` — `hymeko_graph/src/sphf.rs`
+- `positions` — `hymeko_graph/src/neural_gas/mod.rs`
 - `push` — `hymeko_graph/src/topk_cycles.rs`
 - `rank` — `hymeko_graph/src/cell_topology.rs`
 - `rank2_rank` — `hymeko_graph/src/matroid/rank2.rs`
@@ -443,6 +451,7 @@ _No public symbols._
 - `sources` — `hymeko_graph/src/sphf.rs`
 - `star_matvec` — `hymeko_graph/src/hyper_operator.rs`
 - `stats` — `hymeko_graph/src/direct_ir/informed.rs`
+- `step` — `hymeko_graph/src/neural_gas/mod.rs`
 - `stored_bytes` — `hymeko_graph/src/cell_topology.rs`
 - `targets` — `hymeko_graph/src/sphf.rs`
 - `tiered_m_v_by_degree` — `hymeko_graph/src/topk_cycles.rs`

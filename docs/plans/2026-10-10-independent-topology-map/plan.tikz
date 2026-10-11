@@ -1,0 +1,7 @@
+\begin{tikzpicture}[every node/.style={draw,align=center,font=\small}]
+\node (ir) at (0,0) {Core canonical IR\\positions and identities};
+\node (g) at (6,0) {Graph batch topology operation\\proposed additive module};
+\node (s) at (0,-2) {Existing SBSH\\spatial partition};
+\node (v) at (6,-2) {Existing Graph traversal\\and downstream verification};
+\draw[->] (ir)--(g);\draw[->] (ir)--(s);\draw[->] (g)--(v);
+\end{tikzpicture}

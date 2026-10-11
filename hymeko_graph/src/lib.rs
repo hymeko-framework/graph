@@ -100,6 +100,7 @@ pub mod direct_ir;
 pub mod hyper_operator;
 pub mod incidence;
 pub mod matroid;
+pub mod neural_gas;
 pub mod path_closure;
 pub mod pruner;
 pub mod quadtree;
