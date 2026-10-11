@@ -81,8 +81,8 @@ pub mod width;
 
 pub use ir_positions::IrPositions;
 pub use orthtree::{
-    Coordinate, CountSplit, OrthConfig, OrthTree, RealCoordinate, SplitRule, build_orthtree,
-    point_bbox,
+    Coordinate, CountSplit, Laminar, OrthConfig, OrthTree, RealCoordinate, SplitRule,
+    build_orthtree, point_bbox,
 };
 pub use scene::{SbshScene, SceneError};
 pub use width::{ElimCost, certificate_width, certificate_width_of, elimination_cost};

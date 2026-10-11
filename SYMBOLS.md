@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 605 public symbol(s).**
+**8 package(s), 612 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -71,6 +71,8 @@ _No public symbols._
 
 ### structs
 
+- `AnchoredWalkRequest` — `hymeko_graph/src/signed_tuples.rs`
+- `AnchoredWalks` — `hymeko_graph/src/signed_tuples.rs`
 - `AndFilter` — `hymeko_graph/src/vertex_filter.rs`
 - `AstarScratch` — `hymeko_graph/src/traversal_heuristic.rs`
 - `BalanceScorer` — `hymeko_graph/src/topk_cycles.rs`
@@ -163,6 +165,7 @@ _No public symbols._
 
 ### enums
 
+- `AnchoredWalk` — `hymeko_graph/src/signed_tuples.rs`
 - `AxiomChoice` — `hymeko_graph/src/community.rs`
 - `BalanceMode` — `hymeko_graph/src/balance.rs`
 - `BudgetKind` — `hymeko_graph/src/direct_ir/mod.rs`
@@ -265,6 +268,7 @@ _No public symbols._
 - `edge_to_node` — `hymeko_graph/src/hyper_operator.rs`
 - `emit_reject_rate` — `hymeko_graph/src/pruner.rs`
 - `ensure_capacity` — `hymeko_graph/src/direct_ir/workspace.rs`
+- `enumerate_anchored_walks` — `hymeko_graph/src/signed_tuples.rs`
 - `enumerate_berge_cycles` — `hymeko_graph/src/direct_ir/berge_enum.rs`
 - `enumerate_berge_paths` — `hymeko_graph/src/direct_ir/berge_enum.rs`
 - `enumerate_color_coded` — `hymeko_graph/src/color_coding.rs`
@@ -377,6 +381,7 @@ _No public symbols._
 - `n_edges` — `hymeko_graph/src/signed_graph.rs`
 - `n_lower` — `hymeko_graph/src/cell_topology.rs`
 - `n_nodes` — `hymeko_graph/src/hyper_operator.rs`
+- `n_walks` — `hymeko_graph/src/signed_tuples.rs`
 - `neighbours` — `hymeko_graph/src/traversal.rs`
 - `neighbours` — `hymeko_graph/src/unsigned_cycles/csr.rs`
 - `new` — `hymeko_graph/src/cell_topology.rs`
@@ -404,6 +409,7 @@ _No public symbols._
 - `nodes` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `of` — `hymeko_graph/src/cell_topology.rs`
 - `of` — `hymeko_graph/src/sphf.rs`
+- `of_pair` — `hymeko_graph/src/signed_tuples.rs`
 - `offer` — `hymeko_graph/src/matroid/levi.rs`
 - `offer` — `hymeko_graph/src/matroid/rank2.rs`
 - `offer` — `hymeko_graph/src/unsigned_cycles/sink.rs`
@@ -641,6 +647,7 @@ _No public symbols._
 ### traits
 
 - `Coordinate` — `hymeko_sbsh/src/orthtree.rs`
+- `Laminar` — `hymeko_sbsh/src/orthtree.rs`
 - `RealCoordinate` — `hymeko_sbsh/src/orthtree.rs`
 - `SplitRule` — `hymeko_sbsh/src/orthtree.rs`
 
