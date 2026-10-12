@@ -33,3 +33,6 @@ flowchart TD
     NONE -.oracle.-> ORA["tests: unit==BFS, weighted==test-Dijkstra, Zero==Dijkstra, admissible==same cost"]
     OUT -.oracle.-> ORA
     ORA --> HARD["HARD STOP: no promotion, no pgraph migration, no P2"]
+    UPD --> INDEXED["2026-10-12 approved: replace or insert one indexed entry per DeclId"]
+    INDEXED --> CAP["Preallocated frontier bounded by declaration count; sparse inverse positions"]
+    CAP --> POP

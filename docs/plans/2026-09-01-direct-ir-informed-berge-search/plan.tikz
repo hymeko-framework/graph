@@ -1,4 +1,6 @@
 % P1.1 informed Berge search --- state space + ownership (standalone-compilable)
+% 2026-10-12: approved indexed frontier; one Entry per DeclId, sparse inverse
+% positions validate membership after constant-time clear; capacity prepared up front.
 \documentclass[tikz,border=6pt]{standalone}
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.geometric}
 \begin{document}
@@ -22,7 +24,7 @@
   \node[draw,dashed,fit=(u)(e1)(v)(e2)(w),inner sep=4mm,label=above:{implicit Berge state space over \texttt{Ir} --- NO explicit Levi/star/clique}] {};
 
   % --- engine ---
-  \node[box,fill=green!12,below=16mm of u] (ws) {InformedSearchWorkspace\\g[] / pred[] / settled\\binary heap (lazy del)\\gen-stamped, warm-alloc-free};
+  \node[box,fill=green!12,below=16mm of u] (ws) {InformedSearchWorkspace\\g[] / pred[] / settled\\indexed heap / inverse positions\\one current entry per DeclId};
   \node[box,fill=blue!8,right=8mm of ws] (astar) {astar\_berge\_path$\langle$C,H,P$\rangle$\\f=g+h, total\_cmp\\+ (tiebreak,DeclId,arc,slot)};
   \node[box,right=8mm of astar] (traits) {C: cost (unit/weight/metric)\\H: heuristic (Zero/metric)\\P: policy (undir/signed/directed)};
   \draw[e] (ws) -- (astar); \draw[e] (traits) -- (astar);

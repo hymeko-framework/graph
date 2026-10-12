@@ -11,6 +11,20 @@
 
 schema_version: 1
 
+approved_edits:
+  - slug: indexed-informed-frontier
+    date: 2026-10-12
+    authority: user approved every algorithm/data-structure catalogue candidate
+    scope: >
+      Replace the informed-search lazy duplicate heap with a private indexed
+      binary heap, one current entry per DeclId. Sparse inverse positions give
+      constant-time clear; capacity is prepared for the declaration domain.
+    constraints:
+      - preserve the existing search, costs, policies and tie ordering
+      - no public API, graph model or dependency addition
+      - pushes counts queue insertions and updates; pops describe actual extractions
+      - Core gates precede Graph; no measured speed or hard-deadline claim
+
 project:
   name: HyMeKo graph layer
   root_language: rust

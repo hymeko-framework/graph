@@ -96,4 +96,61 @@ forbidden artefact (Levi/star/clique on the standard path, second engine, \textt
 \texttt{partial\_cmp} on cost, an \texttt{IRDelta}/snapshot framework, production D*), a $>3\%$ untouched-op
 regression, or any pgraph/core/Nagare/Hotaru production modification. \textbf{HARD STOP} at P1.1 end: no
 production PGRAPH migration, no P2 operator-precompute.
+\section*{Indexed frontier continuation, 2026-10-12 01:49 +02:00}
+User approved all candidates in the Core algorithm/data-structure catalogue.
+Core first: shared Index/imports, incremental symbol counts and linear parent
+classification pass 193 library and 181 IR tests, plus Clippy. This continuation
+supersedes the original implementation stop, not the Git publication gate.
+The checkout advanced externally to f7ed8c2 (orthtree merge plus the earlier
+arena-test adaptation); freshly fetched feature upstream matches. Reuse this
+checkout and preserve unrelated work. No modifications in the target informed
+search file appeared during that integration.
+
+Owner: existing \path{hymeko_graph/src/direct_ir/informed.rs}. Discovery found
+lazy BinaryHeap queues in top-k modules but no indexed/decrease-key heap; those
+path-state algorithms are not substitutes. The current search already keys g,
+predecessor and settled state by DeclId, making one frontier entry per ID valid.
+Retain Entry/Key ordering and the one production A-star/Dijkstra entry point.
+
+Use a Vec of Entry plus a full-width inverse position Vec. Membership checks
+the position against live heap length and the entry's DeclId. Clear only resets
+the trivial-entry Vec length; stale inverse entries are harmless. Ensure both
+arrays for the declaration domain before search. Insert/update/pop are O(log N),
+clear/membership O(1), live frontier at most N. Preparation and memory are O(N),
+even when the actual frontier is small: this is an explicit tradeoff. No further
+heap growth inside search. Existing generation-stamped state still has a wrap
+clear; this change does not remove that separate cost.
+
+Push statistics continue counting successful relaxations plus the start entry,
+including priority updates. Pops/stale-pops count actual extractions and decrease.
+Preserve path costs, policies, tie choices and errors. No signature or dependency
+change. Touched: this bundle, CORE.YAML, SYMBOLS.md if generated output changes,
+and \path{hymeko_graph/src/direct_ir/informed.rs}. Capture the source before edits.
+Private queue tests use the minimum scan over one optional entry per ID as a
+small independent oracle, not another search engine. Cover both key directions,
+root/last removal, clear, regrowth and reuse. Run existing public path/oracle and
+allocation checks, Graph correctness/strict Clippy, then Web/WASM consumers.
+Use one local Core identity; temporary lockfiles restored only after hash checks.
+No timing matrix. Resource cap 16 GiB. ETA 15 minutes (implementation 5, tests 5,
+shared PDF/report 5). Roll back only these named hunks. TeX is available here;
+build plan.pdf before edits. The original PDF-tool waiver is historical.
+
+\section*{Verification closure, 2026-10-12 02:05 +02:00}
+Implemented one private indexed frontier. Three new tests cover 6,144 mixed
+queue operations against a minimum-scan oracle, equal-key payload replacement,
+and an integrated improved-route query with four updates, three pops and no
+stale pop. Full workspace lib/tests: 644 passed, 30 ignored. Strict Clippy,
+formatting and symbol index checks pass. Web/WASM's 42 native tests and wasm32
+check pass with one local Core/Graph identity; original lockfiles restored.
+
+Duplication gate remains a pre-existing failure: the checked-out HEAD f7ed8c2 and
+candidate both measure 577 clones / 13,157 lines, against stored 547 / 12,629.
+The existing detector was used with the HEAD version of the single changed
+source substituted only in memory. Zero added duplication; baseline unchanged.
+Evidence and shared PDF: \path{reports/2026-10-12-indexed-frontier/} and
+\path{reports/2026-10-12-indexed-frontier.pdf}. No latency gain is claimed.
+The original source SHA-256 starts \path{0e8d885d2e64847f}. No public API or
+dependency change here; observable pops now reflect fewer stale extractions.
+No commit or publication by this task; preserve the externally integrated branch.
+
 \end{document}

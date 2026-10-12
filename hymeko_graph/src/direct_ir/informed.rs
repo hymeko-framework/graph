@@ -35,8 +35,7 @@
 //! sub-optimal path. A zero heuristic reduces the engine to Dijkstra; unit cost + zero heuristic reduces to
 //! the BFS Berge distance.
 
-use std::cmp::{Ordering, Reverse};
-use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 
 use hymeko::common::ids::{DeclId, HyperArcId, NodeId};
 use hymeko::ir::incidence::{IncidenceIndex, IncidenceRef};
@@ -480,11 +479,11 @@ pub struct SearchStats {
     pub expanded_arcs: usize,
     /// Incidences resolved (member visits) during relaxation.
     pub resolved_incidences: usize,
-    /// Heap pushes (relaxations that improved `g`).
+    /// Frontier insertions/updates (start entry plus relaxations that improved `g`).
     pub pushes: usize,
     /// Heap pops (including stale ones).
     pub pops: usize,
-    /// Pops discarded as stale (lazy-deletion overhead).
+    /// Pops discarded as stale; an indexed frontier does not accumulate superseded entries.
     pub stale_pops: usize,
     /// Heuristic `h(..)` evaluations during relaxation.
     pub heuristic_evals: usize,
@@ -552,9 +551,103 @@ impl Ord for Entry {
     }
 }
 
-/// Caller-owned scratch for informed search. Dense, `DeclId`/`HyperArcId`-indexed, generation-stamped;
-/// a warm query allocates nothing (the heap `Vec` and the arrays are retained, marks cleared in O(1)
-/// amortised). No per-node/per-incidence `HashMap`.
+/// Binary min-heap with one current entry per declaration. Inverse positions
+/// use sparse-set membership: a stale position is valid only if it points back
+/// to the same live declaration, so clear needs no domain-sized reset.
+#[derive(Debug, Default)]
+struct IndexedFrontier {
+    entries: Vec<Entry>,
+    positions: Vec<usize>,
+}
+
+impl IndexedFrontier {
+    fn ensure(&mut self, declarations: usize) {
+        if self.positions.len() < declarations {
+            self.positions.resize(declarations, 0);
+        }
+        if self.entries.capacity() < declarations {
+            self.entries.reserve(declarations - self.entries.len());
+        }
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    fn insert(&mut self, entry: Entry) {
+        let slot = self.positions[entry.node.raw()];
+        if self
+            .entries
+            .get(slot)
+            .is_some_and(|old| old.node == entry.node)
+        {
+            let old = std::mem::replace(&mut self.entries[slot], entry);
+            match entry.cmp(&old) {
+                Ordering::Less => self.sift_up(slot),
+                Ordering::Greater => self.sift_down(slot),
+                Ordering::Equal => {}
+            }
+        } else {
+            let slot = self.entries.len();
+            self.entries.push(entry);
+            self.positions[entry.node.raw()] = slot;
+            self.sift_up(slot);
+        }
+    }
+
+    fn pop(&mut self) -> Option<Entry> {
+        let last = self.entries.pop()?;
+        if self.entries.is_empty() {
+            return Some(last);
+        }
+        let first = std::mem::replace(&mut self.entries[0], last);
+        self.positions[last.node.raw()] = 0;
+        self.sift_down(0);
+        Some(first)
+    }
+
+    fn swap(&mut self, a: usize, b: usize) {
+        self.entries.swap(a, b);
+        self.positions[self.entries[a].node.raw()] = a;
+        self.positions[self.entries[b].node.raw()] = b;
+    }
+
+    fn sift_up(&mut self, mut slot: usize) {
+        while slot > 0 {
+            let parent = (slot - 1) / 2;
+            if self.entries[parent] <= self.entries[slot] {
+                break;
+            }
+            self.swap(parent, slot);
+            slot = parent;
+        }
+    }
+
+    fn sift_down(&mut self, mut slot: usize) {
+        loop {
+            let left = 2 * slot + 1;
+            if left >= self.entries.len() {
+                break;
+            }
+            let right = left + 1;
+            let child = if right < self.entries.len() && self.entries[right] < self.entries[left] {
+                right
+            } else {
+                left
+            };
+            if self.entries[slot] <= self.entries[child] {
+                break;
+            }
+            self.swap(slot, child);
+            slot = child;
+        }
+    }
+}
+
+/// Caller-owned scratch for informed search. Dense, `DeclId`/`HyperArcId`-indexed,
+/// generation-stamped; capacity preparation reserves room for one live frontier
+/// entry per declaration. Workspace arrays and heap storage are retained between
+/// queries; generation marks clear in O(1) amortised. No per-node/incidence map.
 #[derive(Debug, Default)]
 pub struct InformedSearchWorkspace {
     stamp: u32,
@@ -571,7 +664,7 @@ pub struct InformedSearchWorkspace {
     /// Recorded because the expansion is the last place it is known: a node may occupy several
     /// slots of one hyperedge, so the reconstruction cannot recover it by scanning `refs`.
     pred_entry_slot: Vec<u32>,
-    heap: BinaryHeap<Reverse<Entry>>,
+    heap: IndexedFrontier,
     stats: SearchStats,
 }
 
@@ -589,6 +682,7 @@ impl InformedSearchWorkspace {
     }
 
     fn ensure(&mut self, n_decls: usize, n_arcs: usize) {
+        self.heap.ensure(n_decls);
         if self.g.len() < n_decls {
             self.g.resize(n_decls, f64::INFINITY);
             self.g_gen.resize(n_decls, 0);
@@ -724,7 +818,7 @@ where
 
     ws.set_g(start_decl, 0.0);
     let h0 = finite_or_zero(heuristic.h(ir, start_decl));
-    ws.heap.push(Reverse(Entry {
+    ws.heap.insert(Entry {
         key: Key {
             f: h0,
             tie: heuristic.tiebreak(ir, start_decl),
@@ -734,13 +828,13 @@ where
         },
         node: start_decl,
         g_at_push: 0.0,
-    }));
+    });
     ws.stats.pushes += 1;
 
-    while let Some(Reverse(entry)) = ws.heap.pop() {
+    while let Some(entry) = ws.heap.pop() {
         ws.stats.pops += 1;
         let node = entry.node;
-        // Lazy deletion: skip a stale entry (already settled, or superseded by a better g).
+        // Retain the settled-state guard; superseded frontier entries are replaced in place.
         if ws.settled(node) || entry.g_at_push > ws.g(node) {
             if ws.settled(node) && entry.g_at_push < ws.g(node) {
                 ws.stats.reopened += 1; // never happens with a consistent heuristic; observed, not assumed
@@ -801,7 +895,7 @@ where
                     ws.set_pred(target, node, arc, entry_slot, slot as u32);
                     ws.stats.heuristic_evals += 1;
                     let f = tentative + finite_or_zero(heuristic.h(ir, target));
-                    ws.heap.push(Reverse(Entry {
+                    ws.heap.insert(Entry {
                         key: Key {
                             f,
                             tie: heuristic.tiebreak(ir, target),
@@ -811,7 +905,7 @@ where
                         },
                         node: target,
                         g_at_push: tentative,
-                    }));
+                    });
                     ws.stats.pushes += 1;
                 }
             }
@@ -926,6 +1020,134 @@ mod tests {
     use super::*;
     use hymeko::ir::incidence::build_incidence_index;
     use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, NodeRec, RefAtomR, SignedRefR};
+
+    fn pop_minimum(frontier: &mut IndexedFrontier, reference: &mut [Option<Entry>]) {
+        // Independent queue oracle: scan the current optional entries for the
+        // minimum under the already-established canonical Key order.
+        let expected = reference.iter().flatten().copied().min();
+        let actual = frontier.pop();
+        assert_eq!(actual, expected);
+        if let Some(entry) = expected {
+            assert_eq!(
+                actual.unwrap().g_at_push.to_bits(),
+                entry.g_at_push.to_bits()
+            );
+            reference[entry.node.raw()] = None;
+        }
+    }
+
+    #[test]
+    fn indexed_frontier_matches_minimum_scan_and_reuses_capacity() {
+        let mut frontier = IndexedFrontier::default();
+        assert!(frontier.pop().is_none());
+        let mut seed = 0x5eed_u64;
+        for size in [17, 97, 8] {
+            frontier.ensure(size);
+            frontier.clear();
+            let allocation = frontier.entries.as_ptr();
+            let capacity = frontier.entries.capacity();
+            let mut reference = vec![None; size];
+            for step in 0..2048 {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                match (seed >> 32) % 11 {
+                    0 => {
+                        frontier.clear();
+                        reference.fill(None);
+                    }
+                    1..=3 => pop_minimum(&mut frontier, &mut reference),
+                    _ => {
+                        let node = (seed >> 16) as usize % size;
+                        let entry = Entry {
+                            key: Key {
+                                f: ((seed >> 24) % 101) as f64 - 50.0,
+                                tie: ((seed >> 40) % 3) as u32,
+                                decl: node,
+                                arc: (seed >> 48) as usize,
+                                slot: (step % 5) as u32,
+                            },
+                            node: DeclId::new(node),
+                            g_at_push: step as f64,
+                        };
+                        frontier.insert(entry);
+                        reference[node] = Some(entry);
+                    }
+                }
+                assert_eq!(frontier.entries.len(), reference.iter().flatten().count());
+                assert!(frontier.entries.len() <= size);
+                assert_eq!(frontier.entries.as_ptr(), allocation);
+                assert_eq!(frontier.entries.capacity(), capacity);
+                for (slot, entry) in frontier.entries.iter().enumerate() {
+                    assert_eq!(frontier.positions[entry.node.raw()], slot);
+                    if slot > 0 {
+                        assert!(frontier.entries[(slot - 1) / 2] <= *entry);
+                    }
+                }
+            }
+            while reference.iter().any(Option::is_some) {
+                pop_minimum(&mut frontier, &mut reference);
+            }
+            pop_minimum(&mut frontier, &mut reference);
+        }
+    }
+
+    #[test]
+    fn indexed_frontier_replaces_payload_without_changing_an_equal_key() {
+        let mut frontier = IndexedFrontier::default();
+        frontier.ensure(1);
+        let mut entry = Entry {
+            key: Key {
+                f: 2.0,
+                tie: 0,
+                decl: 0,
+                arc: 0,
+                slot: 0,
+            },
+            node: DeclId::new(0),
+            g_at_push: 2.0,
+        };
+        frontier.insert(entry);
+        entry.g_at_push = 1.0;
+        frontier.insert(entry);
+        assert_eq!(frontier.entries.len(), 1);
+        assert_eq!(frontier.pop().unwrap().g_at_push, 1.0);
+        assert!(frontier.pop().is_none());
+    }
+
+    #[test]
+    fn improved_frontier_entries_do_not_leave_stale_pops() {
+        let mut ir = chain3();
+        let mut shortcut = ir.arcs[0].clone();
+        let SignedRefR::Plus(target) = &mut shortcut.refs[1] else {
+            unreachable!()
+        };
+        target.target = DeclId::new(2);
+        target.weights = Some(vec![hymeko::ir::ir::ValueR::Num(20.0)]);
+        ir.arcs.push(shortcut);
+        let goal = NodeId::new(ir.nodes.len());
+        let declaration = ir.push_decl(ir.decl_nodes[0].clone());
+        ir.nodes.push(NodeRec::new(declaration, Vec::new()));
+        ir.bind_node_decl(declaration, goal).unwrap();
+        let index = build_incidence_index(&ir).unwrap();
+        let mut workspace = InformedSearchWorkspace::new();
+        let result = dijkstra_berge_path(
+            &HyperTraversal::new(&index),
+            NodeId::new(0),
+            goal,
+            &IncidenceWeightCost { base: 1.0 },
+            &Undirected,
+            &mut workspace,
+        )
+        .unwrap();
+        assert!(result.is_none());
+        let stats = workspace.stats();
+        assert_eq!(
+            stats.pushes, 4,
+            "start, two discoveries, then a cheaper route"
+        );
+        assert_eq!(stats.pops, 3);
+        assert_eq!(stats.expanded_nodes, 3);
+        assert_eq!(stats.stale_pops, 0);
+    }
 
     /// A tiny 3-node chain: arc0 = {n0,n1}, arc1 = {n1,n2}. Unit-cost distance n0->n2 is 2.
     fn chain3() -> Ir {
