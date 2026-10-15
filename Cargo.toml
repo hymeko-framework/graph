@@ -23,5 +23,5 @@ members = ["hymeko_graph", "hymeko_pgraph", "hymeko_sbsh"]
 [workspace.dependencies]
 # The split-out HyMeKo repos. `hymeko_framework_rust` is retired; these are
 # the live ones.
-hymeko_core = { git = "ssh://git@192.168.1.228:2222/hymeko/core.git", rev = "b66cb4dd7def4019c197f6a69271721780879d26" }
+hymeko_core = { git = "ssh://git@192.168.1.228:2222/hymeko/core.git", rev = "c4715f3a0bb78133db88d41cfdfe991e5a184419" }
 parser = { git = "ssh://git@192.168.1.228:2222/hymeko/parser.git", rev = "f11628591a8183586492807ecdf43c64e6d31c5f" }
