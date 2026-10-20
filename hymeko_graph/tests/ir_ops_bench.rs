@@ -8,50 +8,26 @@
 //!
 //! Run: cargo test -p hymeko_graph --release --test ir_ops_bench measure_ir_ops -- --ignored --nocapture
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
+use hymeko::ir::ir::IrConstruction;
+use hymeko::util::measurement::{AllocationSnapshot, CountingAllocator};
 use std::time::Instant;
 
-use hymeko::common::ids::{DeclId, NodeId, SymId};
+use hymeko::common::ids::{DeclId, SymId};
 use hymeko::ir::canonical_hash::{Canon, CanonHashCfg};
-use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR};
+use hymeko::ir::ir::{AnnoR, ArcRec, Ir, SignedRefR};
 use hymeko::resolution::interner::Interner;
 
-thread_local! {
-    static ALLOCS: Cell<u64> = const { Cell::new(0) };
-    static BYTES: Cell<u64> = const { Cell::new(0) };
-}
-struct Counting;
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
-        let _ = ALLOCS.try_with(|c| c.set(c.get() + 1));
-        let _ = BYTES.try_with(|c| c.set(c.get() + l.size() as u64));
-        unsafe { System.alloc(l) }
-    }
-    unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
-        unsafe { System.dealloc(p, l) }
-    }
-}
 #[global_allocator]
-static GA: Counting = Counting;
+static GA: CountingAllocator = CountingAllocator;
 fn snap() -> (u64, u64) {
-    (ALLOCS.with(|c| c.get()), BYTES.with(|c| c.get()))
+    let snapshot = AllocationSnapshot::current_thread();
+    (snapshot.allocations, snapshot.bytes)
 }
 
 fn node_decl(ir: &mut Ir) -> DeclId {
-    let d = ir.push_decl(DeclNode {
-        kind: DeclKind::Node,
-        name: SymId::new(0),
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    });
-    let nid = NodeId::new(ir.nodes.len());
-    ir.nodes.push(NodeRec::new(d, Vec::new()));
-    ir.bind_node_decl(d, nid).expect("bind");
-    d
+    IrConstruction::new(ir)
+        .append_node(SymId::new(0), AnnoR::default(), Vec::new())
+        .expect("bind")
 }
 
 /// Build a connected rank-2 path Ir of `n` nodes via the public construction API.
@@ -62,24 +38,10 @@ fn build_path(n: usize) -> Ir {
         decls.push(node_decl(&mut ir));
     }
     for i in 1..n {
-        ir.arcs.push(ArcRec {
-            anno: AnnoR::default(),
-            in_edge: DeclId::NONE,
-            refs: vec![
-                SignedRefR::Plus(RefAtomR {
-                    target: decls[i - 1],
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                }),
-                SignedRefR::Plus(RefAtomR {
-                    target: decls[i],
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                }),
-            ],
-        });
+        ir.arcs.push(ArcRec::unowned(vec![
+            SignedRefR::plain(decls[i - 1], hymeko::ir::ir::IncidenceSign::Plus),
+            SignedRefR::plain(decls[i], hymeko::ir::ir::IncidenceSign::Plus),
+        ]));
     }
     ir
 }
@@ -189,24 +151,10 @@ fn measure_ir_ops() {
             let b = snap();
             let t = Instant::now();
             for i in 0..n {
-                ir.arcs.push(ArcRec {
-                    anno: AnnoR::default(),
-                    in_edge: DeclId::NONE,
-                    refs: vec![
-                        SignedRefR::Plus(RefAtomR {
-                            target: decls[2 * i],
-                            anno: AnnoR::default(),
-                            weights: None,
-                            direction: Default::default(),
-                        }),
-                        SignedRefR::Plus(RefAtomR {
-                            target: decls[2 * i + 1],
-                            anno: AnnoR::default(),
-                            weights: None,
-                            direction: Default::default(),
-                        }),
-                    ],
-                });
+                ir.arcs.push(ArcRec::unowned(vec![
+                    SignedRefR::plain(decls[2 * i], hymeko::ir::ir::IncidenceSign::Plus),
+                    SignedRefR::plain(decls[2 * i + 1], hymeko::ir::ir::IncidenceSign::Plus),
+                ]));
             }
             let wall = t.elapsed().as_secs_f64();
             let d = (snap().0 - b.0, snap().1 - b.1);

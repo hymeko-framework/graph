@@ -17,6 +17,7 @@
 //!    than the global ABB enumerator's at the same K, on a
 //!    fixture where the optimal cycle set has high score variance.
 
+use hymeko_graph::signed_graph::{GraphGenerator, SignedGraphGenerator};
 use hymeko_graph::{
     EntropyGainScorer, InverseDegreeScorer, SignedGraph, UniformityHeuristic, UniformityState,
     balance::{BalanceMode, CartwrightHararyPruner},
@@ -24,33 +25,6 @@ use hymeko_graph::{
     pruner::NoOpPruner,
     topk_cycles::FractionNegativeScorer,
 };
-
-fn lcg(state: &mut u32) -> u32 {
-    *state = state.wrapping_mul(1664525).wrapping_add(1013904223);
-    *state
-}
-
-fn synthetic_signed_graph(n: u32, edge_prob_pm: u32, pos_prob_pm: u32, seed: u32) -> SignedGraph {
-    let mut rng = seed;
-    let mut us: Vec<u32> = Vec::new();
-    let mut vs: Vec<u32> = Vec::new();
-    let mut ss: Vec<i8> = Vec::new();
-    for u in 0..n {
-        for v in (u + 1)..n {
-            if lcg(&mut rng) % 1_000_000 < edge_prob_pm * 1_000 {
-                us.push(u);
-                vs.push(v);
-                let s = if lcg(&mut rng) % 1_000_000 < pos_prob_pm * 1_000 {
-                    1i8
-                } else {
-                    -1i8
-                };
-                ss.push(s);
-            }
-        }
-    }
-    SignedGraph::from_parts(n, &us, &vs, &ss)
-}
 
 // ─── State round-trip tests ───────────────────────────────────────
 
@@ -148,21 +122,27 @@ fn check_admissibility<H: UniformityHeuristic>(
 
 #[test]
 fn entropy_ub_admissible_root_state() {
-    let g = synthetic_signed_graph(60, 100, 700, 42);
+    let g = SignedGraphGenerator::new(60, 100, 700, 42)
+        .generate()
+        .unwrap();
     let state = UniformityState::new(g.n_nodes as usize);
     check_admissibility(&g, &EntropyGainScorer, &state, "entropy");
 }
 
 #[test]
 fn inverse_degree_ub_admissible_root_state() {
-    let g = synthetic_signed_graph(60, 100, 700, 43);
+    let g = SignedGraphGenerator::new(60, 100, 700, 43)
+        .generate()
+        .unwrap();
     let state = UniformityState::new(g.n_nodes as usize);
     check_admissibility(&g, &InverseDegreeScorer, &state, "inverse_degree");
 }
 
 #[test]
 fn entropy_ub_admissible_after_some_updates() {
-    let g = synthetic_signed_graph(60, 100, 700, 44);
+    let g = SignedGraphGenerator::new(60, 100, 700, 44)
+        .generate()
+        .unwrap();
     let mut state = UniformityState::new(g.n_nodes as usize);
     let scorer = EntropyGainScorer;
     // Pre-populate state with a few cycles to make counts non-trivial.
@@ -180,7 +160,9 @@ fn entropy_ub_admissible_after_some_updates() {
 
 #[test]
 fn entropy_enumerator_returns_k_cycles_balance_pruner() {
-    let g = synthetic_signed_graph(150, 60, 700, 51);
+    let g = SignedGraphGenerator::new(150, 60, 700, 51)
+        .generate()
+        .unwrap();
     let pruner = CartwrightHararyPruner {
         mode: BalanceMode::OnlyBalanced,
     };
@@ -196,7 +178,9 @@ fn entropy_enumerator_returns_k_cycles_balance_pruner() {
 
 #[test]
 fn entropy_enumerator_returns_k_cycles_no_pruner() {
-    let g = synthetic_signed_graph(150, 60, 700, 52);
+    let g = SignedGraphGenerator::new(150, 60, 700, 52)
+        .generate()
+        .unwrap();
     let out = enumerate_top_k_cycles_par_entropy(&g, 4, &NoOpPruner, 50, &InverseDegreeScorer);
     assert!(!out.is_empty());
     assert!(out.len() <= 50);
@@ -210,7 +194,9 @@ fn entropy_coverage_more_uniform_than_global_abb() {
     // distribution is more uniform (lower variance) than global
     // ABB's, on a fixture where the global ABB pulls cycles from
     // a concentrated subset.
-    let g = synthetic_signed_graph(150, 60, 700, 61);
+    let g = SignedGraphGenerator::new(150, 60, 700, 61)
+        .generate()
+        .unwrap();
     let pruner = CartwrightHararyPruner {
         mode: BalanceMode::OnlyBalanced,
     };

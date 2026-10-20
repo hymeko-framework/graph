@@ -35,6 +35,11 @@
 //! sub-optimal path. A zero heuristic reduces the engine to Dijkstra; unit cost + zero heuristic reduces to
 //! the BFS Berge distance.
 
+mod prepared;
+pub use prepared::PreparedBergeSearch;
+
+#[cfg(test)]
+use hymeko::ir::ir::IrConstruction;
 use std::cmp::Ordering;
 
 use hymeko::common::ids::{DeclId, HyperArcId, NodeId};
@@ -73,6 +78,16 @@ pub enum InformedSearchError {
         slot: u32,
         /// The raw offending value's bit pattern (avoids `f64: Eq` issues; `to_bits`).
         value_bits: u64,
+    },
+    /// A declared global step-cost lower bound was negative or non-finite.
+    BadStepBound {
+        /// Rejected bound's exact bits.
+        value_bits: u64,
+    },
+    /// Prepared hop/prioritization tables require fewer than u32::MAX nodes.
+    PreparationTooLarge {
+        /// Requested node count.
+        nodes: usize,
     },
     /// An inconsistent (or unproven-consistent) heuristic was used in optimal mode; refused so no run can
     /// silently return a sub-optimal path. Use a consistent heuristic (or a future bounded-suboptimal mode).
@@ -125,6 +140,14 @@ impl core::fmt::Display for InformedSearchError {
                 f64::from_bits(*value_bits),
                 arc.raw()
             ),
+            Self::BadStepBound { value_bits } => write!(
+                f,
+                "invalid step lower bound {}",
+                f64::from_bits(*value_bits)
+            ),
+            Self::PreparationTooLarge { nodes } => {
+                write!(f, "prepared Berge domain exceeds u32: {nodes} nodes")
+            }
             Self::InconsistentHeuristicInOptimalMode => {
                 write!(f, "inconsistent heuristic used in optimal (A*) mode")
             }
@@ -154,6 +177,12 @@ impl std::error::Error for InformedSearchError {}
 pub trait BergeCost {
     /// See the trait docs. Default: exit-independent (the unit / incidence-weight models).
     const EXIT_INDEPENDENT: bool = true;
+    /// Certified lower bound for every legal step. Zero is always valid for this
+    /// nonnegative-cost contract. An override must prove the global inequality;
+    /// estimates such as entropy must never be returned here.
+    fn minimum_step_cost(&self) -> f64 {
+        0.0
+    }
     /// Cost of stepping *into* `to` from node `from`. Must be finite and `>= 0`; the engine rejects
     /// `NaN`/`±∞`/negative as [`InformedSearchError::BadCost`].
     fn step_cost(&self, from: DeclId, to: &IncidenceRef<'_>) -> f64;
@@ -196,6 +225,9 @@ pub trait TransitionPolicy {
 #[derive(Clone, Copy, Default)]
 pub struct UnitCost;
 impl BergeCost for UnitCost {
+    fn minimum_step_cost(&self) -> f64 {
+        1.0
+    }
     #[inline]
     fn step_cost(&self, _from: DeclId, _to: &IncidenceRef<'_>) -> f64 {
         1.0
@@ -285,6 +317,79 @@ impl<P: PositionProvider> BergeHeuristic for MetricHeuristic<'_, P> {
             (Some(p), Some(g)) => euclidean(p, g),
             _ => 0.0,
         }
+    }
+}
+
+/// A borrowed, declaration-indexed undirected hop-distance lower bound.
+///
+/// # Contract
+/// `hops` must contain exact undirected hop distances to the search goal on the
+/// same IR, covering every node's DeclId. `u32::MAX` denotes a disconnected node.
+/// Every legal transition must cost at least `min_step_cost`. Policy restrictions
+/// may remove transitions. These conditions make the estimate admissible and
+/// consistent; this adapter does not compute or certify the distance table.
+/// Missing table entries and disconnected components contribute zero.
+#[derive(Clone, Copy, Debug)]
+pub struct HopHeuristic<'a> {
+    hops: &'a [u32],
+    min_step_cost: f64,
+}
+
+impl<'a> HopHeuristic<'a> {
+    /// Borrow prepared distances without copying or allocating.
+    /// # Panics
+    /// Panics for a negative/nonfinite step bound or an overflowing finite-hop
+    /// estimate. Numeric validation scans the table once, outside search.
+    /// The topology/cost coupling in the type's contract remains the caller's duty.
+    pub fn new(hops: &'a [u32], min_step_cost: f64) -> Self {
+        assert!(
+            min_step_cost.is_finite() && min_step_cost >= 0.0,
+            "hop step bound must be finite and non-negative"
+        );
+        assert!(
+            hops.iter()
+                .all(|&h| h == u32::MAX || (f64::from(h) * min_step_cost).is_finite()),
+            "hop estimate overflows"
+        );
+        Self {
+            hops,
+            min_step_cost,
+        }
+    }
+}
+
+impl BergeHeuristic for HopHeuristic<'_> {
+    const ADMISSIBLE: bool = true;
+    const CONSISTENT: bool = true;
+    fn h(&self, _ir: &Ir, node: DeclId) -> f64 {
+        match self.hops.get(node.raw()).copied() {
+            None | Some(u32::MAX) => 0.0,
+            Some(hops) => f64::from(hops) * self.min_step_cost,
+        }
+    }
+}
+
+/// Pointwise maximum of two borrowed bounds for the same graph, goal and costs.
+/// Both component contracts must hold. Guarantees are their conjunction;
+/// tie-break values are intentionally not combined (the default remains zero).
+#[derive(Clone, Copy)]
+pub struct MaxHeuristic<'a, A, B> {
+    left: &'a A,
+    right: &'a B,
+}
+
+impl<'a, A: BergeHeuristic, B: BergeHeuristic> MaxHeuristic<'a, A, B> {
+    /// Compose already prepared bounds, without allocating or taking ownership.
+    pub fn new(left: &'a A, right: &'a B) -> Self {
+        Self { left, right }
+    }
+}
+
+impl<A: BergeHeuristic, B: BergeHeuristic> BergeHeuristic for MaxHeuristic<'_, A, B> {
+    const ADMISSIBLE: bool = A::ADMISSIBLE && B::ADMISSIBLE;
+    const CONSISTENT: bool = A::CONSISTENT && B::CONSISTENT;
+    fn h(&self, ir: &Ir, node: DeclId) -> f64 {
+        self.left.h(ir, node).max(self.right.h(ir, node))
     }
 }
 
@@ -391,6 +496,31 @@ pub struct WeightedBergePath {
     pub total_cost: f64,
 }
 
+/// Owns byte accumulation and framing, while each digest retains its distinct
+/// typed identity, domain and payload field order.
+struct PathDigest(u64);
+
+impl PathDigest {
+    fn new(domain: &[u8], start: NodeId) -> Self {
+        let mut digest = Self(0xcbf2_9ce4_8422_2325);
+        digest.write(domain);
+        digest.write(&(start.raw() as u64).to_le_bytes());
+        digest
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.0 ^= u64::from(byte);
+            self.0 = self.0.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+
+    fn finish(mut self, cost: f64) -> u64 {
+        self.write(&cost.to_bits().to_le_bytes());
+        self.0
+    }
+}
+
 impl WeightedBergePath {
     /// Path length in hyperedges.
     #[must_use]
@@ -417,26 +547,17 @@ impl WeightedBergePath {
     /// still reproduces.
     #[must_use]
     pub fn path_hash(&self) -> PathHash {
-        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-        let mut mix = |bytes: &[u8]| {
-            for &b in bytes {
-                h ^= u64::from(b);
-                h = h.wrapping_mul(0x0000_0100_0000_01b3);
-            }
-        };
-        mix(b"HYMEKO-WEIGHTED-BERGE-PATH-v1");
-        mix(&(self.start.raw() as u64).to_le_bytes());
+        let mut digest = PathDigest::new(b"HYMEKO-WEIGHTED-BERGE-PATH-v1", self.start);
         // The SAME four quantities in the SAME order as v1: the arc and the step's ARRIVAL
         // coordinate. Only the accessor path changed when the step gained its entry coordinate, so
         // every historical hash is reproduced bit-for-bit.
         for s in &self.steps {
-            mix(&(s.arc.raw() as u64).to_le_bytes());
-            mix(&s.to.slot.to_le_bytes());
-            mix(&i64::from(s.to.sign).to_le_bytes());
-            mix(&(s.to.node.raw() as u64).to_le_bytes());
+            digest.write(&(s.arc.raw() as u64).to_le_bytes());
+            digest.write(&s.to.slot.to_le_bytes());
+            digest.write(&i64::from(s.to.sign).to_le_bytes());
+            digest.write(&(s.to.node.raw() as u64).to_le_bytes());
         }
-        mix(&self.total_cost.to_bits().to_le_bytes());
-        PathHash(h)
+        PathHash(digest.finish(self.total_cost))
     }
 
     /// The digest of the path's **oriented materialisation**: start, then every step's `arc`,
@@ -447,31 +568,25 @@ impl WeightedBergePath {
     /// at different slots produce **different** values here -- which is the whole reason it exists.
     #[must_use]
     pub fn oriented_materialisation_digest(&self) -> OrientedMaterialisationDigest {
-        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-        let mut mix = |bytes: &[u8]| {
-            for &b in bytes {
-                h ^= u64::from(b);
-                h = h.wrapping_mul(0x0000_0100_0000_01b3);
-            }
-        };
-        mix(b"HYMEKO-ORIENTED-BERGE-MATERIALISATION-v1");
-        mix(&(self.start.raw() as u64).to_le_bytes());
+        let mut digest = PathDigest::new(b"HYMEKO-ORIENTED-BERGE-MATERIALISATION-v1", self.start);
         for s in &self.steps {
-            mix(&(s.arc.raw() as u64).to_le_bytes());
+            digest.write(&(s.arc.raw() as u64).to_le_bytes());
             for end in [s.from, s.to] {
-                mix(&(end.node.raw() as u64).to_le_bytes());
-                mix(&end.slot.to_le_bytes());
-                mix(&i64::from(end.sign).to_le_bytes());
+                digest.write(&(end.node.raw() as u64).to_le_bytes());
+                digest.write(&end.slot.to_le_bytes());
+                digest.write(&i64::from(end.sign).to_le_bytes());
             }
         }
-        mix(&self.total_cost.to_bits().to_le_bytes());
-        OrientedMaterialisationDigest(h)
+        OrientedMaterialisationDigest(digest.finish(self.total_cost))
     }
 }
 
 /// Per-query instrumentation (never gates results; observability for the benchmark).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SearchStats {
+    /// Improving relaxations omitted because their certified f exceeds an
+    /// already discovered complete goal path. Equal-cost ties are preserved.
+    pub bound_pruned: usize,
     /// Nodes popped-and-settled (each once).
     pub expanded_nodes: usize,
     /// Arc expansions. Entry-independent policies and costs reuse an expansion
@@ -644,17 +759,15 @@ impl IndexedFrontier {
     }
 }
 
-/// Caller-owned scratch for informed search. Dense, `DeclId`/`HyperArcId`-indexed,
-/// generation-stamped; capacity preparation reserves room for one live frontier
-/// entry per declaration. Workspace arrays and heap storage are retained between
-/// queries; generation marks clear in O(1) amortised. No per-node/incidence map.
+/// Caller-owned scratch for informed search. Typed sparse visitation clears in
+/// O(1) without generation rollover. Preparation reserves each full ID domain
+/// and one heap entry per declaration. Storage is retained between queries.
 #[derive(Debug, Default)]
 pub struct InformedSearchWorkspace {
-    stamp: u32,
+    seen: super::workspace::SparseVisited<hymeko::common::ids::DeclTag>,
+    active_arcs: super::workspace::SparseVisited<hymeko::common::ids::HyperArcTag>,
     g: Vec<f64>,
-    g_gen: Vec<u32>,
-    settled_gen: Vec<u32>,
-    arc_active_gen: Vec<u32>,
+    settled: Vec<bool>,
     arc_entry_g: Vec<f64>,
     pred_node: Vec<DeclId>,
     pred_arc: Vec<HyperArcId>,
@@ -683,37 +796,31 @@ impl InformedSearchWorkspace {
 
     fn ensure(&mut self, n_decls: usize, n_arcs: usize) {
         self.heap.ensure(n_decls);
+        self.seen.ensure(n_decls);
+        self.active_arcs.ensure(n_arcs);
         if self.g.len() < n_decls {
             self.g.resize(n_decls, f64::INFINITY);
-            self.g_gen.resize(n_decls, 0);
-            self.settled_gen.resize(n_decls, 0);
+            self.settled.resize(n_decls, false);
             self.pred_node.resize(n_decls, DeclId::NONE);
             self.pred_arc.resize(n_decls, HyperArcId::NONE);
             self.pred_slot.resize(n_decls, 0);
             self.pred_entry_slot.resize(n_decls, 0);
         }
-        if self.arc_active_gen.len() < n_arcs {
-            self.arc_active_gen.resize(n_arcs, 0);
+        if self.arc_entry_g.len() < n_arcs {
             self.arc_entry_g.resize(n_arcs, f64::INFINITY);
         }
     }
 
     fn begin(&mut self) {
-        if self.stamp == u32::MAX {
-            self.g_gen.iter_mut().for_each(|g| *g = 0);
-            self.settled_gen.iter_mut().for_each(|g| *g = 0);
-            self.arc_active_gen.iter_mut().for_each(|g| *g = 0);
-            self.stamp = 1;
-        } else {
-            self.stamp += 1;
-        }
+        self.seen.clear();
+        self.active_arcs.clear();
         self.heap.clear();
         self.stats = SearchStats::default();
     }
 
     #[inline]
     fn g_valid(&self, d: DeclId) -> bool {
-        self.g_gen.get(d.raw()).is_some_and(|&g| g == self.stamp)
+        self.seen.contains(d)
     }
     #[inline]
     fn g(&self, d: DeclId) -> f64 {
@@ -726,27 +833,26 @@ impl InformedSearchWorkspace {
     #[inline]
     fn set_g(&mut self, d: DeclId, v: f64) {
         self.g[d.raw()] = v;
-        self.g_gen[d.raw()] = self.stamp;
+        if self.seen.insert(d) {
+            self.settled[d.raw()] = false;
+        }
     }
     #[inline]
     fn settled(&self, d: DeclId) -> bool {
-        self.settled_gen
-            .get(d.raw())
-            .is_some_and(|&g| g == self.stamp)
+        self.g_valid(d) && self.settled[d.raw()]
     }
     #[inline]
     fn mark_settled(&mut self, d: DeclId) {
-        self.settled_gen[d.raw()] = self.stamp;
+        debug_assert!(self.g_valid(d));
+        self.settled[d.raw()] = true;
     }
     #[inline]
     fn arc_active(&self, a: HyperArcId) -> bool {
-        self.arc_active_gen
-            .get(a.raw())
-            .is_some_and(|&g| g == self.stamp)
+        self.active_arcs.contains(a)
     }
     #[inline]
     fn mark_arc_active(&mut self, a: HyperArcId, entry_g: f64) {
-        self.arc_active_gen[a.raw()] = self.stamp;
+        self.active_arcs.insert(a);
         self.arc_entry_g[a.raw()] = entry_g;
     }
     #[inline]
@@ -798,7 +904,7 @@ where
     H: BergeHeuristic,
     P: TransitionPolicy,
 {
-    if !H::CONSISTENT {
+    if !H::CONSISTENT || !H::ADMISSIBLE {
         return Err(InformedSearchError::InconsistentHeuristicInOptimalMode);
     }
     let ir = traversal.ir();
@@ -891,10 +997,14 @@ where
                 }
                 let tentative = gu + c;
                 if tentative < ws.g(target) {
-                    ws.set_g(target, tentative);
-                    ws.set_pred(target, node, arc, entry_slot, slot as u32);
                     ws.stats.heuristic_evals += 1;
                     let f = tentative + finite_or_zero(heuristic.h(ir, target));
+                    if f > ws.g(goal_decl) {
+                        ws.stats.bound_pruned += 1;
+                        continue;
+                    }
+                    ws.set_g(target, tentative);
+                    ws.set_pred(target, node, arc, entry_slot, slot as u32);
                     ws.heap.insert(Entry {
                         key: Key {
                             f,
@@ -1018,8 +1128,39 @@ fn euclidean(a: &[f64], b: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sparse_queries_reset_g_settlement_and_arc_activation() {
+        let mut ws = InformedSearchWorkspace::new();
+        ws.ensure(8, 4);
+        for round in 0..64 {
+            ws.begin();
+            let node = DeclId::new(round % 8);
+            let arc = HyperArcId::new(round % 4);
+            assert_eq!(ws.g(node), f64::INFINITY);
+            assert!(!ws.settled(node));
+            assert!(!ws.arc_active(arc));
+            assert!(!ws.settled(DeclId::NONE));
+            ws.set_g(node, 3.0);
+            ws.mark_settled(node);
+            ws.set_g(node, 2.0);
+            assert!(ws.settled(node), "same-query updates keep settlement");
+            assert_eq!(ws.g(node), 2.0);
+            ws.mark_arc_active(arc, 3.0);
+            ws.mark_arc_active(arc, 2.0);
+            assert!(ws.arc_active(arc));
+            assert_eq!(ws.arc_entry_g[arc.raw()], 2.0);
+        }
+        ws.ensure(16, 9);
+        ws.begin();
+        ws.set_g(DeclId::new(15), 7.0);
+        ws.mark_arc_active(HyperArcId::new(8), 7.0);
+        assert!(!ws.settled(DeclId::new(15)));
+        assert_eq!(ws.g(DeclId::new(15)), 7.0);
+        assert!(ws.arc_active(HyperArcId::new(8)));
+    }
     use hymeko::ir::incidence::build_incidence_index;
-    use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, NodeRec, RefAtomR, SignedRefR};
+    use hymeko::ir::ir::{AnnoR, ArcRec, NodeRec, SignedRefR};
 
     fn pop_minimum(frontier: &mut IndexedFrontier, reference: &mut [Option<Entry>]) {
         // Independent queue oracle: scan the current optional entries for the
@@ -1117,15 +1258,18 @@ mod tests {
     fn improved_frontier_entries_do_not_leave_stale_pops() {
         let mut ir = chain3();
         let mut shortcut = ir.arcs[0].clone();
-        let SignedRefR::Plus(target) = &mut shortcut.refs[1] else {
-            unreachable!()
-        };
-        target.target = DeclId::new(2);
-        target.weights = Some(vec![hymeko::ir::ir::ValueR::Num(20.0)]);
+        let mut draft = ir.reference_draft(&shortcut.refs[1]).unwrap();
+        assert_eq!(draft.sign(), 1);
+        draft.atom.target = DeclId::new(2);
+        draft.atom.weights = Some(vec![hymeko::ir::ir::ValueR::Num(20.0)]);
+        shortcut.refs[1] = ir.store_reference(draft);
         ir.arcs.push(shortcut);
         let goal = NodeId::new(ir.nodes.len());
-        let declaration = ir.push_decl(ir.decl_nodes[0].clone());
-        ir.nodes.push(NodeRec::new(declaration, Vec::new()));
+        let declaration = ir.push_decl(ir.decl_draft(DeclId::new(0)).unwrap());
+        ir.nodes.push(NodeRec::new(
+            declaration,
+            hymeko::common::ids::BaseListId::NONE,
+        ));
         ir.bind_node_decl(declaration, goal).unwrap();
         let index = build_incidence_index(&ir).unwrap();
         let mut workspace = InformedSearchWorkspace::new();
@@ -1153,38 +1297,19 @@ mod tests {
     fn chain3() -> Ir {
         let mut ir = Ir::default();
         for _ in 0..3 {
-            let d = ir.push_decl(DeclNode {
-                kind: DeclKind::Node,
-                name: hymeko::common::ids::SymId::new(0),
-                parent: DeclId::NONE,
-                first_child: DeclId::NONE,
-                last_child: DeclId::NONE,
-                next_sibling: DeclId::NONE,
-                anno: AnnoR::default(),
-            });
-            let nid = NodeId::new(ir.nodes.len());
-            ir.nodes.push(NodeRec::new(d, Vec::new()));
-            ir.bind_node_decl(d, nid).expect("bind");
+            IrConstruction::new(&mut ir)
+                .append_node(
+                    hymeko::common::ids::SymId::new(0),
+                    AnnoR::default(),
+                    Vec::new(),
+                )
+                .expect("bind");
         }
         for (a, b) in [(0usize, 1usize), (1, 2)] {
-            ir.arcs.push(ArcRec {
-                anno: AnnoR::default(),
-                in_edge: DeclId::NONE,
-                refs: vec![
-                    SignedRefR::Plus(RefAtomR {
-                        target: DeclId::new(a),
-                        anno: AnnoR::default(),
-                        weights: None,
-                        direction: Default::default(),
-                    }),
-                    SignedRefR::Plus(RefAtomR {
-                        target: DeclId::new(b),
-                        anno: AnnoR::default(),
-                        weights: None,
-                        direction: Default::default(),
-                    }),
-                ],
-            });
+            ir.arcs.push(ArcRec::unowned(vec![
+                SignedRefR::plain(DeclId::new(a), hymeko::ir::ir::IncidenceSign::Plus),
+                SignedRefR::plain(DeclId::new(b), hymeko::ir::ir::IncidenceSign::Plus),
+            ]));
         }
         ir
     }
@@ -1245,38 +1370,19 @@ mod tests {
         // two disjoint arcs: {0,1} and {2,3}
         let mut ir = Ir::default();
         for _ in 0..4 {
-            let d = ir.push_decl(DeclNode {
-                kind: DeclKind::Node,
-                name: hymeko::common::ids::SymId::new(0),
-                parent: DeclId::NONE,
-                first_child: DeclId::NONE,
-                last_child: DeclId::NONE,
-                next_sibling: DeclId::NONE,
-                anno: AnnoR::default(),
-            });
-            let nid = NodeId::new(ir.nodes.len());
-            ir.nodes.push(NodeRec::new(d, Vec::new()));
-            ir.bind_node_decl(d, nid).unwrap();
+            IrConstruction::new(&mut ir)
+                .append_node(
+                    hymeko::common::ids::SymId::new(0),
+                    AnnoR::default(),
+                    Vec::new(),
+                )
+                .unwrap();
         }
         for (a, b) in [(0usize, 1usize), (2, 3)] {
-            ir.arcs.push(ArcRec {
-                anno: AnnoR::default(),
-                in_edge: DeclId::NONE,
-                refs: vec![
-                    SignedRefR::Plus(RefAtomR {
-                        target: DeclId::new(a),
-                        anno: AnnoR::default(),
-                        weights: None,
-                        direction: Default::default(),
-                    }),
-                    SignedRefR::Plus(RefAtomR {
-                        target: DeclId::new(b),
-                        anno: AnnoR::default(),
-                        weights: None,
-                        direction: Default::default(),
-                    }),
-                ],
-            });
+            ir.arcs.push(ArcRec::unowned(vec![
+                SignedRefR::plain(DeclId::new(a), hymeko::ir::ir::IncidenceSign::Plus),
+                SignedRefR::plain(DeclId::new(b), hymeko::ir::ir::IncidenceSign::Plus),
+            ]));
         }
         let idx = build_incidence_index(&ir).unwrap();
         let trav = HyperTraversal::new(&idx);

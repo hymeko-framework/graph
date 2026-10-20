@@ -111,7 +111,7 @@ fn manhattan_admissible_and_consistent() {
                     continue;
                 }
                 let (u, v) = (a.refs[i].target(), a.refs[j].target());
-                let c = ic::first_num_weight_pub(&a.refs[j]);
+                let c = ic::first_num_weight_pub(&ir, &a.refs[j]);
                 assert!(
                     man.h(&ir, u) - man.h(&ir, v) <= c + 1e-9,
                     "manhattan consistent"

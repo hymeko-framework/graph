@@ -221,15 +221,10 @@ fn check_consumed_has_producer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{PGraphSchema, PNodeKind};
-    use hymeko::common::ids::EdgeId;
-    use std::collections::BTreeMap;
+    use crate::schema::SchemaCase;
 
     fn d(i: usize) -> DeclId {
         DeclId::new(i)
-    }
-    fn e(i: usize) -> EdgeId {
-        EdgeId::new(i)
     }
 
     // ─── E-StrictNoExcess ───────────────────────────────────────
@@ -246,18 +241,10 @@ mod tests {
         // S5 passes (d(3) has incident edge from U1). But d(3) does
         // NOT reach any product, so the strict-no-excess refinement
         // fires.
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material),
-            (d(3), PNodeKind::Material), // by-product
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(1))),
-            (e(1), (d(1), d(2))),
-            (e(2), (d(1), d(3))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // by-product
+        let schema = SchemaCase::new(&[0, 2, 3], &[1], &[(0, 0, 1), (1, 1, 2), (2, 1, 3)])
+            .build()
+            .unwrap();
         let ext = ExtensionAxiomBundle::new([d(0)]);
         let products = BTreeSet::from([d(2)]);
         let v = ext.validate(&schema, &products).expect_err("must err");
@@ -284,12 +271,8 @@ mod tests {
         // U1 has NO inputs (a "source" unit) but produces the
         // product directly. Canonical S4 passes (U1 → d(2)).
         // E-UnitWellFormed fires on U1.
-        let kinds = BTreeMap::from([
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material), // product
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(1), d(2)))]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // product
+        let schema = SchemaCase::new(&[2], &[1], &[(0, 1, 2)]).build().unwrap();
         let ext = ExtensionAxiomBundle::new([]);
         let products = BTreeSet::from([d(2)]);
         let v = ext.validate(&schema, &products).expect_err("must err");
@@ -305,18 +288,13 @@ mod tests {
     /// independently.
     #[test]
     fn unit_well_formed_catches_zero_out_degree() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material), // raw
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material),      // product (unreachable)
-            (d(3), PNodeKind::OperatingUnit), // produces the product
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(1))), // U1 consumes d(0), produces nothing
-            (e(1), (d(0), d(3))),
-            (e(2), (d(3), d(2))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // raw
+        // product (unreachable)
+        // produces the product
+        // U1 consumes d(0), produces nothing
+        let schema = SchemaCase::new(&[0, 2], &[1, 3], &[(0, 0, 1), (1, 0, 3), (2, 3, 2)])
+            .build()
+            .unwrap();
         let ext = ExtensionAxiomBundle::new([d(0)]);
         let products = BTreeSet::from([d(2)]);
         let v = ext.validate(&schema, &products).expect_err("must err");
@@ -335,20 +313,15 @@ mod tests {
     /// docstring.
     #[test]
     fn consumed_has_producer_overlap_with_canonical_a2() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material),
-            (d(3), PNodeKind::Material), // consumed, no producer, not raw
-            (d(4), PNodeKind::OperatingUnit),
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(1))),
-            (e(1), (d(1), d(2))),
-            (e(2), (d(3), d(4))), // d(3) consumed by U2
-            (e(3), (d(4), d(2))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // consumed, no producer, not raw
+        // d(3) consumed by U2
+        let schema = SchemaCase::new(
+            &[0, 2, 3],
+            &[1, 4],
+            &[(0, 0, 1), (1, 1, 2), (2, 3, 4), (3, 4, 2)],
+        )
+        .build()
+        .unwrap();
         let ext = ExtensionAxiomBundle::new([d(0)]); // d(3) NOT raw
         let products = BTreeSet::from([d(2)]);
         let v = ext.validate(&schema, &products).expect_err("must err");
@@ -375,14 +348,10 @@ mod tests {
     /// relationship: canonical catches the isolated case, E does not.
     #[test]
     fn consumed_has_producer_silent_on_isolated_m_node() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material),
-            (d(3), PNodeKind::Material), // isolated non-raw, not consumed
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1))), (e(1), (d(1), d(2)))]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // isolated non-raw, not consumed
+        let schema = SchemaCase::new(&[0, 2, 3], &[1], &[(0, 0, 1), (1, 1, 2)])
+            .build()
+            .unwrap();
         let ext = ExtensionAxiomBundle::new([d(0)]);
         let products = BTreeSet::from([d(2)]);
         // E-ConsumedHasProducer accepts (d(3) is not in `consumed`).
@@ -413,18 +382,10 @@ mod tests {
         // Two raws → one unit → one product. Satisfies S1..S5
         // and every extension axiom (no by-product, unit has both
         // in and out, no consumed-without-producer).
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::Material),
-            (d(2), PNodeKind::OperatingUnit),
-            (d(3), PNodeKind::Material),
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(2))),
-            (e(1), (d(1), d(2))),
-            (e(2), (d(2), d(3))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+
+        let schema = SchemaCase::new(&[0, 1, 3], &[2], &[(0, 0, 2), (1, 1, 2), (2, 2, 3)])
+            .build()
+            .unwrap();
         let products = BTreeSet::from([d(3)]);
         // Canonical OK.
         crate::axioms::AxiomBundle::new([d(0), d(1)], [])

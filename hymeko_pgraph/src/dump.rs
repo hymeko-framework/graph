@@ -31,6 +31,16 @@ pub enum DumpAlgorithm {
     Abb,
 }
 
+impl DumpAlgorithm {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Msg => "msg",
+            Self::Ssg => "ssg",
+            Self::Abb => "abb",
+        }
+    }
+}
+
 /// Which SSG implementation drives the `--algorithm ssg` output.
 ///
 /// 2026-06-03 (Pimentel benchmark): the brute path enumerates the
@@ -168,6 +178,60 @@ pub struct PgraphAnalysisJson {
     /// counters apply only to the single-best [`solve_with_regime`]
     /// path). `None` ⇒ only the single best is requested.
     pub abb_top_k: Option<Vec<AbbJson>>,
+}
+
+/// A source failure carries exactly one stage and preserves the description
+/// only once parsing has succeeded. Formatting matches the public JSON contract.
+enum SourceFailure {
+    Parse(String),
+    Lower { description: String, error: String },
+}
+
+fn lower_source(source: &str) -> Result<(String, LoweredPGraph), SourceFailure> {
+    let description =
+        parse_description(source).map_err(|error| SourceFailure::Parse(format!("{error:?}")))?;
+    let name = description.name.to_string();
+    match lower(&description) {
+        Ok(graph) => Ok((name, graph)),
+        Err(error) => Err(SourceFailure::Lower {
+            description: name,
+            error: error.to_string(),
+        }),
+    }
+}
+
+impl PgraphAnalysisJson {
+    fn source_failure(
+        algorithm: DumpAlgorithm,
+        strict_no_excess: bool,
+        cost_weights_echo: Option<Vec<f64>>,
+        failure: SourceFailure,
+    ) -> Self {
+        let (description, parse_error, lower_error) = match failure {
+            SourceFailure::Parse(error) => (String::new(), Some(error), None),
+            SourceFailure::Lower { description, error } => (description, None, Some(error)),
+        };
+        Self {
+            ok: false,
+            description,
+            algorithm: algorithm.label().into(),
+            parse_error,
+            lower_error,
+            msg_units: vec![],
+            ssg_structures: None,
+            ssg_note: None,
+            abb: None,
+            canonical_full: empty_cert_with("UNKNOWN"),
+            extension_full: empty_cert_with("UNKNOWN"),
+            canonical_abb_subschema: None,
+            extension_abb_subschema: None,
+            strict_no_excess,
+            cost_dimensions: vec![],
+            cost_weights_echo,
+            abb_cost_breakdown: None,
+            abb_top_k: None,
+        }
+    }
 }
 
 fn unit_names(p: &LoweredPGraph, sol: &SolutionStructure) -> Vec<String> {
@@ -411,68 +475,7 @@ pub fn analyze_source_with_regime(
     regime: &dyn crate::regime::Regime,
     opts: AbbOptions,
 ) -> PgraphAnalysisJson {
-    let algo_label = match algorithm {
-        DumpAlgorithm::Msg => "msg",
-        DumpAlgorithm::Ssg => "ssg",
-        DumpAlgorithm::Abb => "abb",
-    };
-    let strict_echo = regime.name() != "canonical";
-    let cost_weights_echo = opts.cost_weights.clone();
-    let desc = parse_description(hymeko_src);
-    let d = match desc {
-        Ok(d) => d,
-        Err(e) => {
-            return PgraphAnalysisJson {
-                ok: false,
-                description: String::new(),
-                algorithm: algo_label.into(),
-                parse_error: Some(format!("{e:?}")),
-                lower_error: None,
-                msg_units: vec![],
-                ssg_structures: None,
-                ssg_note: None,
-                abb: None,
-                canonical_full: empty_cert_with("UNKNOWN"),
-                extension_full: empty_cert_with("UNKNOWN"),
-                canonical_abb_subschema: None,
-                extension_abb_subschema: None,
-                strict_no_excess: strict_echo,
-                cost_dimensions: vec![],
-                cost_weights_echo,
-                abb_cost_breakdown: None,
-                abb_top_k: None,
-            };
-        }
-    };
-    let description = d.name.to_string();
-    let p = match lower(&d) {
-        Ok(p) => p,
-        Err(e) => {
-            return PgraphAnalysisJson {
-                ok: false,
-                description,
-                algorithm: algo_label.into(),
-                parse_error: None,
-                lower_error: Some(e.to_string()),
-                msg_units: vec![],
-                ssg_structures: None,
-                ssg_note: None,
-                abb: None,
-                canonical_full: empty_cert_with("UNKNOWN"),
-                extension_full: empty_cert_with("UNKNOWN"),
-                canonical_abb_subschema: None,
-                extension_abb_subschema: None,
-                strict_no_excess: strict_echo,
-                cost_dimensions: vec![],
-                cost_weights_echo,
-                abb_cost_breakdown: None,
-                abb_top_k: None,
-            };
-        }
-    };
-
-    let (json, _abb) = analyze_lowered_with_regime(&p, description, algorithm, regime, opts);
-    json
+    analyze_source_with_regime_full(hymeko_src, algorithm, regime, opts, 1, SsgAlgorithm::Brute)
 }
 
 /// Top-$k$ variant of [`analyze_source_with_regime`]. Same parse +
@@ -486,71 +489,14 @@ pub fn analyze_source_with_regime_topk(
     opts: AbbOptions,
     top_k: usize,
 ) -> PgraphAnalysisJson {
-    if top_k <= 1 {
-        return analyze_source_with_regime(hymeko_src, algorithm, regime, opts);
-    }
-    let algo_label = match algorithm {
-        DumpAlgorithm::Msg => "msg",
-        DumpAlgorithm::Ssg => "ssg",
-        DumpAlgorithm::Abb => "abb",
-    };
-    let strict_echo = regime.name() != "canonical";
-    let cost_weights_echo = opts.cost_weights.clone();
-    let desc = parse_description(hymeko_src);
-    let d = match desc {
-        Ok(d) => d,
-        Err(e) => {
-            return PgraphAnalysisJson {
-                ok: false,
-                description: String::new(),
-                algorithm: algo_label.into(),
-                parse_error: Some(format!("{e:?}")),
-                lower_error: None,
-                msg_units: vec![],
-                ssg_structures: None,
-                ssg_note: None,
-                abb: None,
-                canonical_full: empty_cert_with("UNKNOWN"),
-                extension_full: empty_cert_with("UNKNOWN"),
-                canonical_abb_subschema: None,
-                extension_abb_subschema: None,
-                strict_no_excess: strict_echo,
-                cost_dimensions: vec![],
-                cost_weights_echo,
-                abb_cost_breakdown: None,
-                abb_top_k: None,
-            };
-        }
-    };
-    let description = d.name.to_string();
-    let p = match lower(&d) {
-        Ok(p) => p,
-        Err(e) => {
-            return PgraphAnalysisJson {
-                ok: false,
-                description,
-                algorithm: algo_label.into(),
-                parse_error: None,
-                lower_error: Some(e.to_string()),
-                msg_units: vec![],
-                ssg_structures: None,
-                ssg_note: None,
-                abb: None,
-                canonical_full: empty_cert_with("UNKNOWN"),
-                extension_full: empty_cert_with("UNKNOWN"),
-                canonical_abb_subschema: None,
-                extension_abb_subschema: None,
-                strict_no_excess: strict_echo,
-                cost_dimensions: vec![],
-                cost_weights_echo,
-                abb_cost_breakdown: None,
-                abb_top_k: None,
-            };
-        }
-    };
-    let (json, _abb) =
-        analyze_lowered_with_regime_topk(&p, description, algorithm, regime, opts, top_k);
-    json
+    analyze_source_with_regime_full(
+        hymeko_src,
+        algorithm,
+        regime,
+        opts,
+        top_k,
+        SsgAlgorithm::Brute,
+    )
 }
 
 /// Source variant of [`analyze_lowered_with_regime_full`]. Parses,
@@ -565,77 +511,35 @@ pub fn analyze_source_with_regime_full(
     top_k: usize,
     ssg_algorithm: SsgAlgorithm,
 ) -> PgraphAnalysisJson {
-    if top_k <= 1 && matches!(ssg_algorithm, SsgAlgorithm::Brute) {
-        return analyze_source_with_regime(hymeko_src, algorithm, regime, opts);
-    }
-    let algo_label = match algorithm {
-        DumpAlgorithm::Msg => "msg",
-        DumpAlgorithm::Ssg => "ssg",
-        DumpAlgorithm::Abb => "abb",
-    };
+    // Preserve regime/options echoes even when parsing or lowering fails.
     let strict_echo = regime.name() != "canonical";
     let cost_weights_echo = opts.cost_weights.clone();
-    let desc = parse_description(hymeko_src);
-    let d = match desc {
-        Ok(d) => d,
-        Err(e) => {
-            return PgraphAnalysisJson {
-                ok: false,
-                description: String::new(),
-                algorithm: algo_label.into(),
-                parse_error: Some(format!("{e:?}")),
-                lower_error: None,
-                msg_units: vec![],
-                ssg_structures: None,
-                ssg_note: None,
-                abb: None,
-                canonical_full: empty_cert_with("UNKNOWN"),
-                extension_full: empty_cert_with("UNKNOWN"),
-                canonical_abb_subschema: None,
-                extension_abb_subschema: None,
-                strict_no_excess: strict_echo,
-                cost_dimensions: vec![],
+    let (description, graph) = match lower_source(hymeko_src) {
+        Ok(lowered) => lowered,
+        Err(failure) => {
+            return PgraphAnalysisJson::source_failure(
+                algorithm,
+                strict_echo,
                 cost_weights_echo,
-                abb_cost_breakdown: None,
-                abb_top_k: None,
-            };
+                failure,
+            );
         }
     };
-    let description = d.name.to_string();
-    let p = match lower(&d) {
-        Ok(p) => p,
-        Err(e) => {
-            return PgraphAnalysisJson {
-                ok: false,
-                description,
-                algorithm: algo_label.into(),
-                parse_error: None,
-                lower_error: Some(e.to_string()),
-                msg_units: vec![],
-                ssg_structures: None,
-                ssg_note: None,
-                abb: None,
-                canonical_full: empty_cert_with("UNKNOWN"),
-                extension_full: empty_cert_with("UNKNOWN"),
-                canonical_abb_subschema: None,
-                extension_abb_subschema: None,
-                strict_no_excess: strict_echo,
-                cost_dimensions: vec![],
-                cost_weights_echo,
-                abb_cost_breakdown: None,
-                abb_top_k: None,
-            };
-        }
+    // Keep the direct single-best route: the extended lowered entry clones
+    // options for additional stages, which simple source requests do not need.
+    let (json, _) = if top_k <= 1 && matches!(ssg_algorithm, SsgAlgorithm::Brute) {
+        analyze_lowered_with_regime(&graph, description, algorithm, regime, opts)
+    } else {
+        analyze_lowered_with_regime_full(
+            &graph,
+            description,
+            algorithm,
+            regime,
+            opts,
+            top_k,
+            ssg_algorithm,
+        )
     };
-    let (json, _abb) = analyze_lowered_with_regime_full(
-        &p,
-        description,
-        algorithm,
-        regime,
-        opts,
-        top_k,
-        ssg_algorithm,
-    );
     json
 }
 
@@ -741,11 +645,7 @@ pub fn analyze_lowered_with_regime(
     regime: &dyn crate::regime::Regime,
     opts: AbbOptions,
 ) -> (PgraphAnalysisJson, Option<AbbSolution>) {
-    let algo_label = match algorithm {
-        DumpAlgorithm::Msg => "msg",
-        DumpAlgorithm::Ssg => "ssg",
-        DumpAlgorithm::Abb => "abb",
-    };
+    let algo_label = algorithm.label();
 
     let strict_echo = regime.name() != "canonical";
     let cost_weights_echo = opts.cost_weights.clone();

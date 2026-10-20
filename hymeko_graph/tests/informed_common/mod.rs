@@ -6,30 +6,25 @@
 //! `informed_search_vv.rs` / `informed_search_bench.rs` (engine comparison) via `#[path]`.
 #![allow(dead_code)] // shared across test binaries; not every binary uses every helper.
 
+pub mod search;
+
+use hymeko::ir::ir::IrConstruction;
+use hymeko::util::measurement::{MeasurementRunner, Runner};
 use std::collections::BTreeMap;
-use std::time::Instant;
 
 use hymeko::common::ids::{DeclId, NodeId, SymId};
 use hymeko::ir::incidence::{IncidenceIndex, IncidenceRef};
 use hymeko::ir::ir::{
-    AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR, ValueR,
+    AnnoR, ArcRec, DeclKind, DeclNode, IncidenceSign, Ir, RefAtomR, ReferenceDraft, SignedRefR,
+    ValueR,
 };
 
 // ---- timing helper (single typed unit: microseconds) ----------------------------------------------
 
 /// Median, min, max microseconds over `iters` timed runs after 2 warm-ups.
-pub fn median_us(iters: usize, mut f: impl FnMut()) -> (f64, f64, f64) {
-    for _ in 0..2 {
-        f();
-    }
-    let mut s: Vec<f64> = Vec::with_capacity(iters);
-    for _ in 0..iters {
-        let t = Instant::now();
-        f();
-        s.push(t.elapsed().as_secs_f64() * 1e6);
-    }
-    s.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    (s[0], s[s.len() / 2], *s.last().unwrap())
+pub fn median_us(iters: usize, f: impl FnMut()) -> (f64, f64, f64) {
+    let d = MeasurementRunner::new(2, iters).run(f);
+    (d.min, d.median, d.worst)
 }
 
 // ---- cost spec (shared spec; the SEARCH below is independent of the engine) ------------------------
@@ -212,18 +207,7 @@ pub enum SignMode {
 
 fn push_nodes(ir: &mut Ir, m: usize) {
     for _ in 0..m {
-        let d = ir.push_decl(DeclNode {
-            kind: DeclKind::Node,
-            name: SymId::new(0),
-            parent: DeclId::NONE,
-            first_child: DeclId::NONE,
-            last_child: DeclId::NONE,
-            next_sibling: DeclId::NONE,
-            anno: AnnoR::default(),
-        });
-        let nid = NodeId::new(ir.nodes.len());
-        ir.nodes.push(NodeRec::new(d, Vec::new()));
-        ir.bind_node_decl(d, nid).expect("bind node");
+        node_decl(ir);
     }
 }
 
@@ -247,52 +231,36 @@ pub fn named_workload(name: &str) -> Ir {
 /// Push one node declaration + record + binding; return its `DeclId` (which, when nodes are pushed
 /// first, equals its `NodeId`). Shared inline builder for hand-constructed fixtures.
 pub fn node_decl(ir: &mut Ir) -> DeclId {
-    let d = ir.push_decl(DeclNode {
-        kind: DeclKind::Node,
-        name: SymId::new(0),
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    });
-    let nid = NodeId::new(ir.nodes.len());
-    ir.nodes.push(NodeRec::new(d, Vec::new()));
-    ir.bind_node_decl(d, nid).expect("bind node");
-    d
+    IrConstruction::new(ir)
+        .append_node(SymId::new(0), AnnoR::default(), Vec::new())
+        .expect("bind node")
 }
 
 /// Push one **non-node** (edge-kind) declaration; return its `DeclId`. Used to build a target that is
 /// deliberately not a node (so `decl_to_node` returns `None`).
 pub fn edge_decl(ir: &mut Ir) -> DeclId {
-    ir.push_decl(DeclNode {
-        kind: DeclKind::Edge,
-        name: SymId::new(0),
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    })
+    ir.push_decl(DeclNode::root(
+        DeclKind::Edge,
+        SymId::new(0),
+        AnnoR::default(),
+    ))
 }
 
 /// A `+` incidence reference to `target`, optionally weighted.
-pub fn plus_ref(target: DeclId, weight: Option<f64>) -> SignedRefR {
-    SignedRefR::Plus(RefAtomR {
-        target,
-        anno: AnnoR::default(),
-        weights: weight.map(|w| vec![ValueR::Num(w)]),
-        direction: Default::default(),
-    })
+pub fn plus_ref(target: DeclId, weight: Option<f64>) -> ReferenceDraft {
+    ReferenceDraft::new(
+        IncidenceSign::Plus,
+        RefAtomR::plain(target).with_weights(weight.map(|w| vec![ValueR::Num(w)])),
+    )
 }
 
 /// Push one hyperarc with the given references.
-pub fn push_arc(ir: &mut Ir, refs: Vec<SignedRefR>) {
-    ir.arcs.push(ArcRec {
-        anno: AnnoR::default(),
-        in_edge: DeclId::NONE,
-        refs,
-    });
+pub fn push_arc(ir: &mut Ir, refs: Vec<ReferenceDraft>) {
+    let refs = refs
+        .into_iter()
+        .map(|draft| ir.store_reference(draft))
+        .collect();
+    ir.arcs.push(ArcRec::unowned(refs));
 }
 
 /// A weighted pairwise graph on `n` nodes from an explicit `(u, v, w)` edge list.
@@ -308,19 +276,20 @@ pub fn weighted_graph_ir(n: usize, edges: &[(usize, usize, f64)]) -> Ir {
     ir
 }
 
-fn signed_ref(sign: SignMode, member_idx: usize, target: usize, weight: Option<f64>) -> SignedRefR {
-    let atom = RefAtomR {
-        target: DeclId::new(target),
-        anno: AnnoR::default(),
-        weights: weight.map(|w| vec![ValueR::Num(w)]),
-        direction: Default::default(),
-    };
+fn signed_ref(
+    sign: SignMode,
+    member_idx: usize,
+    target: usize,
+    weight: Option<f64>,
+) -> ReferenceDraft {
+    let atom =
+        RefAtomR::plain(DeclId::new(target)).with_weights(weight.map(|w| vec![ValueR::Num(w)]));
     match sign {
-        SignMode::AllPlus => SignedRefR::Plus(atom),
+        SignMode::AllPlus => ReferenceDraft::new(IncidenceSign::Plus, atom),
         SignMode::Alternating => match member_idx % 3 {
-            0 => SignedRefR::Plus(atom),
-            1 => SignedRefR::Minus(atom),
-            _ => SignedRefR::Neutral(atom),
+            0 => ReferenceDraft::new(IncidenceSign::Plus, atom),
+            1 => ReferenceDraft::new(IncidenceSign::Minus, atom),
+            _ => ReferenceDraft::new(IncidenceSign::Neutral, atom),
         },
     }
 }
@@ -332,7 +301,7 @@ pub fn window_ir(m: usize, k: usize, weighted: bool, signs: SignMode) -> Ir {
     let mut ir = Ir::default();
     push_nodes(&mut ir, m);
     for i in 0..(m - k + 1) {
-        let refs: Vec<SignedRefR> = (i..i + k)
+        let refs: Vec<ReferenceDraft> = (i..i + k)
             .enumerate()
             .map(|(mi, j)| {
                 let w = if weighted {
@@ -343,11 +312,7 @@ pub fn window_ir(m: usize, k: usize, weighted: bool, signs: SignMode) -> Ir {
                 signed_ref(signs, mi, j, w)
             })
             .collect();
-        ir.arcs.push(ArcRec {
-            anno: AnnoR::default(),
-            in_edge: DeclId::NONE,
-            refs,
-        });
+        push_arc(&mut ir, refs);
     }
     ir
 }
@@ -360,14 +325,10 @@ pub fn multi_component_ir(comps: usize, m: usize, k: usize) -> Ir {
     for c in 0..comps {
         let base = c * m;
         for i in 0..(m - k + 1) {
-            let refs: Vec<SignedRefR> = (i..i + k)
+            let refs: Vec<ReferenceDraft> = (i..i + k)
                 .map(|j| signed_ref(SignMode::AllPlus, 0, base + j, None))
                 .collect();
-            ir.arcs.push(ArcRec {
-                anno: AnnoR::default(),
-                in_edge: DeclId::NONE,
-                refs,
-            });
+            push_arc(&mut ir, refs);
         }
     }
     ir
@@ -401,24 +362,13 @@ pub fn grid_ir(w: usize, h: usize) -> Ir {
     let mut ir = Ir::default();
     push_nodes(&mut ir, w * h);
     let edge = |ir: &mut Ir, a: usize, b: usize| {
-        ir.arcs.push(ArcRec {
-            anno: AnnoR::default(),
-            in_edge: DeclId::NONE,
-            refs: vec![
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(a),
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                }),
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(b),
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                }),
+        push_arc(
+            ir,
+            vec![
+                ReferenceDraft::plain(DeclId::new(a), hymeko::ir::ir::IncidenceSign::Plus),
+                ReferenceDraft::plain(DeclId::new(b), hymeko::ir::ir::IncidenceSign::Plus),
             ],
-        });
+        );
     };
     for r in 0..h {
         for c in 0..w {
@@ -467,22 +417,16 @@ pub fn steiner_sts_ir(m: u32) -> Ir {
         for b in (a + 1)..=v {
             let c = a ^ b;
             if c > b {
-                let refs: Vec<SignedRefR> = [a, b, c]
+                let refs: Vec<ReferenceDraft> = [a, b, c]
                     .into_iter()
                     .map(|p| {
-                        SignedRefR::Plus(RefAtomR {
-                            target: DeclId::new(p - 1),
-                            anno: AnnoR::default(),
-                            weights: None,
-                            direction: Default::default(),
-                        })
+                        ReferenceDraft::plain(
+                            DeclId::new(p - 1),
+                            hymeko::ir::ir::IncidenceSign::Plus,
+                        )
                     })
                     .collect();
-                ir.arcs.push(ArcRec {
-                    anno: AnnoR::default(),
-                    in_edge: DeclId::NONE,
-                    refs,
-                });
+                push_arc(&mut ir, refs);
             }
         }
     }
@@ -510,46 +454,23 @@ pub fn base_c5() -> (usize, Vec<(usize, usize)>) {
 /// `V={v_i} ∪ U={u_i} ∪ {w}`: original edges `{v_i,v_j}`; for each original edge the two shadow edges
 /// `{u_i,v_j}` and `{v_i,u_j}`; apex edges `{w,u_i}` for all `i`. `u_i = n+i`, `w = 2n`.
 pub fn mycielski_ir(base_n: usize, base_edges: &[(usize, usize)], iters: u32) -> Ir {
-    let mut n = base_n;
-    let mut edges: Vec<(usize, usize)> = base_edges.to_vec();
+    use hymeko::generators::{HypergraphDesign, mycielskian};
+    let mut design = HypergraphDesign {
+        n_vertices: base_n,
+        edges: base_edges.iter().map(|&(a, b)| vec![a, b]).collect(),
+    };
     for _ in 0..iters {
-        let mut ne: Vec<(usize, usize)> = Vec::with_capacity(3 * edges.len() + n);
-        for &(i, j) in &edges {
-            ne.push((i, j));
-            ne.push((n + i, j));
-            ne.push((i, n + j));
-        }
-        for i in 0..n {
-            ne.push((2 * n, n + i));
-        }
-        edges = ne;
-        n = 2 * n + 1;
+        design = mycielskian(&design);
     }
-    ir_from_rank2(n, &edges)
-}
-
-fn ir_from_rank2(n: usize, edges: &[(usize, usize)]) -> Ir {
     let mut ir = Ir::default();
-    push_nodes(&mut ir, n);
-    for &(a, b) in edges {
-        ir.arcs.push(ArcRec {
-            anno: AnnoR::default(),
-            in_edge: DeclId::NONE,
-            refs: vec![
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(a),
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                }),
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(b),
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                }),
-            ],
-        });
+    push_nodes(&mut ir, design.n_vertices);
+    for edge in design.edges {
+        push_arc(
+            &mut ir,
+            edge.into_iter()
+                .map(|node| plus_ref(DeclId::new(node), None))
+                .collect(),
+        );
     }
     ir
 }
@@ -591,20 +512,9 @@ pub fn uniform_rank_k_ir(seed: u64, n: usize, m_edges: usize, k: usize) -> Ir {
         }
         let refs = members
             .into_iter()
-            .map(|t| {
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(t),
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                })
-            })
+            .map(|t| ReferenceDraft::plain(DeclId::new(t), hymeko::ir::ir::IncidenceSign::Plus))
             .collect();
-        ir.arcs.push(ArcRec {
-            anno: AnnoR::default(),
-            in_edge: DeclId::NONE,
-            refs,
-        });
+        push_arc(&mut ir, refs);
     }
     ir
 }
@@ -621,19 +531,13 @@ pub fn two_disjoint_sts_ir(m: u32) -> (Ir, usize) {
             .refs
             .iter()
             .map(|r| {
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(r.target().raw() + off),
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                })
+                ReferenceDraft::plain(
+                    DeclId::new(r.target().raw() + off),
+                    hymeko::ir::ir::IncidenceSign::Plus,
+                )
             })
             .collect();
-        ir.arcs.push(ArcRec {
-            anno: AnnoR::default(),
-            in_edge: DeclId::NONE,
-            refs,
-        });
+        push_arc(&mut ir, refs);
     }
     (ir, off)
 }
@@ -643,26 +547,21 @@ pub fn two_disjoint_sts_ir(m: u32) -> (Ir, usize) {
 use std::collections::HashSet;
 
 fn push_positioned_node(ir: &mut Ir, x: f64, y: f64) {
-    let d = ir.push_decl(DeclNode {
-        kind: DeclKind::Node,
-        name: SymId::new(0),
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR {
-            tags: Vec::new(),
-            value: Some(ValueR::List(vec![ValueR::Num(x), ValueR::Num(y)])),
-        },
-    });
-    let nid = NodeId::new(ir.nodes.len());
-    ir.nodes.push(NodeRec::new(d, Vec::new()));
-    ir.bind_node_decl(d, nid).expect("bind node");
+    IrConstruction::new(ir)
+        .append_node(
+            SymId::new(0),
+            AnnoR {
+                tags: Vec::new(),
+                value: Some(ValueR::List(vec![ValueR::Num(x), ValueR::Num(y)])),
+            },
+            Vec::new(),
+        )
+        .expect("bind node");
 }
 
 /// Read a node's `[x, y]` coordinate back out of the canonical `Ir` (`DeclNode.anno.value`).
 pub fn ir_position(ir: &Ir, decl: DeclId) -> Option<[f64; 2]> {
-    match &ir.decl_nodes[decl.raw()].anno.value {
+    match &ir.decl_annotation(decl).unwrap().value {
         Some(ValueR::List(v)) if v.len() == 2 => match (&v[0], &v[1]) {
             (ValueR::Num(x), ValueR::Num(y)) => Some([*x, *y]),
             _ => None,
@@ -676,11 +575,7 @@ pub fn map_min_edge_cost(ir: &Ir) -> f64 {
     let mut m = f64::INFINITY;
     for a in &ir.arcs {
         for r in &a.refs {
-            let w = match r {
-                SignedRefR::Plus(x) | SignedRefR::Minus(x) | SignedRefR::Neutral(x) => {
-                    first_num_weight(x.weights.as_deref())
-                }
-            };
+            let w = first_num_weight(ir.reference_atom(r).unwrap().weights);
             if w > 0.0 && w < m {
                 m = w;
             }
@@ -691,18 +586,12 @@ pub fn map_min_edge_cost(ir: &Ir) -> f64 {
 
 fn weighted_edge(ir: &mut Ir, a: usize, b: usize, w: f64) {
     let mk = |t: usize| {
-        SignedRefR::Plus(RefAtomR {
-            target: DeclId::new(t),
-            anno: AnnoR::default(),
-            weights: Some(vec![ValueR::Num(w)]),
-            direction: Default::default(),
-        })
+        ReferenceDraft::new(
+            IncidenceSign::Plus,
+            RefAtomR::plain(DeclId::new(t)).with_weights(Some(vec![ValueR::Num(w)])),
+        )
     };
-    ir.arcs.push(ArcRec {
-        anno: AnnoR::default(),
-        in_edge: DeclId::NONE,
-        refs: vec![mk(a), mk(b)],
-    });
+    push_arc(ir, vec![mk(a), mk(b)]);
 }
 
 /// A weighted street grid on `w x h` intersections as canonical `Ir`. Node `(r,c) = r*w+c` carries its
@@ -777,19 +666,13 @@ pub fn map_grid_with_transport_ir(
         .into_iter()
         .filter(|s| !blocked.contains(s))
         .map(|s| {
-            SignedRefR::Plus(RefAtomR {
-                target: DeclId::new(s),
-                anno: AnnoR::default(),
-                weights: Some(vec![ValueR::Num(fare)]),
-                direction: Default::default(),
-            })
+            ReferenceDraft::new(
+                IncidenceSign::Plus,
+                RefAtomR::plain(DeclId::new(s)).with_weights(Some(vec![ValueR::Num(fare)])),
+            )
         })
         .collect();
-    ir.arcs.push(ArcRec {
-        anno: AnnoR::default(),
-        in_edge: DeclId::NONE,
-        refs,
-    });
+    push_arc(&mut ir, refs);
     ir
 }
 
@@ -821,10 +704,8 @@ pub fn hop_distances_from(ir: &Ir, index: &IncidenceIndex<'_>, goal: NodeId) -> 
 }
 
 /// The first numeric weight of a signed ref (0.0 if none) — public accessor for consistency checks.
-pub fn first_num_weight_pub(sref: &SignedRefR) -> f64 {
-    let w = match sref {
-        SignedRefR::Plus(x) | SignedRefR::Minus(x) | SignedRefR::Neutral(x) => x.weights.as_deref(),
-    };
+pub fn first_num_weight_pub(ir: &Ir, sref: &SignedRefR) -> f64 {
+    let w = ir.reference_atom(sref).unwrap().weights;
     first_num_weight(w)
 }
 
@@ -849,4 +730,32 @@ pub fn corridor_map_ir(w: usize, h: usize) -> Ir {
         }
     }
     ir
+}
+
+/// Read-only 2-D positions for this test workload vocabulary, keyed by DeclId.
+pub struct MapPositions(pub Vec<Option<[f64; 2]>>);
+impl MapPositions {
+    pub fn from_ir(ir: &Ir) -> Self {
+        Self(
+            (0..ir.decl_nodes.len())
+                .map(|raw| ir_position(ir, DeclId::new(raw)))
+                .collect(),
+        )
+    }
+
+    pub fn from_grid(width: usize, height: usize) -> Self {
+        let positions = grid_positions(width, height)
+            .into_iter()
+            .map(Some)
+            .collect();
+        Self(positions)
+    }
+}
+impl hymeko_graph::direct_ir::PositionProvider for MapPositions {
+    fn position(&self, node: DeclId) -> Option<&[f64]> {
+        self.0
+            .get(node.raw())
+            .and_then(Option::as_ref)
+            .map(|position| position.as_slice())
+    }
 }

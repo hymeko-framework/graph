@@ -99,6 +99,19 @@ pub enum MetaResolveError {
 /// and whose coherence validator is clean never produces one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum IrReadError {
+    /// A compact model-local annotation/base handle does not resolve.
+    #[error("declaration {} has invalid {field} payload {id}", .decl.raw())]
+    InvalidPayload {
+        /// Declaration whose payload is invalid.
+        decl: DeclId,
+        /// Annotation or base-list field.
+        field: &'static str,
+        /// Model-local payload index.
+        id: usize,
+    },
+    /// An attribute ID is outside its owning IR's payload table.
+    #[error("invalid reference payload: {0}")]
+    ReferencePayload(#[from] hymeko::ir::ir::ReferenceError),
     /// A declaration the lowerer read does not exist.
     #[error("declaration {} does not exist", .decl.raw())]
     DanglingDeclaration {
@@ -484,7 +497,11 @@ fn bases_of(ir: &Ir, d: DeclId) -> Result<&[SignedRefR], IrReadError> {
                     record_decl: rec.decl,
                 });
             }
-            Ok(rec.bases.as_slice())
+            ir.bases(rec.bases).ok_or(IrReadError::InvalidPayload {
+                decl: d,
+                field: "bases",
+                id: rec.bases.raw(),
+            })
         }
         Some(DeclKind::Edge) => {
             let eid = ir
@@ -499,7 +516,11 @@ fn bases_of(ir: &Ir, d: DeclId) -> Result<&[SignedRefR], IrReadError> {
                     record_decl: rec.decl,
                 });
             }
-            Ok(rec.bases.as_slice())
+            ir.bases(rec.bases).ok_or(IrReadError::InvalidPayload {
+                decl: d,
+                field: "bases",
+                id: rec.bases.raw(),
+            })
         }
         // A hyper-arc declaration carries no bases in this model; a legitimate
         // absence, not a fault.
@@ -548,7 +569,7 @@ impl IsaWalk {
         self.stack.push(from);
         while let Some(cur) = self.stack.pop() {
             for base in bases_of(ir, cur)? {
-                if !base.atom().anno.tags.contains(&isa) {
+                if !ir.reference_atom(base)?.anno.tags.contains(&isa) {
                     continue;
                 }
                 let parent = base.target();
@@ -624,10 +645,20 @@ fn edge_cost(ir: &Ir, edge: DeclId) -> Result<Option<f64>, IrReadError> {
     let node = ir
         .decl_node(edge)
         .ok_or(IrReadError::DanglingDeclaration { decl: edge })?;
-    Ok(match node.anno.value {
-        Some(ValueR::Num(v)) => Some(v),
-        _ => None,
-    })
+    Ok(
+        match ir
+            .annotation(node.anno)
+            .ok_or(IrReadError::InvalidPayload {
+                decl: edge,
+                field: "annotation",
+                id: node.anno.raw(),
+            })?
+            .value
+        {
+            Some(ValueR::Num(v)) => Some(v),
+            _ => None,
+        },
+    )
 }
 
 /// Find the single declaration named `name` of the given `kind`.

@@ -90,6 +90,12 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+#[cfg(test)]
+extern crate self as hymeko_graph;
+#[cfg(test)]
+#[path = "../tests/pagerank_support/mod.rs"]
+pub(crate) mod ir_test_support;
+
 pub mod balance;
 pub mod cell_topology;
 pub mod color_coding;
@@ -105,6 +111,7 @@ pub mod path_closure;
 pub mod pruner;
 pub mod quadtree;
 pub mod rand_lcg;
+mod ranked_path;
 pub mod signed_graph;
 pub mod signed_tuples;
 pub mod spine;
@@ -120,10 +127,11 @@ pub use balance::{BipartiteOnlyPruner, CartwrightHararyPruner, DavisWeakBalanceP
 pub use cycle_enum::{enumerate_simple_cycles, enumerate_simple_cycles_noprune};
 pub use direct_ir::{
     BergeCycle, BergeIncidence, BergePath, BergeStep, BudgetKind, ComponentLabeling, DirectIrError,
-    DualReach, EnumBudget, EnumOutcome, HyperTraversal, NodeSet, SComponentLabeling,
-    TraversalWorkspace, batch_reachable_counts, connected_components, dual_reachability,
-    enumerate_berge_cycles, enumerate_berge_paths, par_batch_reachable_counts,
-    s_connected_components,
+    DualReach, EnumBudget, EnumOutcome, HyperTraversal, NodeSet, PageRank, PageRankConfig,
+    PageRankError, PageRankModel, PageRankOptions, PageRankResult, PageRankWorkspace, RankFlow,
+    RankOrdering, RankWeights, SComponentLabeling, TraversalWorkspace, batch_reachable_counts,
+    connected_components, dual_reachability, enumerate_berge_cycles, enumerate_berge_paths,
+    par_batch_reachable_counts, s_connected_components,
 };
 pub use hyper_operator::{HyperIncidenceError, SignedHyperIncidence};
 pub use incidence::{

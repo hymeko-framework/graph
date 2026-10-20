@@ -8,8 +8,7 @@
 //!
 //! Run: cargo test -p hymeko_graph --release --test p34_memory measure_memory -- --ignored --nocapture
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
+use hymeko::util::measurement::{AllocationSnapshot, CountingAllocator};
 
 use hymeko::common::ids::NodeId;
 use hymeko::ir::incidence::build_incidence_index;
@@ -22,27 +21,12 @@ use hymeko_graph::{
 #[path = "informed_common/mod.rs"]
 mod ic;
 
-thread_local! {
-    static ALLOCS: Cell<u64> = const { Cell::new(0) };
-    static BYTES: Cell<u64> = const { Cell::new(0) };
-}
-
-struct Counting;
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
-        let _ = ALLOCS.try_with(|c| c.set(c.get() + 1));
-        let _ = BYTES.try_with(|c| c.set(c.get() + l.size() as u64));
-        unsafe { System.alloc(l) }
-    }
-    unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
-        unsafe { System.dealloc(p, l) }
-    }
-}
 #[global_allocator]
-static GA: Counting = Counting;
+static GA: CountingAllocator = CountingAllocator;
 
 fn snap() -> (u64, u64) {
-    (ALLOCS.with(|c| c.get()), BYTES.with(|c| c.get()))
+    let snapshot = AllocationSnapshot::current_thread();
+    (snapshot.allocations, snapshot.bytes)
 }
 fn since(base: (u64, u64)) -> (u64, u64) {
     let n = snap();

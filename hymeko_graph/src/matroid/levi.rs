@@ -66,23 +66,98 @@ fn levi_endpoints(
     }
 }
 
-/// `(vertex_count, rank)` over the implicit Levi graph — the shared inner loop.
-fn levi_forest(ir: &Ir, ws: &mut GraphicMatroidWorkspace) -> Result<(usize, usize), MatroidError> {
-    let n = ir.nodes.len();
-    let a = ir.arcs.len();
-    let vtx = n.checked_add(a).ok_or(MatroidError::Overflow)?;
-    ws.begin(vtx)?;
-    let mut rank = 0usize;
-    for ai in 0..a {
-        let arc = HyperArcId::new(ai);
-        for slot in 0..ir.arcs[ai].refs.len() {
-            let (nc, ac) = levi_endpoints(ir, n, arc, slot)?;
-            if ws.union(nc, ac) {
-                rank += 1;
+/// Private common source for IR and graded-cell Levi incidences.
+pub(super) trait LeviSource: Copy {
+    type Coordinate: Copy;
+    fn universe(self) -> Result<usize, MatroidError>;
+    fn coordinates(&self) -> impl Iterator<Item = Self::Coordinate>;
+    fn endpoints(self, coordinate: Self::Coordinate) -> Result<(u32, u32), MatroidError>;
+}
+#[derive(Clone, Copy)]
+struct IrSource<'a>(&'a Ir);
+impl LeviSource for IrSource<'_> {
+    type Coordinate = LeviCoord;
+    fn universe(self) -> Result<usize, MatroidError> {
+        self.0
+            .nodes
+            .len()
+            .checked_add(self.0.arcs.len())
+            .ok_or(MatroidError::Overflow)
+    }
+    fn coordinates(&self) -> impl Iterator<Item = LeviCoord> {
+        self.0.arcs.iter().enumerate().flat_map(|(arc, record)| {
+            (0..record.refs.len()).map(move |slot| LeviCoord {
+                arc: HyperArcId::new(arc),
+                slot: slot as u32,
+            })
+        })
+    }
+    fn endpoints(self, c: LeviCoord) -> Result<(u32, u32), MatroidError> {
+        levi_endpoints(self.0, self.0.nodes.len(), c.arc, c.slot as usize)
+    }
+}
+/// The single incremental union step shared by every Levi source.
+pub(super) struct LeviSession<'w, S: LeviSource> {
+    ws: &'w mut GraphicMatroidWorkspace,
+    pub(super) source: S,
+    accepted: usize,
+}
+impl<'w, S: LeviSource> LeviSession<'w, S> {
+    pub(super) fn begin(
+        source: S,
+        ws: &'w mut GraphicMatroidWorkspace,
+    ) -> Result<Self, MatroidError> {
+        ws.begin(source.universe()?)?;
+        Ok(Self {
+            source,
+            ws,
+            accepted: 0,
+        })
+    }
+    pub(super) fn offer(&mut self, coordinate: S::Coordinate) -> Result<bool, MatroidError> {
+        let (a, b) = self.source.endpoints(coordinate)?;
+        let joined = self.ws.union(a, b);
+        self.accepted += usize::from(joined);
+        Ok(joined)
+    }
+    pub(super) fn accepted(&self) -> usize {
+        self.accepted
+    }
+}
+/// Batch operations consume the same source and incremental union owner.
+pub(super) struct LeviTraversal;
+impl LeviTraversal {
+    pub(super) fn forest<S: LeviSource>(
+        source: S,
+        ws: &mut GraphicMatroidWorkspace,
+        mut out: Option<&mut Vec<S::Coordinate>>,
+    ) -> Result<(usize, usize), MatroidError> {
+        let mut session = LeviSession::begin(source, ws)?;
+        if let Some(output) = out.as_mut() {
+            output.clear();
+        }
+        for coordinate in source.coordinates() {
+            if session.offer(coordinate)?
+                && let Some(output) = out.as_mut()
+            {
+                output.push(coordinate);
             }
         }
+        Ok((source.universe()?, session.accepted()))
     }
-    Ok((vtx, rank))
+    pub(super) fn independent<S: LeviSource>(
+        source: S,
+        coords: &[S::Coordinate],
+        ws: &mut GraphicMatroidWorkspace,
+    ) -> Result<bool, MatroidError> {
+        let mut session = LeviSession::begin(source, ws)?;
+        for &coordinate in coords {
+            if !session.offer(coordinate)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
 }
 
 /// The Levi/incidence graphic-matroid **rank** = `(N + A) − C`, without retaining the basis.
@@ -94,7 +169,7 @@ pub fn levi_rank(
     m: MatroidRef<'_, '_>,
     ws: &mut GraphicMatroidWorkspace,
 ) -> Result<usize, MatroidError> {
-    Ok(levi_forest(m.ir(), ws)?.1)
+    Ok(LeviTraversal::forest(IrSource(m.ir()), ws, None)?.1)
 }
 
 /// The number of connected components `C` of the implicit Levi graph over the full `N + A` vertex
@@ -106,7 +181,7 @@ pub fn levi_components(
     m: MatroidRef<'_, '_>,
     ws: &mut GraphicMatroidWorkspace,
 ) -> Result<usize, MatroidError> {
-    let (vtx, rank) = levi_forest(m.ir(), ws)?;
+    let (vtx, rank) = LeviTraversal::forest(IrSource(m.ir()), ws, None)?;
     Ok(vtx - rank)
 }
 
@@ -121,25 +196,7 @@ pub fn levi_spanning_basis(
     ws: &mut GraphicMatroidWorkspace,
     out: &mut Vec<LeviCoord>,
 ) -> Result<usize, MatroidError> {
-    let ir = m.ir();
-    let n = ir.nodes.len();
-    let a = ir.arcs.len();
-    let vtx = n.checked_add(a).ok_or(MatroidError::Overflow)?;
-    ws.begin(vtx)?;
-    out.clear();
-    for ai in 0..a {
-        let arc = HyperArcId::new(ai);
-        for slot in 0..ir.arcs[ai].refs.len() {
-            let (nc, ac) = levi_endpoints(ir, n, arc, slot)?;
-            if ws.union(nc, ac) {
-                out.push(LeviCoord {
-                    arc,
-                    slot: slot as u32,
-                });
-            }
-        }
-    }
-    Ok(out.len())
+    Ok(LeviTraversal::forest(IrSource(m.ir()), ws, Some(out))?.1)
 }
 
 /// Is this set of incidence coordinates **independent** (acyclic) in the Levi matroid?
@@ -151,27 +208,14 @@ pub fn levi_independent(
     coords: &[LeviCoord],
     ws: &mut GraphicMatroidWorkspace,
 ) -> Result<bool, MatroidError> {
-    let ir = m.ir();
-    let n = ir.nodes.len();
-    let vtx = n.checked_add(ir.arcs.len()).ok_or(MatroidError::Overflow)?;
-    ws.begin(vtx)?;
-    for c in coords {
-        let (nc, ac) = levi_endpoints(ir, n, c.arc, c.slot as usize)?;
-        if !ws.union(nc, ac) {
-            return Ok(false);
-        }
-    }
-    Ok(true)
+    LeviTraversal::independent(IrSource(m.ir()), coords, ws)
 }
 
 /// An **incremental**, append-only Levi independence stream: feed incidence coordinates one at a time;
 /// each call returns `true` if the coordinate is independent of those already accepted (joins the forest)
 /// or `false` if it closes a cycle. Deletion is **not** supported.
 pub struct IncrementalLevi<'ws, 'ir> {
-    ws: &'ws mut GraphicMatroidWorkspace,
-    snapshot: &'ir Ir,
-    n_nodes: usize,
-    accepted: usize,
+    inner: LeviSession<'ws, IrSource<'ir>>,
 }
 
 impl<'ws, 'ir> IncrementalLevi<'ws, 'ir> {
@@ -180,17 +224,8 @@ impl<'ws, 'ir> IncrementalLevi<'ws, 'ir> {
     /// # Errors
     /// [`MatroidError::Overflow`] if `N + A` exceeds `u32`.
     pub fn begin(ws: &'ws mut GraphicMatroidWorkspace, ir: &'ir Ir) -> Result<Self, MatroidError> {
-        let vtx = ir
-            .nodes
-            .len()
-            .checked_add(ir.arcs.len())
-            .ok_or(MatroidError::Overflow)?;
-        ws.begin(vtx)?;
         Ok(Self {
-            ws,
-            snapshot: ir,
-            n_nodes: ir.nodes.len(),
-            accepted: 0,
+            inner: LeviSession::begin(IrSource(ir), ws)?,
         })
     }
     /// Offer one incidence coordinate; `Ok(true)` = independent (accepted), `Ok(false)` = closes a cycle.
@@ -198,19 +233,14 @@ impl<'ws, 'ir> IncrementalLevi<'ws, 'ir> {
     /// # Errors
     /// As [`levi_rank`] for a non-node / dangling coordinate.
     pub fn offer(&mut self, ir: &'ir Ir, arc: HyperArcId, slot: u32) -> Result<bool, MatroidError> {
-        if !std::ptr::eq(self.snapshot, ir) {
+        if !std::ptr::eq(self.inner.source.0, ir) {
             return Err(MatroidError::ForeignSnapshot);
         }
-        let (nc, ac) = levi_endpoints(self.snapshot, self.n_nodes, arc, slot as usize)?;
-        let joined = self.ws.union(nc, ac);
-        if joined {
-            self.accepted += 1;
-        }
-        Ok(joined)
+        self.inner.offer(LeviCoord { arc, slot })
     }
     /// The number of accepted (independent) coordinates so far — the current forest rank.
     #[must_use]
     pub fn accepted(&self) -> usize {
-        self.accepted
+        self.inner.accepted()
     }
 }

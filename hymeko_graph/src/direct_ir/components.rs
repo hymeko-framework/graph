@@ -1,6 +1,6 @@
 //! Connected components of the canonical `Ir` hypergraph, by direct traversal.
 //!
-//! One generation covers the whole labeling: each still-unseen node seeds a flood that reuses the
+//! One query covers the whole labeling: each still-unseen node seeds a flood that reuses the
 //! shared [`HyperTraversal::expand`] step, and the nodes it discovers form one component. Because
 //! the visited marks persist across floods (no `begin` between them), every node is touched exactly
 //! once -- total cost `O(nodes + arcs + incidences)`.
@@ -20,6 +20,34 @@ pub struct ComponentLabeling {
 }
 
 impl ComponentLabeling {
+    /// Component labels from already validated numeric coordinates. Reuses the
+    /// matroid union-find and avoids constructing a reverse incidence index.
+    pub(crate) fn from_projection(
+        projection: &hymeko::ir::incidence::IncidenceProjection<'_>,
+        workspace: &mut crate::GraphicMatroidWorkspace,
+    ) -> Result<Self, crate::MatroidError> {
+        workspace.begin(projection.domain_len())?;
+        for row in projection.rows() {
+            let mut targets = row.iter_targets();
+            if let Some(first) = targets.next() {
+                for target in targets {
+                    workspace.union(first as u32, target as u32);
+                }
+            }
+        }
+        let mut roots = vec![u32::MAX; projection.domain_len()];
+        let mut label_of = Vec::with_capacity(projection.domain_len());
+        let mut count = 0;
+        for node in 0..projection.domain_len() {
+            let root = workspace.find(node as u32) as usize;
+            if roots[root] == u32::MAX {
+                roots[root] = count;
+                count += 1;
+            }
+            label_of.push(roots[root]);
+        }
+        Ok(Self { label_of, count })
+    }
     /// Number of connected components.
     #[must_use]
     pub fn count(&self) -> u32 {
@@ -83,4 +111,28 @@ pub fn connected_components(
     }
 
     Ok(ComponentLabeling { label_of, count })
+}
+
+#[cfg(test)]
+mod projection_tests {
+    #[test]
+    fn shared_union_find_labels_match_the_existing_incidence_traversal() {
+        use super::*;
+        use crate::ir_test_support::Case;
+        use hymeko::ir::incidence::{IncidenceDomain, IncidenceProjection, build_incidence_index};
+        use hymeko::ir::ir::IrBuilder;
+        let ir = Case::unsigned(9, &[&[0, 1, 1], &[1, 4], &[2, 3], &[3, 5], &[], &[7]])
+            .build()
+            .unwrap();
+        let projection = IncidenceProjection::build(&ir, IncidenceDomain::Nodes).unwrap();
+        let got = ComponentLabeling::from_projection(
+            &projection,
+            &mut crate::GraphicMatroidWorkspace::new(),
+        )
+        .unwrap();
+        let index = build_incidence_index(&ir).unwrap();
+        let expected = connected_components(&index, &mut TraversalWorkspace::new()).unwrap();
+        assert_eq!(got.labels(), expected.labels());
+        assert_eq!(got.count(), 5);
+    }
 }

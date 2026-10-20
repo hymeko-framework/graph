@@ -16,6 +16,62 @@ use hymeko_graph::direct_ir::{
 
 use direct_ir_common::compile;
 
+#[test]
+fn frozen_enumeration_budget_and_incidence_matrix() {
+    let mut observations = Vec::new();
+    for source in [DIAMOND, TRIANGLE, PARALLEL_ARCS, DEEP_THEN_SHORT] {
+        let world = compile(source);
+        for duplicate_entry in [false, true] {
+            let mut ir = world.ir().clone();
+            if duplicate_entry {
+                let repeated = ir.arcs[0].refs[0];
+                ir.arcs[0].refs.insert(1, repeated);
+            }
+            let index = build_incidence_index(&ir).unwrap();
+            let mut hash = 0xcbf29ce484222325_u64;
+            for depth in [0, 1, 2, 4] {
+                for results in [0, 1, 3, 20] {
+                    for expansions in [0, 1, 3, 20] {
+                        let budget = EnumBudget::new(depth, results, expansions);
+                        for start in [world.node("a"), world.node("b"), NodeId::NONE] {
+                            let cycles = enumerate_berge_cycles(&index, start, budget);
+                            let mut encoded = format!("{cycles:?}");
+                            for goal in [
+                                None,
+                                Some(world.node("a")),
+                                Some(world.node("b")),
+                                Some(NodeId::NONE),
+                            ] {
+                                encoded.push_str(&format!(
+                                    "{:?}",
+                                    enumerate_berge_paths(&index, start, goal, budget)
+                                ));
+                            }
+                            hash = encoded
+                                .bytes()
+                                .fold(hash, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3));
+                        }
+                    }
+                }
+            }
+            observations.push(hash);
+        }
+    }
+    assert_eq!(
+        observations,
+        [
+            6290285332835712200,
+            8932646818798971038,
+            16034843550269216935,
+            8395700347480179857,
+            3923066658907001633,
+            6650288657386311263,
+            5172912605622434041,
+            3093870467323935079
+        ]
+    );
+}
+
 const DIAMOND: &str = r#"
 vv {}
 g {

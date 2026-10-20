@@ -1,34 +1,76 @@
 //! Caller-owned scratch memory for direct-`Ir` traversal.
 //!
-//! One [`TraversalWorkspace`] is allocated once and reused across many queries on `Ir`s of the
-//! same shape; a **warm** query does no heap allocation. Visited state is
-//! *generation-marked* -- each query bumps a counter instead of clearing `O(n)` marks, so the
-//! only linear clear is the rare generation wrap (exercised by a test).
-//!
-//! # Layout (data-oriented)
-//! - `node_gen[d]` / `arc_gen[a]`: a decl/arc is "seen this query" iff its stamp `== gen`.
-//!   Node marks are indexed in `DeclId` space (the incidence key space), arc marks in
-//!   `HyperArcId` space.
-//! - `frontier` / `discovered`: node-space FIFO and discovery buffer (primal traversal).
-//! - `arc_frontier` / `arc_discovered`: arc-space FIFO and discovery buffer (dual traversal).
-//! - predecessor arrays (`pred_node`/`pred_arc`/`pred_entry_slot`/`pred_slot`): allocated lazily, only for path
-//!   queries that reconstruct an alternating walk.
+//! Visitation uses typed sparse sets: inverse positions are live only when the
+//! dense discovery buffer points back to the same ID. Clearing a query resets
+//! lengths in O(1), without a generation counter or a wraparound sweep.
+//! Preparation reserves the full declaration/arc domains. Compared with u32
+//! stamps, full-width positions and arc discovery require more memory.
+//! Predecessor arrays are still allocated lazily for path queries.
 
+use hymeko::common::ids::{DeclId, DeclTag, HyperArcId, HyperArcTag, Id};
 use std::collections::VecDeque;
 
-use hymeko::common::ids::{DeclId, HyperArcId};
+/// Query membership and discovery order, owned together to prevent stale aliases.
+/// Only canonical IDs are stored, so clearing the dense Vec runs no destructors.
+pub(super) struct SparseVisited<Tag> {
+    positions: Vec<usize>,
+    dense: Vec<Id<Tag>>,
+}
+impl<Tag> Default for SparseVisited<Tag> {
+    fn default() -> Self {
+        Self {
+            positions: Vec::new(),
+            dense: Vec::new(),
+        }
+    }
+}
+impl<Tag> std::fmt::Debug for SparseVisited<Tag> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(&self.dense).finish()
+    }
+}
+impl<Tag> SparseVisited<Tag> {
+    pub(super) fn ensure(&mut self, domain: usize) {
+        if self.positions.len() < domain {
+            self.positions.resize(domain, 0);
+        }
+        if self.dense.capacity() < domain {
+            self.dense.reserve(domain - self.dense.len());
+        }
+    }
+    pub(super) fn clear(&mut self) {
+        self.dense.clear();
+    }
+    #[inline]
+    pub(super) fn contains(&self, id: Id<Tag>) -> bool {
+        self.positions
+            .get(id.raw())
+            .and_then(|&at| self.dense.get(at))
+            == Some(&id)
+    }
+    /// Returns true only on first discovery. ID must fit the prepared domain.
+    #[inline]
+    pub(super) fn insert(&mut self, id: Id<Tag>) -> bool {
+        if self.contains(id) {
+            return false;
+        }
+        self.positions[id.raw()] = self.dense.len();
+        self.dense.push(id);
+        true
+    }
+    pub(super) fn as_slice(&self) -> &[Id<Tag>] {
+        &self.dense
+    }
+}
 
 /// Reusable scratch for the alternating hypergraph walk. See the module docs for the layout and
 /// the zero-allocation-on-warm-query contract.
 #[derive(Debug, Default)]
 pub struct TraversalWorkspace {
-    node_gen: Vec<u32>,
-    arc_gen: Vec<u32>,
-    stamp: u32,
+    nodes: SparseVisited<DeclTag>,
+    arcs: SparseVisited<HyperArcTag>,
     frontier: VecDeque<DeclId>,
-    discovered: Vec<DeclId>,
     arc_frontier: VecDeque<HyperArcId>,
-    arc_discovered: Vec<HyperArcId>,
     // Lazily sized (path queries only).
     pred_node: Vec<DeclId>,
     pred_arc: Vec<HyperArcId>,
@@ -46,36 +88,29 @@ impl TraversalWorkspace {
         Self::default()
     }
 
-    /// Ensure the visited-mark arrays cover `n_decls` decls and `n_arcs` arcs. Idempotent; grows
-    /// only. New slots are stamped `0` (never equal to a live `gen`, which is `>= 1`).
+    /// Prepare the full ID domains and FIFO capacity; grows only. Warm queries
+    /// within these domains need no additional visitation/frontier allocation.
     pub fn ensure_capacity(&mut self, n_decls: usize, n_arcs: usize) {
-        if self.node_gen.len() < n_decls {
-            self.node_gen.resize(n_decls, 0);
+        self.nodes.ensure(n_decls);
+        self.arcs.ensure(n_arcs);
+        if self.frontier.capacity() < n_decls {
+            self.frontier.reserve(n_decls - self.frontier.len());
         }
-        if self.arc_gen.len() < n_arcs {
-            self.arc_gen.resize(n_arcs, 0);
+        if self.arc_frontier.capacity() < n_arcs {
+            self.arc_frontier.reserve(n_arcs - self.arc_frontier.len());
         }
-        // A grow can invalidate the lazily-sized predecessor arrays.
         if self.pred_ready && self.pred_node.len() < n_decls {
             self.pred_ready = false;
         }
     }
 
-    /// Begin a new query: advance the generation (clearing all marks in `O(1)` amortised), and
-    /// empty the frontiers and discovery buffers. Handles generation wrap by clearing the stamps
-    /// once when the counter saturates -- after which no stale stamp can alias a live generation.
+    /// Begin a new query with O(1) logical clears; stale inverse positions cannot
+    /// alias live discovery entries. No query counter can wrap.
     pub fn begin(&mut self) {
-        if self.stamp == u32::MAX {
-            self.node_gen.iter_mut().for_each(|g| *g = 0);
-            self.arc_gen.iter_mut().for_each(|g| *g = 0);
-            self.stamp = 1;
-        } else {
-            self.stamp += 1;
-        }
+        self.nodes.clear();
+        self.arcs.clear();
         self.frontier.clear();
-        self.discovered.clear();
         self.arc_frontier.clear();
-        self.arc_discovered.clear();
     }
 
     /// Prepare predecessor arrays for a path query. Cheap when already sized.
@@ -93,17 +128,15 @@ impl TraversalWorkspace {
 
     #[inline]
     pub(crate) fn node_seen(&self, d: DeclId) -> bool {
-        self.node_gen.get(d.raw()).is_some_and(|&g| g == self.stamp)
+        self.nodes.contains(d)
     }
 
     /// Mark a node seen and append it to the discovery buffer. Precondition (debug-checked):
     /// `d` is in range and not already seen this query.
     #[inline]
     pub(crate) fn discover_node(&mut self, d: DeclId) {
-        debug_assert!(d.raw() < self.node_gen.len(), "node decl out of capacity");
         debug_assert!(!self.node_seen(d), "double-discover of a node");
-        self.node_gen[d.raw()] = self.stamp;
-        self.discovered.push(d);
+        self.nodes.insert(d);
     }
 
     #[inline]
@@ -119,35 +152,33 @@ impl TraversalWorkspace {
     /// The nodes discovered by the current query, in discovery order (seeds first per layer).
     #[inline]
     pub(crate) fn discovered(&self) -> &[DeclId] {
-        &self.discovered
+        self.nodes.as_slice()
     }
 
     /// Number of nodes discovered so far this query (component range markers).
     #[inline]
     pub(crate) fn discovered_len(&self) -> usize {
-        self.discovered.len()
+        self.nodes.as_slice().len()
     }
 
     // ---- arc-space (dual) ----
 
     #[inline]
     pub(crate) fn arc_seen(&self, a: HyperArcId) -> bool {
-        self.arc_gen.get(a.raw()).is_some_and(|&g| g == self.stamp)
+        self.arcs.contains(a)
     }
 
     /// Mark an arc expanded/reached. Precondition (debug-checked): not already marked this query.
     #[inline]
     pub(crate) fn mark_arc(&mut self, a: HyperArcId) {
-        debug_assert!(a.raw() < self.arc_gen.len(), "arc out of capacity");
         debug_assert!(!self.arc_seen(a), "double-mark of an arc");
-        self.arc_gen[a.raw()] = self.stamp;
+        self.arcs.insert(a);
     }
 
     /// Mark an arc reached (dual traversal) and record it in the arc discovery buffer.
     #[inline]
     pub(crate) fn discover_arc(&mut self, a: HyperArcId) {
         self.mark_arc(a);
-        self.arc_discovered.push(a);
     }
 
     #[inline]
@@ -163,7 +194,7 @@ impl TraversalWorkspace {
     /// The arcs reached by the current dual query, in discovery order.
     #[inline]
     pub(crate) fn arc_discovered(&self) -> &[HyperArcId] {
-        &self.arc_discovered
+        self.arcs.as_slice()
     }
 
     // ---- predecessors (path reconstruction) ----
@@ -194,68 +225,78 @@ impl TraversalWorkspace {
             self.pred_slot[i],
         )
     }
-
-    /// Current generation stamp (for tests exercising wrap).
-    #[cfg(test)]
-    pub(crate) fn generation(&self) -> u32 {
-        self.stamp
-    }
-
-    /// Force the generation near saturation (test-only, to exercise wrap in [`begin`]).
-    #[cfg(test)]
-    pub(crate) fn force_generation(&mut self, g: u32) {
-        self.stamp = g;
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::TraversalWorkspace;
-    use hymeko::common::ids::{DeclId, HyperArcId};
+    use super::*;
 
     #[test]
-    fn generation_advance_clears_node_marks() {
-        let mut ws = TraversalWorkspace::new();
-        ws.ensure_capacity(4, 2);
-        ws.begin();
-        let d = DeclId::new(2);
-        ws.discover_node(d);
-        assert!(ws.node_seen(d));
-        ws.begin();
-        assert!(!ws.node_seen(d), "a new generation clears the mark");
+    fn sparse_membership_matches_an_independent_boolean_oracle() {
+        let mut visited = SparseVisited::<DeclTag>::default();
+        for domain in [1, 7, 32, 9, 65] {
+            visited.ensure(domain);
+            let capacities = (visited.positions.capacity(), visited.dense.capacity());
+            for round in 0..37 {
+                visited.clear();
+                let mut oracle = vec![false; domain];
+                let mut order = Vec::new();
+                for step in 0..domain * 3 {
+                    let raw = (step * 17 + round * 13) % domain;
+                    let id = DeclId::new(raw);
+                    assert_eq!(visited.insert(id), !oracle[raw]);
+                    if !oracle[raw] {
+                        order.push(id);
+                    }
+                    oracle[raw] = true;
+                    for (raw, &expected) in oracle.iter().enumerate() {
+                        assert_eq!(visited.contains(DeclId::new(raw)), expected);
+                    }
+                    assert!(!visited.contains(DeclId::NONE));
+                    assert_eq!(visited.as_slice(), order);
+                }
+                assert_eq!(
+                    capacities,
+                    (visited.positions.capacity(), visited.dense.capacity())
+                );
+            }
+        }
+        assert!(!format!("{visited:?}").is_empty());
     }
 
     #[test]
-    fn generation_wrap_resets_stale_stamps() {
+    fn begin_leaves_inverse_storage_untouched_and_reuses_discovery_order() {
         let mut ws = TraversalWorkspace::new();
-        ws.ensure_capacity(4, 2);
-        ws.begin(); // stamp = 1
-        let d = DeclId::new(1);
-        ws.discover_node(d); // node_gen[1] = 1
-        // Saturate the counter so the next begin() must wrap.
-        ws.force_generation(u32::MAX);
-        assert!(
-            !ws.node_seen(d),
-            "stale stamp 1 must not alias generation u32::MAX"
+        ws.ensure_capacity(8, 5);
+        ws.begin();
+        ws.discover_node(DeclId::new(7));
+        ws.discover_node(DeclId::new(1));
+        ws.mark_arc(HyperArcId::new(4));
+        ws.discover_arc(HyperArcId::new(2));
+        let before = (ws.nodes.positions.clone(), ws.arcs.positions.clone());
+        ws.begin();
+        assert_eq!(
+            before,
+            (ws.nodes.positions.clone(), ws.arcs.positions.clone())
         );
-        ws.begin(); // wraps: clears stamps, stamp = 1
-        assert_eq!(ws.generation(), 1);
-        assert!(!ws.node_seen(d), "wrap cleared the stale stamp");
-        ws.discover_node(d);
-        assert!(ws.node_seen(d), "workspace remains usable after a wrap");
-    }
-
-    #[test]
-    fn arc_marks_are_generation_scoped() {
-        let mut ws = TraversalWorkspace::new();
-        ws.ensure_capacity(2, 3);
-        ws.begin();
-        let a = HyperArcId::new(2);
-        assert!(!ws.arc_seen(a));
-        ws.discover_arc(a);
-        assert!(ws.arc_seen(a));
-        assert_eq!(ws.arc_discovered(), &[a]);
-        ws.begin();
-        assert!(!ws.arc_seen(a), "arc marks reset with the generation");
+        assert!(!ws.node_seen(DeclId::new(1)));
+        assert!(!ws.arc_seen(HyperArcId::new(4)));
+        ws.discover_node(DeclId::new(1));
+        ws.discover_arc(HyperArcId::new(2));
+        assert!(
+            !ws.node_seen(DeclId::new(7)),
+            "stale position 0 must not alias"
+        );
+        assert!(!ws.arc_seen(HyperArcId::new(4)));
+        assert_eq!(ws.discovered(), &[DeclId::new(1)]);
+        assert_eq!(ws.arc_discovered(), &[HyperArcId::new(2)]);
+        ws.arm_predecessors(8);
+        ws.ensure_capacity(16, 10);
+        assert!(!ws.pred_ready);
+        ws.arm_predecessors(16);
+        ws.discover_node(DeclId::new(15));
+        ws.discover_arc(HyperArcId::new(9));
+        assert!(ws.node_seen(DeclId::new(15)));
+        assert!(ws.arc_seen(HyperArcId::new(9)));
     }
 }

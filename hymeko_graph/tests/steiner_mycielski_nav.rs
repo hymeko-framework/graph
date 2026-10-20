@@ -4,7 +4,7 @@
 //! oracles in `informed_common` / `direct_ir_common` (a linear-scan Dijkstra and an O(V·E) reachability
 //! scan share no code with the engine). The workloads emit canonical `hymeko_core::ir::Ir` and are
 //! navigated through the sparse `IncidenceIndex` — no pairwise projection, no second model. The final
-//! test is a measurement pass (run with `--nocapture`) separating cold construction from warm search.
+//! measurement test is ignored by default and requires explicit opt-in.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -21,6 +21,281 @@ mod dc;
 mod ic;
 
 use ic::OracleCost;
+#[path = "pagerank_support/mod.rs"]
+mod construction;
+
+use hymeko::generators::{GraphGenerator, HypergraphDesign, HypergraphGenerator, mycielskian};
+use hymeko::ir::incidence::IncidenceIndex;
+use hymeko::ir::ir::IrBuilder;
+use hymeko_graph::direct_ir::{
+    batch_reachable_counts, connected_components, dual_reachability, par_batch_reachable_counts,
+};
+use hymeko_graph::matroid::{
+    GraphicMatroidWorkspace, MatroidRef, levi_components, levi_independent, levi_spanning_basis,
+};
+
+/// Test client only: one generated design feeds the existing canonical builder,
+/// then all algorithms see the same IR. Expected answers use the frozen oracles.
+struct GeneratedAlgorithms {
+    name: &'static str,
+    design: HypergraphDesign,
+}
+impl GeneratedAlgorithms {
+    fn check(&self) {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let mut original = None;
+        for seed in [None, Some(17), Some(29)] {
+            let permutation = construction::VertexPermutation::new(self.design.n_vertices, seed);
+            let members: Vec<Vec<usize>> = self
+                .design
+                .edges
+                .iter()
+                .map(|row| row.iter().map(|&v| permutation.target(v)).collect())
+                .collect();
+            let ir = construction::Case::unsigned(
+                self.design.n_vertices,
+                &members.iter().map(Vec::as_slice).collect::<Vec<_>>(),
+            )
+            .build()
+            .unwrap();
+            assert_eq!(ir.nodes.len(), self.design.n_vertices);
+            assert_eq!(ir.edges.len(), self.design.edges.len());
+            assert_eq!(ir.arcs.len(), self.design.edges.len());
+            for (arc, expected) in ir.arcs.iter().zip(&members) {
+                let actual: Vec<_> = arc
+                    .refs
+                    .iter()
+                    .map(|r| ir.as_node(r.target()).unwrap().raw())
+                    .collect();
+                assert_eq!(
+                    &actual, expected,
+                    "ordered membership must survive construction"
+                );
+            }
+            let index = build_incidence_index(&ir).unwrap();
+            let starts: Vec<_> = (0..ir.nodes.len())
+                .map(|v| NodeId::new(permutation.target(v)))
+                .collect();
+            let mut traversal = TraversalWorkspace::new();
+            let labeling = connected_components(&index, &mut traversal).unwrap();
+            let expected: Vec<_> = starts
+                .iter()
+                .map(|&s| dc::oracle_reachable(&ir, s))
+                .collect();
+            let partitions: BTreeSet<_> = expected.iter().cloned().collect();
+            assert_eq!(
+                labeling.count() as usize,
+                partitions.len(),
+                "{} {seed:?}",
+                self.name
+            );
+            let counts: Vec<_> = expected.iter().map(BTreeSet::len).collect();
+            assert_eq!(batch_reachable_counts(&index, &starts).unwrap(), counts);
+            assert_eq!(
+                pool.install(|| par_batch_reachable_counts(&index, &starts))
+                    .unwrap(),
+                counts
+            );
+            for (i, &start) in starts.iter().enumerate() {
+                let reached: BTreeSet<_> = HyperTraversal::new(&index)
+                    .reachable_nodes(&mut traversal, start)
+                    .unwrap()
+                    .nodes()
+                    .map(|n| n.raw())
+                    .collect();
+                assert_eq!(reached, expected[i]);
+                for &goal in &starts {
+                    assert_eq!(
+                        labeling.same_component(start, goal),
+                        Some(expected[i].contains(&goal.raw()))
+                    );
+                }
+            }
+            self.check_dual_and_basis(&index, partitions.len());
+            let distances = Self::check_paths(&index, &starts);
+            if let Some(ref baseline) = original {
+                assert_eq!(&(counts, distances), baseline, "{} {seed:?}", self.name);
+            } else {
+                original = Some((counts, distances));
+            }
+            println!(
+                "ALGORITHM_CASE\tname={}\tseed={seed:?}\tvertices={}\tarcs={}\tincidences={}\tcomponents={}\tordered_pairs={}",
+                self.name,
+                ir.nodes.len(),
+                ir.arcs.len(),
+                members.iter().map(Vec::len).sum::<usize>(),
+                partitions.len(),
+                starts.len() * starts.len()
+            );
+        }
+    }
+
+    fn check_paths(index: &IncidenceIndex<'_>, starts: &[NodeId]) -> Vec<Option<usize>> {
+        let traversal = HyperTraversal::new(index);
+        let mut bfs = TraversalWorkspace::new();
+        let mut informed = InformedSearchWorkspace::new();
+        let mut distances = Vec::new();
+        for &start in starts {
+            for &goal in starts {
+                let reference =
+                    ic::oracle_dijkstra_cost(index.ir(), index, start, goal, OracleCost::Unit);
+                let path = traversal
+                    .berge_shortest_path(&mut bfs, start, goal)
+                    .unwrap();
+                assert_eq!(path.as_ref().map(|p| p.steps.len() as f64), reference);
+                for use_astar in [false, true] {
+                    let path = if use_astar {
+                        astar_berge_path(
+                            &traversal,
+                            start,
+                            goal,
+                            &UnitCost,
+                            &ZeroHeuristic,
+                            &Undirected,
+                            &mut informed,
+                        )
+                    } else {
+                        dijkstra_berge_path(
+                            &traversal,
+                            start,
+                            goal,
+                            &UnitCost,
+                            &Undirected,
+                            &mut informed,
+                        )
+                    }
+                    .unwrap();
+                    assert_eq!(path.as_ref().map(|p| p.total_cost), reference);
+                }
+                distances.push(path.map(|p| p.steps.len()));
+            }
+        }
+        distances
+    }
+
+    fn check_dual_and_basis(&self, index: &IncidenceIndex<'_>, components: usize) {
+        use hymeko::common::ids::HyperArcId;
+        let ir = index.ir();
+        let mut traversal = TraversalWorkspace::new();
+        for (start, arc) in ir.arcs.iter().enumerate() {
+            let expected = if let Some(first) = arc.refs.first() {
+                let nodes = dc::oracle_reachable(ir, ir.as_node(first.target()).unwrap());
+                ir.arcs
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, arc)| {
+                        arc.refs
+                            .iter()
+                            .any(|r| nodes.contains(&ir.as_node(r.target()).unwrap().raw()))
+                            .then_some(i)
+                    })
+                    .collect::<BTreeSet<_>>()
+            } else {
+                BTreeSet::from([start])
+            };
+            let actual = dual_reachability(index, &mut traversal, HyperArcId::new(start)).unwrap();
+            assert_eq!(
+                actual
+                    .arcs()
+                    .iter()
+                    .map(|a| a.raw())
+                    .collect::<BTreeSet<_>>(),
+                expected
+            );
+        }
+        let expected_components =
+            components + ir.arcs.iter().filter(|arc| arc.refs.is_empty()).count();
+        let mut scratch = GraphicMatroidWorkspace::new();
+        let facade = MatroidRef::new(index);
+        assert_eq!(
+            levi_components(facade, &mut scratch).unwrap(),
+            expected_components
+        );
+        let mut basis = Vec::new();
+        let expected_rank = ir.nodes.len() + ir.arcs.len() - expected_components;
+        assert_eq!(
+            levi_spanning_basis(facade, &mut scratch, &mut basis).unwrap(),
+            expected_rank
+        );
+        assert_eq!(basis.len(), expected_rank);
+        assert!(levi_independent(facade, &basis, &mut scratch).unwrap());
+    }
+}
+
+#[test]
+fn core_generators_feed_one_ir_across_algorithms_and_vertex_numberings() {
+    let fano = HypergraphGenerator::SteinerTriple { n: 7 }
+        .generate()
+        .unwrap();
+    let (n, edges) = ic::base_c5();
+    let cycle = HypergraphDesign {
+        n_vertices: n,
+        edges: edges.into_iter().map(|(a, b)| vec![a, b]).collect(),
+    };
+    let requests = [
+        ("fano", HypergraphGenerator::SteinerTriple { n: 7 }),
+        ("bose9", HypergraphGenerator::SteinerTriple { n: 9 }),
+        ("steiner13", HypergraphGenerator::SteinerTriple { n: 13 }),
+        ("bose15", HypergraphGenerator::SteinerTriple { n: 15 }),
+        (
+            "sunflower",
+            HypergraphGenerator::Sunflower {
+                petals: 4,
+                core: 2,
+                petal: 3,
+            },
+        ),
+        (
+            "disjoint",
+            HypergraphGenerator::Sunflower {
+                petals: 3,
+                core: 0,
+                petal: 2,
+            },
+        ),
+        (
+            "complete3",
+            HypergraphGenerator::CompleteUniform { n: 6, r: 3 },
+        ),
+    ];
+    for (name, request) in requests {
+        GeneratedAlgorithms {
+            name,
+            design: request.generate().unwrap(),
+        }
+        .check();
+    }
+    for (name, design) in [
+        ("mycielski_graph", mycielskian(&mycielskian(&cycle))),
+        ("mycielski_hypergraph", mycielskian(&fano)),
+        (
+            "empty",
+            HypergraphDesign {
+                n_vertices: 0,
+                edges: vec![],
+            },
+        ),
+        (
+            "isolated",
+            HypergraphDesign {
+                n_vertices: 4,
+                edges: vec![],
+            },
+        ),
+        (
+            "boundary",
+            HypergraphDesign {
+                n_vertices: 6,
+                edges: vec![vec![], vec![0], vec![1, 1], vec![1, 2], vec![3, 4]],
+            },
+        ),
+    ] {
+        GeneratedAlgorithms { name, design }.check();
+    }
+}
 
 // ---- Steiner formula verification (§4.1, §6) -------------------------------------------------------
 
@@ -77,6 +352,25 @@ fn mycielski_recurrence_and_properties() {
     for iters in 0u32..=3 {
         let (exp_n, exp_e) = ic::mycielski_expected_counts(bn, be.len(), iters);
         let ir = ic::mycielski_ir(bn, &be, iters);
+        let ordered_membership = ir
+            .arcs
+            .iter()
+            .flat_map(|arc| arc.refs.iter())
+            .flat_map(|reference| (reference.target().raw() as u64).to_le_bytes())
+            .fold(0xcbf29ce484222325_u64, |hash, byte| {
+                (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+            });
+        // Frozen from the pre-delegation adapter on 2026-10-20. Checks ordered
+        // endpoints, not only counts/isomorphism, independently of Core generation.
+        assert_eq!(
+            ordered_membership,
+            [
+                8829341927553824037,
+                12972309819242767082,
+                14714448923187843448,
+                16428135619258162422,
+            ][iters as usize]
+        );
         assert_eq!(
             ir.decl_nodes.len(),
             exp_n,

@@ -6,13 +6,14 @@
 use hymeko::common::ids::{DeclId, NodeId};
 use hymeko::ir::incidence::IncidenceRef;
 use hymeko::ir::incidence::build_incidence_index;
-use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR};
+use hymeko::ir::ir::IrConstruction;
+use hymeko::ir::ir::{AnnoR, ArcRec, Ir, RefAtomR, SignedRefR};
 use hymeko_graph::direct_ir::{
     BergeCost, BergeHeuristic, DirectedProducerConsumer, HyperTraversal, IncidenceWeightCost,
     InformedSearchError, InformedSearchWorkspace, MetricHeuristic, MetricStepCost,
-    PositionProvider, TraversalWorkspace, Undirected, UnitCost, ZeroHeuristic, astar_berge_path,
-    dijkstra_berge_path,
+    PositionProvider, TraversalWorkspace, Undirected, UnitCost, ZeroHeuristic,
 };
+use ic::search::{AStar, Dijkstra, SearchCase};
 
 #[path = "direct_ir_common/mod.rs"]
 mod dc;
@@ -20,6 +21,186 @@ mod dc;
 mod ic;
 
 use ic::{OracleCost, SignMode};
+
+#[test]
+fn prepared_berge_matches_oracle_and_directed_engine_across_shapes() {
+    use hymeko_graph::direct_ir::{DirectedConsumerProducer, PreparedBergeSearch};
+    for n in [5, 9, 17] {
+        for arity in [2, 3, 5] {
+            let ir = ic::window_ir(n, arity, true, SignMode::Alternating);
+            let index = build_incidence_index(&ir).unwrap();
+            let traversal = HyperTraversal::new(&index);
+            let goal = NodeId::new(n - 1);
+            let mut scratch = TraversalWorkspace::new();
+            let prepared = PreparedBergeSearch::build(&index, goal, &mut scratch).unwrap();
+            let mut ws = InformedSearchWorkspace::new();
+            for start in (0..n).map(NodeId::new) {
+                let exact = ic::oracle_dijkstra_cost(&ir, &index, start, goal, OracleCost::Unit);
+                assert_eq!(prepared.relaxed_hops(start).map(f64::from), exact);
+                assert_eq!(
+                    prepared
+                        .search(start, &UnitCost, &Undirected, &mut ws)
+                        .unwrap()
+                        .map(|p| p.total_cost),
+                    exact
+                );
+                let cost = IncidenceWeightCost { base: 0.25 };
+                assert_eq!(
+                    prepared
+                        .search(start, &cost, &Undirected, &mut ws)
+                        .unwrap()
+                        .map(|p| p.total_cost),
+                    ic::oracle_dijkstra_cost(
+                        &ir,
+                        &index,
+                        start,
+                        goal,
+                        OracleCost::Weight { base: 0.25 }
+                    )
+                );
+                let direct = ic::search::SearchCase::new(&traversal, start, goal, &mut ws)
+                    .run(&Dijkstra::new(&UnitCost, &DirectedProducerConsumer))
+                    .unwrap();
+                let optimized = prepared
+                    .search(start, &UnitCost, &DirectedProducerConsumer, &mut ws)
+                    .unwrap();
+                assert_eq!(
+                    optimized.as_ref().map(|p| p.total_cost),
+                    direct.as_ref().map(|p| p.total_cost)
+                );
+                let direct = ic::search::SearchCase::new(&traversal, start, goal, &mut ws)
+                    .run(&Dijkstra::new(&UnitCost, &DirectedConsumerProducer))
+                    .unwrap();
+                assert_eq!(
+                    prepared
+                        .search(start, &UnitCost, &DirectedConsumerProducer, &mut ws)
+                        .unwrap()
+                        .map(|p| p.total_cost),
+                    direct.map(|p| p.total_cost)
+                );
+            }
+            assert_eq!(prepared.relaxed_hops(NodeId::new(n)), None);
+            assert_eq!(prepared.entropy_priority(NodeId::new(n)), None);
+            let rebuilt = PreparedBergeSearch::build(&index, goal, &mut scratch).unwrap();
+            for node in (0..n).map(NodeId::new) {
+                assert_eq!(
+                    prepared.entropy_priority(node),
+                    rebuilt.entropy_priority(node)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn prepared_berge_rejects_disconnected_starts_without_frontier_work() {
+    use hymeko_graph::direct_ir::PreparedBergeSearch;
+    let ir = ic::multi_component_ir(2, 5, 3);
+    let index = build_incidence_index(&ir).unwrap();
+    let mut scratch = TraversalWorkspace::new();
+    let prepared = PreparedBergeSearch::build(&index, NodeId::new(9), &mut scratch).unwrap();
+    let mut ws = InformedSearchWorkspace::new();
+    prepared
+        .search(NodeId::new(5), &UnitCost, &Undirected, &mut ws)
+        .unwrap();
+    assert!(
+        prepared
+            .search(NodeId::new(0), &UnitCost, &Undirected, &mut ws)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(ws.stats(), Default::default());
+    assert!(matches!(
+        prepared.search(NodeId::new(99), &UnitCost, &Undirected, &mut ws),
+        Err(InformedSearchError::InvalidStart { .. })
+    ));
+    assert!(matches!(
+        PreparedBergeSearch::build(&index, NodeId::new(99), &mut scratch),
+        Err(InformedSearchError::InvalidStart { .. })
+    ));
+    struct InvalidBound;
+    impl BergeCost for InvalidBound {
+        fn minimum_step_cost(&self) -> f64 {
+            f64::NAN
+        }
+        fn step_cost(&self, _: DeclId, _: &IncidenceRef<'_>) -> f64 {
+            1.0
+        }
+    }
+    assert!(matches!(
+        prepared.search(NodeId::new(5), &InvalidBound, &Undirected, &mut ws),
+        Err(InformedSearchError::BadStepBound { .. })
+    ));
+}
+
+#[test]
+fn incumbent_bound_prunes_only_paths_worse_than_a_complete_witness() {
+    let ir = ic::weighted_graph_ir(4, &[(0, 1, 1.0), (0, 2, 9.0), (2, 3, 1.0)]);
+    let index = build_incidence_index(&ir).unwrap();
+    let traversal = HyperTraversal::new(&index);
+    let mut ws = InformedSearchWorkspace::new();
+    let cost = IncidenceWeightCost { base: 0.0 };
+    let result = SearchCase::new(&traversal, NodeId::new(0), NodeId::new(1), &mut ws)
+        .run(&Dijkstra::new(&cost, &Undirected))
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.total_cost, 1.0);
+    assert_eq!(ws.stats().bound_pruned, 1);
+    assert_eq!(
+        ic::oracle_dijkstra_cost(
+            &ir,
+            &index,
+            NodeId::new(0),
+            NodeId::new(1),
+            OracleCost::Weight { base: 0.0 }
+        ),
+        Some(1.0)
+    );
+}
+
+#[test]
+fn entropy_orders_equal_cost_candidates_without_becoming_a_distance() {
+    use hymeko_graph::direct_ir::PreparedBergeSearch;
+    let ir = ic::weighted_graph_ir(4, &[(0, 1, 1.0), (0, 2, 1.0), (0, 3, 1.0)]);
+    let index = build_incidence_index(&ir).unwrap();
+    let mut preparation = TraversalWorkspace::new();
+    let search = PreparedBergeSearch::build(&index, NodeId::new(1), &mut preparation).unwrap();
+    // Hub has entropy log2(3); each leaf has one bucket and entropy zero.
+    assert!(search.entropy_priority(NodeId::new(0)) > search.entropy_priority(NodeId::new(3)));
+    assert_eq!(search.relaxed_hops(NodeId::new(0)), Some(1));
+    assert_eq!(search.relaxed_hops(NodeId::new(3)), Some(2));
+    let mut workspace = InformedSearchWorkspace::new();
+    let result = search
+        .search(NodeId::new(3), &UnitCost, &Undirected, &mut workspace)
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.total_cost, 2.0);
+}
+
+#[test]
+fn inconsistent_admissibility_claim_is_rejected_before_search() {
+    struct Uncertified;
+    impl BergeHeuristic for Uncertified {
+        const ADMISSIBLE: bool = false;
+        const CONSISTENT: bool = true;
+        fn h(&self, _: &Ir, _: DeclId) -> f64 {
+            0.0
+        }
+    }
+    let ir = ic::window_ir(3, 2, false, SignMode::AllPlus);
+    let index = build_incidence_index(&ir).unwrap();
+    assert_eq!(
+        SearchCase::new(
+            &HyperTraversal::new(&index),
+            NodeId::new(0),
+            NodeId::new(2),
+            &mut InformedSearchWorkspace::new()
+        )
+        .run(&AStar::new(&UnitCost, &Uncertified, &Undirected))
+        .unwrap_err(),
+        InformedSearchError::InconsistentHeuristicInOptimalMode
+    );
+}
 
 fn unit_path_cost<P: hymeko_graph::direct_ir::TransitionPolicy>(
     ir: &Ir,
@@ -29,16 +210,10 @@ fn unit_path_cost<P: hymeko_graph::direct_ir::TransitionPolicy>(
     workspace: &mut InformedSearchWorkspace,
 ) -> Option<f64> {
     let index = build_incidence_index(ir).unwrap();
-    dijkstra_berge_path(
-        &HyperTraversal::new(&index),
-        start,
-        goal,
-        &UnitCost,
-        policy,
-        workspace,
-    )
-    .unwrap()
-    .map(|path| path.total_cost)
+    SearchCase::new(&HyperTraversal::new(&index), start, goal, workspace)
+        .run(&Dijkstra::new(&UnitCost, policy))
+        .unwrap()
+        .map(|path| path.total_cost)
 }
 
 // ---- test-only position provider + a coupled metric probe ------------------------------------------
@@ -73,9 +248,13 @@ fn astar_zero_equals_oracle_dijkstra_unit_and_weighted() {
             let (start, goal) = (NodeId::new(s), NodeId::new(g));
             let oracle = ic::oracle_dijkstra_cost(&ir, &idx, start, goal, ocost());
             let engine = if weighted {
-                dijkstra_berge_path(&trav, start, goal, &ic_cost, &Undirected, &mut ws).unwrap()
+                SearchCase::new(&trav, start, goal, &mut ws)
+                    .run(&Dijkstra::new(&ic_cost, &Undirected))
+                    .unwrap()
             } else {
-                dijkstra_berge_path(&trav, start, goal, &UnitCost, &Undirected, &mut ws).unwrap()
+                SearchCase::new(&trav, start, goal, &mut ws)
+                    .run(&Dijkstra::new(&UnitCost, &Undirected))
+                    .unwrap()
             };
             match (oracle, engine) {
                 (Some(oc), Some(p)) => {
@@ -104,16 +283,10 @@ fn astar_zero_unit_equals_bfs_length() {
             .berge_shortest_path(&mut bfs_ws, NodeId::new(s), NodeId::new(g))
             .unwrap()
             .unwrap();
-        let a = dijkstra_berge_path(
-            &trav,
-            NodeId::new(s),
-            NodeId::new(g),
-            &UnitCost,
-            &Undirected,
-            &mut a_ws,
-        )
-        .unwrap()
-        .unwrap();
+        let a = SearchCase::new(&trav, NodeId::new(s), NodeId::new(g), &mut a_ws)
+            .run(&Dijkstra::new(&UnitCost, &Undirected))
+            .unwrap()
+            .unwrap();
         assert_eq!(a.total_cost, bfs.hyperedge_len() as f64);
         assert_eq!(a.hyperedge_len(), bfs.hyperedge_len());
     }
@@ -135,15 +308,9 @@ fn astar_zero_equals_exhaustive_tiny() {
             OracleCost::Weight { base: 1.0 },
             2_000_000,
         );
-        let en = dijkstra_berge_path(
-            &trav,
-            NodeId::new(0),
-            NodeId::new(g),
-            &cost,
-            &Undirected,
-            &mut ws,
-        )
-        .unwrap();
+        let en = SearchCase::new(&trav, NodeId::new(0), NodeId::new(g), &mut ws)
+            .run(&Dijkstra::new(&cost, &Undirected))
+            .unwrap();
         match (ex, en) {
             (Some(a), Some(p)) => assert!(
                 (a - p.total_cost).abs() < 1e-9,
@@ -173,14 +340,17 @@ fn metric_astar_matches_dijkstra_cost_and_prunes() {
     let heur = MetricHeuristic::new(&pos, goal_decl);
 
     let mut ws = InformedSearchWorkspace::new();
-    let dij = dijkstra_berge_path(&trav, start, goal, &cost, &Undirected, &mut ws)
+    let mut case = SearchCase::new(&trav, start, goal, &mut ws);
+    let dij = case
+        .run(&Dijkstra::new(&cost, &Undirected))
         .unwrap()
         .unwrap();
-    let dij_expanded = ws.stats().expanded_nodes;
-    let astar = astar_berge_path(&trav, start, goal, &cost, &heur, &Undirected, &mut ws)
+    let dij_expanded = case.stats().expanded_nodes;
+    let astar = case
+        .run(&AStar::new(&cost, &heur, &Undirected))
         .unwrap()
         .unwrap();
-    let astar_expanded = ws.stats().expanded_nodes;
+    let astar_expanded = case.stats().expanded_nodes;
 
     assert!(
         (dij.total_cost - astar.total_cost).abs() < 1e-9,
@@ -202,43 +372,25 @@ fn zero_heuristic_is_dijkstra_and_deterministic() {
     let trav = HyperTraversal::new(&idx);
     let cost = IncidenceWeightCost { base: 1.0 };
     let mut ws = InformedSearchWorkspace::new();
-    let a = astar_berge_path(
-        &trav,
-        NodeId::new(0),
-        NodeId::new(39),
-        &cost,
-        &ZeroHeuristic,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap();
-    let b = dijkstra_berge_path(
-        &trav,
-        NodeId::new(0),
-        NodeId::new(39),
-        &cost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap();
+    let mut case = SearchCase::new(&trav, NodeId::new(0), NodeId::new(39), &mut ws);
+    let a = case
+        .run(&AStar::new(&cost, &ZeroHeuristic, &Undirected))
+        .unwrap()
+        .unwrap();
+    let b = case
+        .run(&Dijkstra::new(&cost, &Undirected))
+        .unwrap()
+        .unwrap();
     assert_eq!(
         a.path_hash(),
         b.path_hash(),
         "Zero-heuristic A* must equal Dijkstra exactly"
     );
     // determinism: re-run gives the identical hash
-    let c = dijkstra_berge_path(
-        &trav,
-        NodeId::new(0),
-        NodeId::new(39),
-        &cost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap();
+    let c = case
+        .run(&Dijkstra::new(&cost, &Undirected))
+        .unwrap()
+        .unwrap();
     assert_eq!(a.path_hash(), c.path_hash());
 }
 
@@ -260,15 +412,11 @@ fn inconsistent_heuristic_rejected_in_optimal_mode() {
     let idx = build_incidence_index(&ir).unwrap();
     let trav = HyperTraversal::new(&idx);
     let mut ws = InformedSearchWorkspace::new();
-    let r = astar_berge_path(
-        &trav,
-        NodeId::new(0),
-        NodeId::new(9),
+    let r = SearchCase::new(&trav, NodeId::new(0), NodeId::new(9), &mut ws).run(&AStar::new(
         &UnitCost,
         &InconsistentH,
         &Undirected,
-        &mut ws,
-    );
+    ));
     assert_eq!(
         r,
         Err(InformedSearchError::InconsistentHeuristicInOptimalMode)
@@ -292,14 +440,8 @@ fn bad_cost_is_rejected() {
     let trav = HyperTraversal::new(&idx);
     let mut ws = InformedSearchWorkspace::new();
     for bad in [f64::NAN, f64::INFINITY, -1.0] {
-        let r = dijkstra_berge_path(
-            &trav,
-            NodeId::new(0),
-            NodeId::new(9),
-            &BadCostModel { which: bad },
-            &Undirected,
-            &mut ws,
-        );
+        let r = SearchCase::new(&trav, NodeId::new(0), NodeId::new(9), &mut ws)
+            .run(&Dijkstra::new(&BadCostModel { which: bad }, &Undirected));
         assert!(
             matches!(r, Err(InformedSearchError::BadCost { .. })),
             "cost {bad} must be BadCost"
@@ -316,16 +458,10 @@ fn boundary_start_goal_unreachable_disconnected() {
     let idx = build_incidence_index(&ir).unwrap();
     let trav = HyperTraversal::new(&idx);
     let mut ws = InformedSearchWorkspace::new();
-    let sg = dijkstra_berge_path(
-        &trav,
-        NodeId::new(2),
-        NodeId::new(2),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap();
+    let sg = SearchCase::new(&trav, NodeId::new(2), NodeId::new(2), &mut ws)
+        .run(&Dijkstra::new(&UnitCost, &Undirected))
+        .unwrap()
+        .unwrap();
     assert_eq!(sg.total_cost, 0.0);
     assert!(sg.steps.is_empty());
 
@@ -333,26 +469,14 @@ fn boundary_start_goal_unreachable_disconnected() {
     let ir2 = ic::multi_component_ir(2, 5, 2);
     let idx2 = build_incidence_index(&ir2).unwrap();
     let trav2 = HyperTraversal::new(&idx2);
-    let r = dijkstra_berge_path(
-        &trav2,
-        NodeId::new(0),
-        NodeId::new(7),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap();
+    let r = SearchCase::new(&trav2, NodeId::new(0), NodeId::new(7), &mut ws)
+        .run(&Dijkstra::new(&UnitCost, &Undirected))
+        .unwrap();
     assert!(r.is_none(), "cross-component must be unreachable");
     // within-component still reachable
-    let w = dijkstra_berge_path(
-        &trav2,
-        NodeId::new(0),
-        NodeId::new(4),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap();
+    let w = SearchCase::new(&trav2, NodeId::new(0), NodeId::new(4), &mut ws)
+        .run(&Dijkstra::new(&UnitCost, &Undirected))
+        .unwrap();
     assert!(w.is_some());
 }
 
@@ -362,14 +486,8 @@ fn boundary_invalid_start_and_malformed_target() {
     let idx = build_incidence_index(&ir).unwrap();
     let trav = HyperTraversal::new(&idx);
     let mut ws = InformedSearchWorkspace::new();
-    let r = dijkstra_berge_path(
-        &trav,
-        NodeId::new(999),
-        NodeId::new(0),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    );
+    let r = SearchCase::new(&trav, NodeId::new(999), NodeId::new(0), &mut ws)
+        .run(&Dijkstra::new(&UnitCost, &Undirected));
     assert!(matches!(r, Err(InformedSearchError::InvalidStart { .. })));
 }
 
@@ -378,63 +496,32 @@ fn boundary_singleton_and_self_incidence() {
     // an arc with a single member (self-incidence) plus a normal edge to reach a goal
     let mut ir = Ir::default();
     for _ in 0..3 {
-        let d = ir.push_decl(DeclNode {
-            kind: DeclKind::Node,
-            name: hymeko::common::ids::SymId::new(0),
-            parent: DeclId::NONE,
-            first_child: DeclId::NONE,
-            last_child: DeclId::NONE,
-            next_sibling: DeclId::NONE,
-            anno: AnnoR::default(),
-        });
-        let nid = NodeId::new(ir.nodes.len());
-        ir.nodes.push(NodeRec::new(d, Vec::new()));
-        ir.bind_node_decl(d, nid).unwrap();
+        IrConstruction::new(&mut ir)
+            .append_node(
+                hymeko::common::ids::SymId::new(0),
+                AnnoR::default(),
+                Vec::new(),
+            )
+            .unwrap();
     }
     // singleton arc on node 0 (self), and arc {0,1}, arc {1,2}
-    ir.arcs.push(ArcRec {
-        anno: AnnoR::default(),
-        in_edge: DeclId::NONE,
-        refs: vec![SignedRefR::Plus(RefAtomR {
-            target: DeclId::new(0),
-            anno: AnnoR::default(),
-            weights: None,
-            direction: Default::default(),
-        })],
-    });
+    ir.arcs.push(ArcRec::unowned(vec![SignedRefR::plain(
+        DeclId::new(0),
+        hymeko::ir::ir::IncidenceSign::Plus,
+    )]));
     for (a, b) in [(0usize, 1usize), (1, 2)] {
-        ir.arcs.push(ArcRec {
-            anno: AnnoR::default(),
-            in_edge: DeclId::NONE,
-            refs: vec![
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(a),
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                }),
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(b),
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                }),
-            ],
-        });
+        ir.arcs.push(ArcRec::unowned(vec![
+            SignedRefR::plain(DeclId::new(a), hymeko::ir::ir::IncidenceSign::Plus),
+            SignedRefR::plain(DeclId::new(b), hymeko::ir::ir::IncidenceSign::Plus),
+        ]));
     }
     let idx = build_incidence_index(&ir).unwrap();
     let trav = HyperTraversal::new(&idx);
     let mut ws = InformedSearchWorkspace::new();
-    let p = dijkstra_berge_path(
-        &trav,
-        NodeId::new(0),
-        NodeId::new(2),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap();
+    let p = SearchCase::new(&trav, NodeId::new(0), NodeId::new(2), &mut ws)
+        .run(&Dijkstra::new(&UnitCost, &Undirected))
+        .unwrap()
+        .unwrap();
     assert_eq!(
         p.total_cost, 2.0,
         "singleton self-arc must not shorten or break the path"
@@ -468,75 +555,137 @@ fn directed_producer_consumer_policy_restricts() {
 
 #[test]
 fn declaration_order_permutation_preserves_cost() {
-    // The engine's optimal cost is invariant to a topology-preserving relabelling. We compare a window
-    // against its reverse (same hypergraph, nodes renumbered); the 0->last distance is identical.
-    let m = 30;
-    let a = ic::window_ir(m, 3, false, SignMode::AllPlus);
-    let ia = build_incidence_index(&a).unwrap();
-    let ta = HyperTraversal::new(&ia);
-    let mut ws = InformedSearchWorkspace::new();
-    let ca = dijkstra_berge_path(
-        &ta,
-        NodeId::new(0),
-        NodeId::new(m - 1),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
+    let original = dc::compile(
+        r#"vv {} g {
+        a {} b {} c {} d {} z {}
+        @ab { (- a, + b); } @bc { (- b, + c); }
+        @cd { (- c, + d); } @ac { (- a, + c); }
+    }"#,
+    );
+    let permuted = dc::compile(
+        r#"vv {} g {
+        @cd { (- c, + d); }
+        z {} d {} b {} a {} c {}
+        @ac { (- a, + c); } @bc { (- b, + c); } @ab { (- a, + b); }
+    }"#,
+    );
+    let names = ["a", "b", "c", "d", "z"];
+    let declarations =
+        |world: &dc::World| names.map(|name| world.ir().nodes[world.node(name).raw()].decl);
+    assert_ne!(
+        declarations(&original),
+        declarations(&permuted),
+        "the fixture must actually permute declarations"
+    );
+    assert_ne!(
+        original.node("a"),
+        permuted.node("a"),
+        "node record IDs must also change"
+    );
+    assert_ne!(
+        original.edge_arc("cd"),
+        permuted.edge_arc("cd"),
+        "arc IDs must actually change"
+    );
+    // Verify reference remapping independently by semantic names, preserving slot order and metadata.
+    for edge in ["ab", "bc", "cd", "ac"] {
+        let left = &original.ir().arcs[original.edge_arc(edge).raw()].refs;
+        let right = &permuted.ir().arcs[permuted.edge_arc(edge).raw()].refs;
+        assert_eq!(left.len(), right.len());
+        for (a, b) in left.iter().zip(right) {
+            let name_of = |world: &dc::World, target: DeclId| {
+                names
+                    .into_iter()
+                    .find(|name| world.ir().nodes[world.node(name).raw()].decl == target)
+                    .unwrap()
+            };
+            assert_eq!(
+                name_of(&original, a.target()),
+                name_of(&permuted, b.target())
+            );
+            assert_eq!(a.sign(), b.sign());
+            assert_eq!(
+                original.ir().reference_atom(a).unwrap().weights,
+                permuted.ir().reference_atom(b).unwrap().weights
+            );
+            assert_eq!(
+                original.ir().reference_atom(a).unwrap().anno,
+                permuted.ir().reference_atom(b).unwrap().anno
+            );
+            assert_eq!(
+                original.ir().reference_atom(a).unwrap().direction,
+                permuted.ir().reference_atom(b).unwrap().direction
+            );
+        }
+    }
+    let original_index = build_incidence_index(original.ir()).unwrap();
+    let permuted_index = build_incidence_index(permuted.ir()).unwrap();
+    let left = HyperTraversal::new(&original_index);
+    let right = HyperTraversal::new(&permuted_index);
+    let mut workspace = InformedSearchWorkspace::new();
+    for (from, to, expected) in [
+        ("a", "d", Some(2.0)),
+        ("b", "d", Some(2.0)),
+        ("a", "a", Some(0.0)),
+        ("a", "z", None),
+    ] {
+        let mut query = |world: &dc::World, traversal: &HyperTraversal<'_, '_>| {
+            let mut case =
+                SearchCase::new(traversal, world.node(from), world.node(to), &mut workspace);
+            let dijkstra = case.run(&Dijkstra::new(&UnitCost, &Undirected)).unwrap();
+            let astar = case
+                .run(&AStar::new(&UnitCost, &ZeroHeuristic, &Undirected))
+                .unwrap();
+            assert_eq!(
+                dijkstra.as_ref().map(|p| p.path_hash()),
+                astar.as_ref().map(|p| p.path_hash())
+            );
+            dijkstra.map(|p| p.total_cost)
+        };
+        assert_eq!(query(&original, &left), expected);
+        assert_eq!(query(&permuted, &right), expected);
+        assert_eq!(
+            ic::oracle_dijkstra_cost(
+                permuted.ir(),
+                &permuted_index,
+                permuted.node(from),
+                permuted.node(to),
+                OracleCost::Unit
+            ),
+            expected
+        );
+    }
+    // A stale dense ID selects the isolated z node in the permuted fixture: this
+    // negative control would fail if the test merely rebuilt the original layout.
+    assert_eq!(original.node("a"), permuted.node("z"));
+    let stale = SearchCase::new(
+        &right,
+        original.node("a"),
+        permuted.node("d"),
+        &mut workspace,
     )
-    .unwrap()
-    .unwrap()
-    .total_cost;
-    // A structurally identical window (rebuilt) yields the same distance.
-    let b = ic::window_ir(m, 3, false, SignMode::AllPlus);
-    let ib = build_incidence_index(&b).unwrap();
-    let tb = HyperTraversal::new(&ib);
-    let cb = dijkstra_berge_path(
-        &tb,
-        NodeId::new(0),
-        NodeId::new(m - 1),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap()
-    .total_cost;
-    assert_eq!(ca, cb);
+    .run(&Dijkstra::new(&UnitCost, &Undirected))
+    .unwrap();
+    assert!(
+        stale.is_none(),
+        "reusing unremapped dense IDs must change the query"
+    );
 }
 
 #[test]
 fn disjoint_union_preserves_within_distances() {
     let single = ic::window_ir(10, 2, false, SignMode::AllPlus);
-    let is = build_incidence_index(&single).unwrap();
-    let ts = HyperTraversal::new(&is);
-    let mut ws = InformedSearchWorkspace::new();
-    let d_single = dijkstra_berge_path(
-        &ts,
-        NodeId::new(0),
-        NodeId::new(9),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap()
-    .total_cost;
-    // add a disjoint second component; the first component's 0->9 distance is unchanged.
     let multi = ic::multi_component_ir(2, 10, 2);
-    let im = build_incidence_index(&multi).unwrap();
-    let tm = HyperTraversal::new(&im);
-    let d_multi = dijkstra_berge_path(
-        &tm,
-        NodeId::new(0),
-        NodeId::new(9),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap()
-    .total_cost;
-    assert_eq!(d_single, d_multi);
+    let mut workspace = InformedSearchWorkspace::new();
+    let start = NodeId::new(0);
+    let goal = NodeId::new(9);
+    let before = unit_path_cost(&single, start, goal, &Undirected, &mut workspace);
+    let after = unit_path_cost(&multi, start, goal, &Undirected, &mut workspace);
+    assert_eq!(before, Some(9.0));
+    assert_eq!(
+        after, before,
+        "adding a disjoint component preserves the original distance"
+    );
 }
 
 // ---- 8. duplicate incidence preserved (multiplicity observable, cost unchanged) --------------------
@@ -547,31 +696,19 @@ fn duplicate_incidence_preserves_cost_and_is_observable() {
     let ip = build_incidence_index(&plain).unwrap();
     let tp = HyperTraversal::new(&ip);
     let mut ws = InformedSearchWorkspace::new();
-    let p = dijkstra_berge_path(
-        &tp,
-        NodeId::new(0),
-        NodeId::new(19),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap();
+    let p = SearchCase::new(&tp, NodeId::new(0), NodeId::new(19), &mut ws)
+        .run(&Dijkstra::new(&UnitCost, &Undirected))
+        .unwrap()
+        .unwrap();
     let plain_resolved = ws.stats().resolved_incidences;
 
     let dup = ic::dup_heavy_ir(20, 3);
     let id = build_incidence_index(&dup).unwrap();
     let td = HyperTraversal::new(&id);
-    let d = dijkstra_berge_path(
-        &td,
-        NodeId::new(0),
-        NodeId::new(19),
-        &UnitCost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap();
+    let d = SearchCase::new(&td, NodeId::new(0), NodeId::new(19), &mut ws)
+        .run(&Dijkstra::new(&UnitCost, &Undirected))
+        .unwrap()
+        .unwrap();
     let dup_resolved = ws.stats().resolved_incidences;
 
     assert_eq!(
@@ -636,20 +773,19 @@ fn consistent_astar_preserves_cheapest_entry_to_shared_arc() {
         vec![(1, 1.0), (2, 1.0), (3, 10.0)],
     ]
     .into_iter()
-    .map(|members| ArcRec {
-        anno: AnnoR::default(),
-        in_edge: DeclId::NONE,
-        refs: members
-            .into_iter()
-            .map(|(node, weight)| {
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(node),
-                    anno: AnnoR::default(),
-                    weights: Some(vec![ValueR::Num(weight)]),
-                    direction: Default::default(),
+    .map(|members| {
+        ArcRec::unowned(
+            members
+                .into_iter()
+                .map(|(node, weight)| {
+                    ir.store_reference(hymeko::ir::ir::ReferenceDraft::new(
+                        hymeko::ir::ir::IncidenceSign::Plus,
+                        RefAtomR::plain(DeclId::new(node))
+                            .with_weights(Some(vec![ValueR::Num(weight)])),
+                    ))
                 })
-            })
-            .collect(),
+                .collect(),
+        )
     })
     .collect();
     let idx = build_incidence_index(&ir).unwrap();
@@ -686,27 +822,14 @@ fn consistent_astar_preserves_cheapest_entry_to_shared_arc() {
         ic::OracleCost::Weight { base: 0.0 },
     );
     assert_eq!(oracle, Some(11.0));
-    let dijkstra = dijkstra_berge_path(
-        &trav,
-        NodeId::new(0),
-        NodeId::new(3),
-        &cost,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap();
+    let dijkstra = SearchCase::new(&trav, NodeId::new(0), NodeId::new(3), &mut ws)
+        .run(&Dijkstra::new(&cost, &Undirected))
+        .unwrap()
+        .unwrap();
     assert_eq!(dijkstra.total_cost, 11.0);
-    let astar = astar_berge_path(
-        &trav,
-        NodeId::new(0),
-        NodeId::new(3),
-        &cost,
-        &ConsistentBound,
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap()
-    .unwrap();
+    let astar = SearchCase::new(&trav, NodeId::new(0), NodeId::new(3), &mut ws)
+        .run(&AStar::new(&cost, &ConsistentBound, &Undirected))
+        .unwrap()
+        .unwrap();
     assert_eq!(astar.total_cost, dijkstra.total_cost);
 }

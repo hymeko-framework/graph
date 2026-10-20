@@ -179,7 +179,7 @@ impl SignedHypergraph {
             if !inside(decl) {
                 continue;
             }
-            let incidences = incidences_of(&record.refs, &index);
+            let incidences = incidences_of(ir, &record.refs, &index);
             if incidences.is_empty() {
                 continue;
             }
@@ -193,7 +193,7 @@ impl SignedHypergraph {
             if !record.arcs.is_empty() || !inside(record.decl) {
                 continue; // its arcs have already been read
             }
-            let incidences = incidences_of(&record.bases, &index);
+            let incidences = incidences_of(ir, &ir[record.bases], &index);
             if incidences.is_empty() {
                 continue;
             }
@@ -364,7 +364,7 @@ impl SignedHypergraph {
 }
 
 /// The first numeric weight a reference carries, or `1.0`.
-fn weight_of(atom: &hymeko::ir::ir::RefAtomR) -> f64 {
+fn weight_of(atom: &hymeko::ir::ir::ReferenceView<'_>) -> f64 {
     use hymeko::ir::ir::ValueR;
     atom.weights
         .as_ref()
@@ -376,18 +376,19 @@ fn weight_of(atom: &hymeko::ir::ir::RefAtomR) -> f64 {
         .unwrap_or(1.0)
 }
 
-fn incidences_of(refs: &[SignedRefR], index: &HashMap<DeclId, usize>) -> Vec<Incidence> {
+fn incidences_of(ir: &Ir, refs: &[SignedRefR], index: &HashMap<DeclId, usize>) -> Vec<Incidence> {
     refs.iter()
         .filter_map(|reference| {
-            let (role, atom) = match reference {
-                SignedRefR::Minus(a) => (Role::Source, a),
-                SignedRefR::Plus(a) => (Role::Target, a),
-                SignedRefR::Neutral(a) => (Role::Neutral, a),
+            let role = match reference.sign() {
+                -1 => Role::Source,
+                1 => Role::Target,
+                _ => Role::Neutral,
             };
+            let atom = ir.reference_atom(reference).expect("model-local reference");
             Some(Incidence {
                 vertex: *index.get(&atom.target)?,
                 role,
-                weight: weight_of(atom),
+                weight: weight_of(&atom),
             })
         })
         .collect()

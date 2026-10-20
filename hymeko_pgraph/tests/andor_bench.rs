@@ -3,7 +3,7 @@
 //! over the borrowed PGraphView. Prints a table (`-- --nocapture`); single host, median-of-9. The exact
 //! producible set is asserted equal inline (A == C), so the speedup is a *proven* speedup.
 
-use std::time::Instant;
+use hymeko::util::measurement::{MeasurementRunner, Runner};
 
 use hymeko::ir::incidence::build_incidence_index;
 use hymeko::module_store::module_store::ModuleStore;
@@ -19,18 +19,8 @@ use hymeko_pgraph::view::PGraphView;
 
 const META: &str = include_str!("../data/meta_pgraph.hymeko");
 
-fn median_us(iters: usize, mut f: impl FnMut()) -> f64 {
-    for _ in 0..2 {
-        f();
-    }
-    let mut s = Vec::with_capacity(iters);
-    for _ in 0..iters {
-        let t = Instant::now();
-        f();
-        s.push(t.elapsed().as_secs_f64() * 1e6);
-    }
-    s.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    s[s.len() / 2]
+fn median_us(iters: usize, f: impl FnMut()) -> f64 {
+    MeasurementRunner::new(2, iters).run(f).median
 }
 
 /// A raw -> product chain of `n` materials (n-1 units); the worst case for the re-scan fixpoint.
