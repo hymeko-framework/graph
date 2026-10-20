@@ -330,7 +330,7 @@ dependencies = [
 [[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+ssh://git@192.168.1.228:2222/hymeko/core.git?rev=77003fa15f0c92c9b56ee5f75c73eab26a079f35#77003fa15f0c92c9b56ee5f75c73eab26a079f35"
+source = "git+ssh://git@192.168.1.228:2222/hymeko/core.git?rev=9f533ca8f9cd39806d8db9a0a68cda7932c81ae2#9f533ca8f9cd39806d8db9a0a68cda7932c81ae2"
 dependencies = [
  "blake3",
  "ciborium",

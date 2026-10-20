@@ -236,6 +236,10 @@ fn core_generators_feed_one_ir_across_algorithms_and_vertex_numberings() {
         edges: edges.into_iter().map(|(a, b)| vec![a, b]).collect(),
     };
     let requests = [
+        (
+            "hypercube3",
+            HypergraphGenerator::Hypercube { dimension: 3 },
+        ),
         ("fano", HypergraphGenerator::SteinerTriple { n: 7 }),
         ("bose9", HypergraphGenerator::SteinerTriple { n: 9 }),
         ("steiner13", HypergraphGenerator::SteinerTriple { n: 13 }),

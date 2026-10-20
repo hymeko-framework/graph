@@ -1245,9 +1245,21 @@ fn regrouped_pagerank_matches_exact_rational_personalized_stationary_distributio
 
 #[test]
 fn core_generated_fixture_rows_keep_the_canonical_builder_and_permutation() {
-    use support::{Fixture, VertexPermutation};
-    for name in ["steiner255", "complete32_3", "sunflower1024", "mycielski7"] {
-        let mut fixture = Fixture::named(name);
+    use hymeko::generators::HypergraphGenerator;
+    use support::{Fixture, Membership, VertexPermutation};
+    let cube = Fixture {
+        nodes: 16,
+        arcs: 32,
+        arity: 2,
+        seed: 0,
+        relabel_seed: None,
+        membership: Membership::Core(HypergraphGenerator::Hypercube { dimension: 4 }),
+    };
+    for mut fixture in ["steiner255", "complete32_3", "sunflower1024", "mycielski7"]
+        .map(Fixture::named)
+        .into_iter()
+        .chain([cube])
+    {
         // The unpermuted topology is the metamorphic reference. Core generator
         // formulas and small independent graph properties are tested separately.
         let original = fixture.generate().unwrap();

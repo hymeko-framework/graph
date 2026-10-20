@@ -263,6 +263,16 @@ impl Fixture {
                             r,
                         )
                     }
+                    HypergraphGenerator::Hypercube { dimension } => {
+                        assert!(dimension > 0);
+                        let nodes = 2usize
+                            .checked_pow(u32::try_from(dimension).expect("fixture dimension"))
+                            .expect("fixture vertex count");
+                        let arcs = (nodes / 2)
+                            .checked_mul(dimension)
+                            .expect("fixture edge count");
+                        (nodes, arcs, 2)
+                    }
                 };
                 assert_eq!((self.nodes, self.arcs, self.arity), expected);
             }
