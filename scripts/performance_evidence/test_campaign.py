@@ -21,6 +21,8 @@ from campaign import (
 
 
 class EvidenceContract(unittest.TestCase):
+    ARCHIVE = Path(__file__).with_name("fixtures")
+
     def assert_rejected_mutations(self, source, replacements):
         for old, new in replacements:
             with self.subTest(replacement=(old, new)), self.assertRaises(ValueError):
@@ -369,10 +371,7 @@ class EvidenceContract(unittest.TestCase):
                 Campaign.verify_sources(root, manifest)
 
     def test_summary_publishes_measured_boundaries_and_exact_hashes(self):
-        original = (
-            Path(__file__).resolve().parents[2]
-            / "reports/cross-platform-benchmarks/2026-09-06"
-        )
+        original = self.ARCHIVE
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for platform in ("windows", "native"):
@@ -539,10 +538,7 @@ class EvidenceContract(unittest.TestCase):
                 Evidence.parse(invalid)
 
     def test_archived_campaign_rejects_corrupted_provenance_and_process_identity(self):
-        root = (
-            Path(__file__).resolve().parents[2]
-            / "reports/cross-platform-benchmarks/2026-09-06"
-        )
+        root = self.ARCHIVE
         original = json.loads(
             (root / "windows/campaign.json").read_text(encoding="utf8")
         )

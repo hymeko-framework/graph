@@ -2,6 +2,59 @@
 
 Graph theory and hypergraph extensions for analysis and modelling with HyMeKo.
 
+## Recorded results: native connected components
+
+On the retained NiTech kato21 campaign (20-21 October 2026), HyMeKo was faster
+on all seven selected workloads and all 35 paired process comparisons. Ratios
+below are Hypergraphz time / HyMeKo time for the same component-partition task.
+
+| Workload | Vertices | Hyperarcs | Incidences | HyMeKo (ms) | Hypergraphz (ms) | Time ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| chain65k | 65,536 | 65,535 | 131,070 | 2.335 | 8.848 | 3.79x |
+| hub32_1m | 65,536 | 31,250 | 1,000,000 | 4.496 | 67.152 | 14.94x |
+| components8_1m | 65,536 | 31,250 | 1,000,000 | 8.863 | 62.337 | 7.03x |
+| steiner255 | 255 | 10,795 | 32,385 | 0.237 | 0.632 | 2.67x |
+| complete32_3 | 32 | 4,960 | 14,880 | 0.085 | 0.160 | 1.88x |
+| sunflower1024 | 32,769 | 1,024 | 33,792 | 0.600 | 4.072 | 6.79x |
+| mycielski7 | 767 | 22,196 | 44,392 | 0.435 | 0.972 | 2.24x |
+
+CPU: AMD Ryzen Threadripper 7980X; Ubuntu 24.04.3; Rust 1.97.1. Each algorithm
+used one thread, pinned to logical CPU 2. Each cell ran in five fresh processes,
+with two warmups and nine calibrated samples per process. Values are the median
+of the five process medians; they are not single-request tail latencies.
+
+The comparison includes fresh operation workspace, normalized output copying
+and temporary-result destruction. Graph and reverse-index construction are
+excluded. Full normalized partitions were checked for equality in each process.
+The complete campaign has 66 cells, 330 processes and 2,970 raw samples; only
+connected components have an external comparison in this campaign.
+
+These are deterministic synthetic inputs. They do not establish universal
+performance superiority. Source parsing/file loading and other systems' graph
+construction are outside this comparison. Whole-process RSS includes setup and,
+in the native comparison, both resident graphs. The publication packaging is
+not a new benchmark run.
+
+Evidence: [PDF report](docs/evidence/graph-algorithms/report.pdf),
+[measurements](docs/evidence/graph-algorithms/measurements.csv),
+[raw samples](docs/evidence/graph-algorithms/raw-samples.csv),
+[provenance and hashes](docs/evidence/graph-algorithms/provenance.json).
+The existing [campaign runner](scripts/performance_evidence/campaign.py) and
+[native adapter](hymeko_graph/tests/performance_evidence/native_adapter.zig)
+retain the measurement implementation. Timing cells are explicitly opt-in. The pinned reference is
+[Hypergraphz e45b7b8](https://github.com/yamafaktory/hypergraphz/tree/e45b7b80e3ce302937a56760d9fe76016ef08e26),
+compiled as a native C-ABI library with Zig `0.17.0-dev.242+5d55999d2`,
+`ReleaseFast`, target `x86_64-linux-gnu`, CPU `baseline`.
+
+The campaign parser, provenance and host-admission contracts have 31 focused
+Python tests. Their archived input fixtures are included in the repository:
+
+```sh
+python -m unittest discover -s scripts/performance_evidence -p 'test_*.py'
+```
+
+## Canonical-IR algorithms
+
 `direct_ir::PageRank` ranks canonical IR nodes without materializing a pairwise
 graph. `PageRank::build(&ir, PageRankModel::default())` prepares an undirected
 vertex–hyperarc–vertex probability walk. `run(config, &mut workspace,
@@ -15,7 +68,7 @@ direction remain independent. `RankWeights::Component(i)` selects one nonnegativ
 numeric weight-vector component. Dangling nodes redistribute to the normalized
 personalization, uniform when absent. Every canonical node record is included;
 non-node arc targets are rejected. Each iteration takes O(nodes + arcs +
-incidences), with no clique expansion, and a warm run allocates no heap storage.
+incidences), with no clique expansion, and the tested prepared serial warm path allocates no heap storage.
 
 The default `PageRank::build` now consumes Core's numeric incidence projection
 and shared gather/scatter row operations. Target resolution and sign/port routing
@@ -35,8 +88,8 @@ let rank = PageRank::from_projection(projection.clone(), model)?;
 
 Projection storage is O(incidences + arcs), with native-size indices preserving
 the canonical ID range. Normalizations remain specific to each PageRank model.
-The earlier timing tables precede this integration; implementation and correctness
-evidence is in `reports/2026-10-18-native-graph-comparison/shared-incidence/report.pdf`.
+The current comparison and its exact scope are linked above; older local reports
+record the intermediate implementations and are not part of this Git repository.
 
 For directed hyperarcs, construct `PageRankModel { flow: RankFlow::InToOut,
 ..Default::default() }` for operator ports, or choose `RankFlow::MinusToPlus`
@@ -88,28 +141,23 @@ compiles two reordered sources, checks actual ID changes and remapped references
 and rejects use of a stale dense node ID. See
 `reports/2026-10-14-informed-search-runners.pdf` for validation and remaining limits.
 
-These additions currently form an uncommitted Core/Graph integration change.
-The checked-in Core revision predates the new APIs: publish the provider and pin
-Graph to that revision before claiming a portable build. The task report records
-the command-line local Core override used for verification; no path override is
-added to the repository manifests. See `reports/2026-10-14-shared-support.pdf`
-and its archive under `by-repository/graph/branch-feat%2Fnewest-core-e1eee8418382`.
+The public build pins Core by exact GitHub revision. Core owns construction,
+identity and incidence storage; `direct_ir` executes algorithms over that same IR.
+It is not another intermediate representation.
 
-Two crates, laid out the way [`hymeko/core`](http://amaterasu.local:3000/hymeko/core)
-is:
-
-| Crate | What it is | Depends on |
+| Crate | Responsibility | Framework dependencies |
 |---|---|---|
-| [`hymeko_graph`](hymeko_graph/) | The generic layer. Signed graphs, CSR, DFS and BFS, cycle and walk enumeration, top-k search, colour coding, community detection, SIMD spine kernels, and the `CyclePruner` seam | `rayon`, `dashmap` |
-| [`hymeko_pgraph`](hymeko_pgraph/) | The P-graph layer. Material/Operating-Unit overlay on the HyMeKo IR, the A1–A5 axiom checker, Friedler's axioms as a `CyclePruner`, MSG/SSG generation, ABB solver | `hymeko_graph`, `hymeko_core`, `parser` |
+| [`hymeko_graph`](hymeko_graph/) | Traversal, Berge paths, Dijkstra/A*, components, PageRank, Levi matroids, cycles and top-k search | Core (and its Tensor provider) |
+| [`hymeko_pgraph`](hymeko_pgraph/) | Material/Operating-Unit P-graph schema, axioms, MSG/SSG and ABB | Graph, Core, Parser |
+| [`hymeko_sbsh`](hymeko_sbsh/) | Spatial orthtree overlay and width certificates | Graph, Core |
 
 Both came out of `hymeko_framework_rust`, which is retired. **This repository
 is the canonical home for both.**
 
 ```
-cargo test                       # 378 tests, no C toolchain needed
-cargo test -p hymeko_graph       # 167
-cargo test -p hymeko_pgraph      # 211
+cargo test --locked -p hymeko_graph --test pagerank --test pagerank_alloc
+cargo test --locked -p hymeko_graph --test steiner_mycielski_nav --test matroid_vv
+cargo check --locked -p hymeko_graph -p hymeko_pgraph -p hymeko_sbsh --lib
 ```
 
 ## Nothing here needs SQLite
@@ -167,7 +215,7 @@ all sound alike:
 |---|---|
 | `hymeko_graph` | pairwise signed graphs — `edges: Vec<(u32, u32)>` |
 | `hymeko_pgraph` | bipartite P-graphs over the HyMeKo IR |
-| [`hotaru::hypergraph`](http://amaterasu.local:3000/hymeko/hotaru) | hypergraphs as hypergraphs — Berge paths, Levi/2-section/dual/s-line, transversals, acyclicity, s-connectivity |
+| [`hotaru::hypergraph`](https://github.com/hymeko-framework/hotaru) | hypergraphs as hypergraphs — Berge paths, Levi/2-section/dual/s-line, transversals, acyclicity, s-connectivity |
 
 A hypergraph reaches `hymeko_graph`'s algorithms only by being star-expanded
 first, which is what `BipartiteOnlyPruner` exists for. If your question is
