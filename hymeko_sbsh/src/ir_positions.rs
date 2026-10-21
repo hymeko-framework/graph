@@ -96,7 +96,7 @@ fn read_child_vector(ir: &Ir, owner: DeclId, attr: SymId) -> Option<Vec<f64>> {
     while child.is_some() {
         let node = ir.decl_nodes.get(child.raw())?;
         if node.name == attr {
-            return match node.anno.value.as_ref()? {
+            return match ir.annotation(node.anno)?.value.as_ref()? {
                 ValueR::List(xs) => xs
                     .iter()
                     .map(|v| match v {

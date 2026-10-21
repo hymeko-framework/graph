@@ -1,4 +1,6 @@
 //! Zero-copy **matroids over the canonical `hymeko_core::ir::Ir`** and its sparse `IncidenceIndex`.
+//! [`CellLeviMatroid`] also borrows graded cell topology; it shares the same Levi
+//! traversal and union-find engine, keeping only per-rank coordinate offsets.
 //!
 //! This is NOT a second graph model. [`MatroidRef`] is a borrowed, `Copy`, **one-word** facade holding
 //! only `&IncidenceIndex`; the `Ir` is reached through `IncidenceIndex::ir()`, so a facade built from a
@@ -20,7 +22,9 @@
 //! weighted shortest paths, incidence signs, hyperedge semantics, T/S-norm propagation, B/Bᵀ/BᵀB, nor
 //! message passing. It must never replace the canonical hypergraph.
 
+mod cell;
 mod error;
+pub use cell::{CellLeviCoord, CellLeviMatroid, CellLeviSession};
 mod facade;
 mod levi;
 mod rank2;

@@ -6,36 +6,22 @@ mod direct_ir_common;
 
 use hymeko::common::ids::{DeclId, EdgeId, NodeId, SymId};
 use hymeko::ir::incidence::build_incidence_index;
-use hymeko::ir::ir::{
-    AnnoR, ArcRec, DeclKind, DeclNode, EdgeRec, Ir, NodeRec, RefAtomR, SignedRefR,
-};
+use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, EdgeRec, Ir, NodeRec, SignedRefR};
 
 use hymeko_graph::direct_ir::{
     BudgetKind, DirectIrError, EnumBudget, HyperTraversal, TraversalWorkspace,
-    connected_components, dual_reachability, enumerate_berge_paths, s_connected_components,
+    connected_components, dual_reachability, enumerate_berge_cycles, enumerate_berge_paths,
+    s_connected_components,
 };
 
 use direct_ir_common::compile;
 
-fn decl(kind: DeclKind) -> DeclNode {
-    DeclNode {
-        kind,
-        name: SymId::new(0),
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    }
+fn decl(kind: DeclKind) -> DeclNode<AnnoR> {
+    DeclNode::root(kind, SymId::new(0), AnnoR::default())
 }
 
 fn plus(target: DeclId) -> SignedRefR {
-    SignedRefR::Plus(RefAtomR {
-        target,
-        anno: AnnoR::default(),
-        weights: None,
-        direction: Default::default(),
-    })
+    SignedRefR::plain(target, hymeko::ir::ir::IncidenceSign::Plus)
 }
 
 /// A hand-built `Ir` with well-formed nodes A (decl 0) and B (decl 2), an edge E (decl 1), and an
@@ -44,20 +30,23 @@ fn plus(target: DeclId) -> SignedRefR {
 fn ir_with_non_node_target() -> Ir {
     let mut ir = Ir::default();
     let a = ir.push_decl(decl(DeclKind::Node));
-    ir.nodes.push(NodeRec::new(a, Vec::new()));
+    ir.nodes
+        .push(NodeRec::new(a, hymeko::common::ids::BaseListId::NONE));
     ir.bind_node_decl(a, NodeId::new(0)).unwrap();
 
     let e = ir.push_decl(decl(DeclKind::Edge));
-    ir.edges.push(EdgeRec::new(e, Vec::new()));
+    ir.edges
+        .push(EdgeRec::new(e, hymeko::common::ids::BaseListId::NONE));
     ir.bind_edge_decl(e, EdgeId::new(0)).unwrap();
 
     let b = ir.push_decl(decl(DeclKind::Node));
-    ir.nodes.push(NodeRec::new(b, Vec::new()));
+    ir.nodes
+        .push(NodeRec::new(b, hymeko::common::ids::BaseListId::NONE));
     ir.bind_node_decl(b, NodeId::new(1)).unwrap();
 
     // arc: (+ E, + A, + B) -- E is an edge decl, so it is not a node.
     ir.arcs.push(ArcRec {
-        anno: AnnoR::default(),
+        anno: hymeko::common::ids::AnnotationId::NONE,
         in_edge: e,
         refs: vec![plus(e), plus(a), plus(b)],
     });
@@ -92,6 +81,27 @@ fn non_node_target_is_a_typed_error_in_every_traversal() {
         enumerate_berge_paths(&index, NodeId::new(0), None, budget),
         Err(DirectIrError::TargetNotANode { .. })
     ));
+    assert!(matches!(
+        enumerate_berge_cycles(&index, NodeId::new(0), budget),
+        Err(DirectIrError::TargetNotANode { slot: 0, .. })
+    ));
+}
+
+#[test]
+fn malformed_incidence_is_inspected_only_after_budget_admission() {
+    let ir = ir_with_non_node_target();
+    let index = build_incidence_index(&ir).unwrap();
+    for (budget, bound) in [
+        (EnumBudget::new(0, 0, 0), BudgetKind::Results),
+        (EnumBudget::new(0, 10, 0), BudgetKind::Depth),
+        (EnumBudget::new(2, 10, 0), BudgetKind::Expansions),
+    ] {
+        let paths = enumerate_berge_paths(&index, NodeId::new(0), None, budget).unwrap();
+        let cycles = enumerate_berge_cycles(&index, NodeId::new(0), budget).unwrap();
+        assert!(paths.items.is_empty() && cycles.items.is_empty());
+        assert_eq!(paths.bound, Some(bound));
+        assert_eq!(cycles.bound, Some(bound));
+    }
 }
 
 #[test]

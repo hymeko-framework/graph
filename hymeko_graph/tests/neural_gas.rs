@@ -319,7 +319,7 @@ fn core_compiled_seed_can_feed_the_operator_without_transformation() {
         .iter()
         .map(|id| {
             let attribute = ir.decl_children(*id).next().unwrap();
-            let Some(ValueR::List(values)) = &ir.decl_nodes[attribute.raw()].anno.value else {
+            let Some(ValueR::List(values)) = &ir.decl_annotation(attribute).unwrap().value else {
                 panic!("numeric fixture position");
             };
             std::array::from_fn(|axis| match values[axis] {

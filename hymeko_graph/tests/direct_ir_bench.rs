@@ -17,29 +17,20 @@
 //! zero-allocation proof lives in `direct_ir_alloc.rs`, which owns the counting global allocator in
 //! its own single-test binary so no parallel test can perturb the count).
 
+use hymeko::ir::ir::IrConstruction;
+use hymeko::util::measurement::{MeasurementRunner, Runner};
 use std::collections::{BTreeSet, VecDeque};
-use std::time::Instant;
 
 use hymeko::common::ids::{DeclId, NodeId};
 use hymeko::ir::incidence::{IncidenceIndex, build_incidence_index};
-use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR};
+use hymeko::ir::ir::{AnnoR, ArcRec, Ir, SignedRefR};
 
 // ---- timing helper (single typed unit: microseconds) ----------------------------------------
 
 /// Median, min and max microseconds over `iters` timed runs after 2 warm-up runs.
-fn median_us(iters: usize, mut f: impl FnMut()) -> (f64, f64, f64) {
-    for _ in 0..2 {
-        f();
-    }
-    let mut samples: Vec<f64> = Vec::with_capacity(iters);
-    for _ in 0..iters {
-        let t = Instant::now();
-        f();
-        samples.push(t.elapsed().as_secs_f64() * 1e6);
-    }
-    samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let median = samples[samples.len() / 2];
-    (samples[0], median, *samples.last().unwrap())
+fn median_us(iters: usize, f: impl FnMut()) -> (f64, f64, f64) {
+    let d = MeasurementRunner::new(2, iters).run(f);
+    (d.min, d.median, d.worst)
 }
 
 // ---- direct Ir generator (sliding-window arity-k hypergraph, one connected component) ---------
@@ -51,37 +42,21 @@ fn build_window_ir(m: usize, k: usize) -> Ir {
     let mut ir = Ir::default();
     // node decls + records
     for _ in 0..m {
-        let d = ir.push_decl(DeclNode {
-            kind: DeclKind::Node,
-            name: hymeko::common::ids::SymId::new(0),
-            parent: DeclId::NONE,
-            first_child: DeclId::NONE,
-            last_child: DeclId::NONE,
-            next_sibling: DeclId::NONE,
-            anno: AnnoR::default(),
-        });
-        let nid = NodeId::new(ir.nodes.len());
-        ir.nodes.push(NodeRec::new(d, Vec::new()));
-        ir.bind_node_decl(d, nid).expect("bind node");
+        IrConstruction::new(&mut ir)
+            .append_node(
+                hymeko::common::ids::SymId::new(0),
+                AnnoR::default(),
+                Vec::new(),
+            )
+            .expect("bind node");
     }
     // arcs: sliding window of k node members
     let n_arcs = m - k + 1;
     for i in 0..n_arcs {
         let refs: Vec<SignedRefR> = (i..i + k)
-            .map(|j| {
-                SignedRefR::Plus(RefAtomR {
-                    target: DeclId::new(j),
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                })
-            })
+            .map(|j| SignedRefR::plain(DeclId::new(j), hymeko::ir::ir::IncidenceSign::Plus))
             .collect();
-        ir.arcs.push(ArcRec {
-            anno: AnnoR::default(),
-            in_edge: DeclId::NONE,
-            refs,
-        });
+        ir.arcs.push(ArcRec::unowned(refs));
     }
     ir
 }

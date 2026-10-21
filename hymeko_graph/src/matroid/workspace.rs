@@ -1,7 +1,7 @@
 //! The caller-owned union-find scratch shared by both matroids. Path-halving `find`, union by rank, and
 //! a generation-stamped lazy reset (no O(N) clear between queries). It stores **no** canonical topology —
 //! only DSU bookkeeping over an abstract dense coordinate space (nodes for rank-2; nodes ⊕ hyperarcs for
-//! Levi). The `begin` / `union` primitives are `pub(in crate::matroid)` so `rank2` and `levi` share this
+//! Levi). The `begin` / `union` primitives are `pub(crate)` so matroids and projection components share this
 //! one implementation rather than each carrying its own.
 
 use super::MatroidError;
@@ -39,7 +39,7 @@ impl GraphicMatroidWorkspace {
     ///
     /// # Errors
     /// [`MatroidError::Overflow`] if `n` exceeds `u32`.
-    pub(in crate::matroid) fn begin(&mut self, n: usize) -> Result<(), MatroidError> {
+    pub(crate) fn begin(&mut self, n: usize) -> Result<(), MatroidError> {
         if u32::try_from(n).is_err() {
             return Err(MatroidError::Overflow);
         }
@@ -67,7 +67,7 @@ impl GraphicMatroidWorkspace {
         }
     }
 
-    fn find(&mut self, mut x: u32) -> u32 {
+    pub(crate) fn find(&mut self, mut x: u32) -> u32 {
         self.touch(x);
         while self.parent[x as usize] != x {
             let p = self.parent[x as usize];
@@ -81,7 +81,7 @@ impl GraphicMatroidWorkspace {
     }
 
     /// Union `a` and `b`; returns `true` iff they were in different sets (i.e. this edge joins the forest).
-    pub(in crate::matroid) fn union(&mut self, a: u32, b: u32) -> bool {
+    pub(crate) fn union(&mut self, a: u32, b: u32) -> bool {
         let (ra, rb) = (self.find(a), self.find(b));
         if ra == rb {
             return false;

@@ -64,73 +64,7 @@ const MAX_INLINE_WALK_LEN: usize = 16;
 /// the least-preferred entry is at the top (next eviction candidate);
 /// this matches the cycle pattern and lets us call `peek()` to compare
 /// against the current top-$K$ threshold.
-#[derive(Clone, Debug)]
-struct HeapEntry {
-    score: f64,
-    walk_len: u8, // edges; vertices = walk_len + 1
-    walk: [u32; MAX_INLINE_WALK_LEN + 1],
-    signs: [i8; MAX_INLINE_WALK_LEN],
-}
-
-impl HeapEntry {
-    fn from_slices(score: f64, walk: &[u32], signs: &[i8]) -> HeapEntry {
-        debug_assert_eq!(walk.len(), signs.len() + 1);
-        debug_assert!(walk.len() <= MAX_INLINE_WALK_LEN + 1);
-        let mut w = [0u32; MAX_INLINE_WALK_LEN + 1];
-        let mut s = [0i8; MAX_INLINE_WALK_LEN];
-        w[..walk.len()].copy_from_slice(walk);
-        s[..signs.len()].copy_from_slice(signs);
-        HeapEntry {
-            score,
-            walk_len: signs.len() as u8,
-            walk: w,
-            signs: s,
-        }
-    }
-
-    fn walk_slice(&self) -> &[u32] {
-        &self.walk[..(self.walk_len as usize + 1)]
-    }
-    fn signs_slice(&self) -> &[i8] {
-        &self.signs[..self.walk_len as usize]
-    }
-
-    /// Score-then-lex preference; replaces NaN with -inf so admissibility
-    /// violations on input don't crash the heap order.
-    fn cmp_preference(&self, other: &Self) -> Ordering {
-        let a = if self.score.is_nan() {
-            f64::NEG_INFINITY
-        } else {
-            self.score
-        };
-        let b = if other.score.is_nan() {
-            f64::NEG_INFINITY
-        } else {
-            other.score
-        };
-        a.partial_cmp(&b)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| self.walk_slice().cmp(other.walk_slice()))
-    }
-}
-
-impl Eq for HeapEntry {}
-impl PartialEq for HeapEntry {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp_preference(other) == Ordering::Equal
-    }
-}
-impl PartialOrd for HeapEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for HeapEntry {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Min-heap on preference: least-preferred at top.
-        other.cmp_preference(self)
-    }
-}
+type HeapEntry = crate::ranked_path::RankedPath<{ MAX_INLINE_WALK_LEN + 1 }, MAX_INLINE_WALK_LEN>;
 
 /// Enumerate the top-$K$ open simple walks of length `walk_len` by
 /// `scorer.score`, with admissible-upper-bound DFS pruning.
@@ -155,40 +89,7 @@ pub fn enumerate_top_k_walks<S: BoundedScorer>(
         // A future refactor could lift the inline cap if needed.
         return Vec::new();
     }
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-    let mut visited = vec![false; n];
-    let mut path: Vec<u32> = Vec::with_capacity(walk_len + 1);
-    let mut signs: Vec<i8> = Vec::with_capacity(walk_len);
-    let mut heap: BinaryHeap<HeapEntry> = BinaryHeap::with_capacity(top_k + 1);
-
-    for start in 0..(n as u32) {
-        path.clear();
-        signs.clear();
-        path.push(start);
-        visited[start as usize] = true;
-        dfs(
-            start,
-            &row_ptr,
-            &col_idx,
-            &signs_csr,
-            walk_len,
-            top_k,
-            scorer,
-            &mut path,
-            &mut signs,
-            &mut visited,
-            &mut heap,
-        );
-        visited[start as usize] = false;
-    }
-
-    let mut out: Vec<TopKWalk> = heap
-        .into_iter()
-        .map(|e| (e.score, e.walk_slice().to_vec(), e.signs_slice().to_vec()))
-        .collect();
-    out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-    out
+    WalkSearch::new(graph, walk_len, top_k, scorer).run()
 }
 
 /// SoA-output variant of [`enumerate_top_k_walks`] for zero-copy PyO3
@@ -218,71 +119,116 @@ pub fn enumerate_top_k_walks_batch<S: BoundedScorer>(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn dfs<S: BoundedScorer>(
-    start: u32,
-    row_ptr: &[u32],
-    col_idx: &[u32],
-    signs_csr: &[i8],
+/// One invocation owns its CSR, selection limits and backtracking state.
+/// The exhaustive test oracle remains separate from this bounded search.
+struct WalkSearch<'a, S> {
+    row_ptr: Vec<u32>,
+    col_idx: Vec<u32>,
+    signs_csr: Vec<i8>,
     walk_len: usize,
     top_k: usize,
-    scorer: &S,
-    path: &mut Vec<u32>,
-    signs: &mut Vec<i8>,
-    visited: &mut [bool],
-    heap: &mut BinaryHeap<HeapEntry>,
-) {
-    if signs.len() == walk_len {
-        // Complete walk; apply canonical filter then offer.
-        let last = *path.last().unwrap();
-        if start <= last {
-            let sc = scorer.score(path, signs);
-            if heap.len() < top_k {
-                heap.push(HeapEntry::from_slices(sc, path, signs));
-            } else if let Some(worst) = heap.peek() {
-                let candidate = HeapEntry::from_slices(sc, path, signs);
-                // Push if strictly more preferred than the worst.
-                if candidate.cmp_preference(worst) == Ordering::Greater {
-                    heap.pop();
-                    heap.push(candidate);
-                }
-            }
+    scorer: &'a S,
+    visited: Vec<bool>,
+    path: Vec<u32>,
+    signs: Vec<i8>,
+    heap: BinaryHeap<HeapEntry>,
+}
+
+impl<'a, S: BoundedScorer> WalkSearch<'a, S> {
+    fn new(graph: &SignedGraph, walk_len: usize, top_k: usize, scorer: &'a S) -> Self {
+        // Public entry validation precedes all allocation, as before.
+        debug_assert!(walk_len > 0 && walk_len <= MAX_INLINE_WALK_LEN && top_k > 0);
+        let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
+        Self {
+            row_ptr,
+            col_idx,
+            signs_csr,
+            walk_len,
+            top_k,
+            scorer,
+            visited: vec![false; graph.n_nodes as usize],
+            path: Vec::with_capacity(walk_len + 1),
+            signs: Vec::with_capacity(walk_len),
+            heap: BinaryHeap::with_capacity(top_k + 1),
         }
-        return;
     }
 
-    // ABB upper-bound prune: skip the entire subtree if the
-    // optimistic best completion of the current prefix cannot
-    // displace the worst entry currently in the heap.
-    if heap.len() >= top_k {
-        let n_neg_so_far = signs.iter().filter(|&&s| s < 0).count();
-        let k_remaining = walk_len - signs.len();
-        let ub = scorer.upper_bound(n_neg_so_far, k_remaining, walk_len);
-        if let Some(worst) = heap.peek()
-            && ub <= worst.score
-        {
+    fn run(mut self) -> Vec<TopKWalk> {
+        for start in 0..self.visited.len() as u32 {
+            self.visit_root(start);
+        }
+        let mut out: Vec<_> = self
+            .heap
+            .into_iter()
+            .map(|e| (e.score, e.vertices().to_vec(), e.signs_slice().to_vec()))
+            .collect();
+        out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+        out
+    }
+
+    fn visit_root(&mut self, start: u32) {
+        self.path.clear();
+        self.signs.clear();
+        self.path.push(start);
+        self.visited[start as usize] = true;
+        self.descend(start);
+        self.visited[start as usize] = false;
+    }
+
+    fn descend(&mut self, start: u32) {
+        if self.signs.len() == self.walk_len {
+            self.offer_complete(start);
             return;
         }
+        if self.dominated() {
+            return;
+        }
+        // visit_root starts a nonempty path; recursion only pushes before entry.
+        let tail = *self.path.last().expect("nonempty walk prefix");
+        let first = self.row_ptr[tail as usize] as usize;
+        let end = self.row_ptr[tail as usize + 1] as usize;
+        for edge in first..end {
+            let next = self.col_idx[edge];
+            if self.visited[next as usize] {
+                continue;
+            }
+            self.path.push(next);
+            self.signs.push(self.signs_csr[edge]);
+            self.visited[next as usize] = true;
+            self.descend(start);
+            self.path.pop();
+            self.signs.pop();
+            self.visited[next as usize] = false;
+        }
     }
 
-    let tail = *path.last().unwrap();
-    let start_idx = row_ptr[tail as usize] as usize;
-    let end_idx = row_ptr[tail as usize + 1] as usize;
-    for ei in start_idx..end_idx {
-        let nxt = col_idx[ei];
-        if visited[nxt as usize] {
-            continue;
+    fn dominated(&self) -> bool {
+        if self.heap.len() < self.top_k {
+            return false;
         }
-        let edge_sign = signs_csr[ei];
-        path.push(nxt);
-        signs.push(edge_sign);
-        visited[nxt as usize] = true;
-        dfs(
-            start, row_ptr, col_idx, signs_csr, walk_len, top_k, scorer, path, signs, visited, heap,
-        );
-        path.pop();
-        signs.pop();
-        visited[nxt as usize] = false;
+        let negatives = self.signs.iter().filter(|&&s| s < 0).count();
+        let remaining = self.walk_len - self.signs.len();
+        let upper = self.scorer.upper_bound(negatives, remaining, self.walk_len);
+        self.heap.peek().is_some_and(|worst| upper <= worst.score)
+    }
+
+    fn offer_complete(&mut self, start: u32) {
+        // A complete walk has walk_len+1 vertices, and walk_len is nonzero.
+        let last = *self.path.last().expect("complete walk has vertices");
+        if start > last {
+            return;
+        }
+        let score = self.scorer.score(&self.path, &self.signs);
+        if self.heap.len() < self.top_k {
+            self.heap
+                .push(HeapEntry::from_slices(score, &self.path, &self.signs));
+        } else if let Some(worst) = self.heap.peek() {
+            let candidate = HeapEntry::from_slices(score, &self.path, &self.signs);
+            if candidate.cmp_preference(worst) == Ordering::Greater {
+                self.heap.pop();
+                self.heap.push(candidate);
+            }
+        }
     }
 }
 
@@ -293,6 +239,82 @@ mod tests {
     use super::*;
     use crate::signed_graph::SignedGraph;
     use crate::topk_cycles::{BalanceScorer, FractionNegativeScorer};
+
+    fn walk_observations<S: BoundedScorer>(scorer: &S) -> u64 {
+        let mut hash = 0xcbf29ce484222325_u64;
+        for graph in [
+            toy_graph(),
+            SignedGraph {
+                n_nodes: 0,
+                edges: vec![],
+                signs: vec![],
+            },
+        ] {
+            for length in [0, 1, 2, 3, 4, 16, 17] {
+                for cap in [0, 1, 3, 20] {
+                    let rows = enumerate_top_k_walks(&graph, length, cap, scorer);
+                    let batch = enumerate_top_k_walks_batch(&graph, length, cap, scorer);
+                    let encoded = format!("{rows:?}{batch:?}");
+                    hash = encoded
+                        .bytes()
+                        .fold(hash, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3));
+                }
+            }
+        }
+        hash
+    }
+
+    #[test]
+    fn frozen_walk_selection_and_batch_layout() {
+        let observed = [
+            walk_observations(&FractionNegativeScorer),
+            walk_observations(&BalanceScorer),
+        ];
+        assert_eq!(observed, [13895120261424007879, 17559861434204650573]);
+    }
+
+    #[test]
+    fn search_state_cleans_each_root_and_retains_its_buffers() {
+        let graph = toy_graph();
+        let mut search = WalkSearch::new(&graph, 3, 1, &FractionNegativeScorer);
+        let pointers = (
+            search.path.as_ptr(),
+            search.signs.as_ptr(),
+            search.visited.as_ptr(),
+            search.heap.as_slice().as_ptr(),
+        );
+        let capacities = (
+            search.path.capacity(),
+            search.signs.capacity(),
+            search.visited.capacity(),
+            search.heap.capacity(),
+        );
+        for start in 0..graph.n_nodes {
+            search.visit_root(start);
+            assert_eq!(search.path, [start]);
+            assert!(search.signs.is_empty());
+            assert!(search.visited.iter().all(|&seen| !seen));
+            assert!(search.heap.len() <= 1);
+            assert_eq!(
+                pointers,
+                (
+                    search.path.as_ptr(),
+                    search.signs.as_ptr(),
+                    search.visited.as_ptr(),
+                    search.heap.as_slice().as_ptr()
+                )
+            );
+            assert_eq!(
+                capacities,
+                (
+                    search.path.capacity(),
+                    search.signs.capacity(),
+                    search.visited.capacity(),
+                    search.heap.capacity()
+                )
+            );
+        }
+    }
 
     fn toy_graph() -> SignedGraph {
         // Triangle with mixed signs + one extra edge to a 4th vertex.

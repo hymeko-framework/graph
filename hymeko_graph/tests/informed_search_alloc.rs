@@ -6,16 +6,20 @@
 //! `Ok(None)`, so no result `Vec` is built — isolating the search + workspace from the one unavoidable
 //! owned-result allocation a *successful* query makes.
 
+#[path = "informed_common/search.rs"]
+mod search;
+use hymeko::ir::ir::IrConstruction;
+use search::{AStar, Dijkstra, SearchCase};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use hymeko::common::ids::DeclId;
 use hymeko::common::ids::NodeId;
 use hymeko::ir::incidence::build_incidence_index;
-use hymeko::ir::ir::{AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR};
+use hymeko::ir::ir::{AnnoR, ArcRec, Ir, SignedRefR};
 use hymeko_graph::direct_ir::{
     HyperTraversal, InformedSearchWorkspace, MetricHeuristic, MetricStepCost, PositionProvider,
-    Undirected, UnitCost, ZeroHeuristic, astar_berge_path, dijkstra_berge_path,
+    Undirected, UnitCost, ZeroHeuristic,
 };
 
 struct Counting;
@@ -44,37 +48,23 @@ impl PositionProvider for LinePos {
 fn two_components(m: usize, k: usize) -> Ir {
     let mut ir = Ir::default();
     for _ in 0..(2 * m) {
-        let d = ir.push_decl(DeclNode {
-            kind: DeclKind::Node,
-            name: hymeko::common::ids::SymId::new(0),
-            parent: DeclId::NONE,
-            first_child: DeclId::NONE,
-            last_child: DeclId::NONE,
-            next_sibling: DeclId::NONE,
-            anno: AnnoR::default(),
-        });
-        let nid = NodeId::new(ir.nodes.len());
-        ir.nodes.push(NodeRec::new(d, Vec::new()));
-        ir.bind_node_decl(d, nid).unwrap();
+        IrConstruction::new(&mut ir)
+            .append_node(
+                hymeko::common::ids::SymId::new(0),
+                AnnoR::default(),
+                Vec::new(),
+            )
+            .unwrap();
     }
     for c in 0..2 {
         let base = c * m;
         for i in 0..(m - k + 1) {
             let refs: Vec<SignedRefR> = (i..i + k)
                 .map(|j| {
-                    SignedRefR::Plus(RefAtomR {
-                        target: DeclId::new(base + j),
-                        anno: AnnoR::default(),
-                        weights: None,
-                        direction: Default::default(),
-                    })
+                    SignedRefR::plain(DeclId::new(base + j), hymeko::ir::ir::IncidenceSign::Plus)
                 })
                 .collect();
-            ir.arcs.push(ArcRec {
-                anno: AnnoR::default(),
-                in_edge: DeclId::NONE,
-                refs,
-            });
+            ir.arcs.push(ArcRec::unowned(refs));
         }
     }
     ir
@@ -98,39 +88,42 @@ fn warm_informed_query_allocates_nothing() {
     // Warm-up sizes the workspace arrays and grows the heap to its peak.
     for _ in 0..3 {
         assert!(
-            dijkstra_berge_path(&trav, start, goal, &UnitCost, &Undirected, &mut ws)
+            SearchCase::new(&trav, start, goal, &mut ws)
+                .run(&Dijkstra::new(&UnitCost, &Undirected))
                 .unwrap()
                 .is_none()
         );
         assert!(
-            astar_berge_path(&trav, start, goal, &cost, &heur, &Undirected, &mut ws)
+            SearchCase::new(&trav, start, goal, &mut ws)
+                .run(&AStar::new(&cost, &heur, &Undirected))
                 .unwrap()
                 .is_none()
         );
         assert!(
-            astar_berge_path(
-                &trav,
-                start,
-                goal,
-                &UnitCost,
-                &ZeroHeuristic,
-                &Undirected,
-                &mut ws
-            )
-            .unwrap()
-            .is_none()
+            SearchCase::new(&trav, start, goal, &mut ws)
+                .run(&AStar::new(&UnitCost, &ZeroHeuristic, &Undirected))
+                .unwrap()
+                .is_none()
         );
     }
 
+    assert!(
+        SearchCase::new(&trav, start, goal, &mut ws)
+            .stats()
+            .expanded_nodes
+            > 0
+    );
     let before = ALLOCS.load(Ordering::Relaxed);
     for _ in 0..64 {
         assert!(
-            dijkstra_berge_path(&trav, start, goal, &UnitCost, &Undirected, &mut ws)
+            SearchCase::new(&trav, start, goal, &mut ws)
+                .run(&Dijkstra::new(&UnitCost, &Undirected))
                 .unwrap()
                 .is_none()
         );
         assert!(
-            astar_berge_path(&trav, start, goal, &cost, &heur, &Undirected, &mut ws)
+            SearchCase::new(&trav, start, goal, &mut ws)
+                .run(&AStar::new(&cost, &heur, &Undirected))
                 .unwrap()
                 .is_none()
         );

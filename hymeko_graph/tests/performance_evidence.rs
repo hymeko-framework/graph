@@ -19,6 +19,13 @@ use hymeko_graph::{
     levi_spanning_basis, par_batch_reachable_counts, rank2_spanning_forest,
 };
 
+#[cfg(any(windows, target_os = "linux"))]
+#[path = "performance_evidence/native.rs"]
+mod native;
+#[path = "performance_evidence/ranking.rs"]
+mod ranking;
+#[path = "pagerank_support/mod.rs"]
+mod ranking_support;
 #[path = "performance_evidence/representations.rs"]
 mod representations;
 #[path = "performance_evidence/statistics.rs"]

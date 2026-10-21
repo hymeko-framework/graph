@@ -18,86 +18,58 @@
 //!    higher under degree-adaptive caps than under fixed-m=128.  The
 //!    plan's mechanism for unlocking per-vertex ABB.
 
+mod cycle_common;
+use cycle_common::{AdaptivePerVertex, CardinalityParity, CycleCase, ParallelPerVertex};
+use hymeko_graph::signed_graph::{GraphGenerator, SignedGraphGenerator};
 use std::collections::HashMap;
 
 use hymeko_graph::{
     SignedGraph, balance::BalanceMode, balance::CartwrightHararyPruner, degree_adaptive_m_v,
-    enumerate_top_k_per_vertex_cycles_par, enumerate_top_k_per_vertex_cycles_par_adaptive,
-    pruner::NoOpPruner, topk_cycles::scorers,
+    enumerate_top_k_per_vertex_cycles_par_adaptive, pruner::NoOpPruner, topk_cycles::scorers,
 };
-
-fn lcg(state: &mut u32) -> u32 {
-    *state = state.wrapping_mul(1664525).wrapping_add(1013904223);
-    *state
-}
-
-fn synthetic_signed_graph(n: u32, edge_prob_pm: u32, pos_prob_pm: u32, seed: u32) -> SignedGraph {
-    let mut rng = seed;
-    let mut us: Vec<u32> = Vec::new();
-    let mut vs: Vec<u32> = Vec::new();
-    let mut ss: Vec<i8> = Vec::new();
-    for u in 0..n {
-        for v in (u + 1)..n {
-            if lcg(&mut rng) % 1_000_000 < edge_prob_pm * 1_000 {
-                us.push(u);
-                vs.push(v);
-                let s = if lcg(&mut rng) % 1_000_000 < pos_prob_pm * 1_000 {
-                    1i8
-                } else {
-                    -1i8
-                };
-                ss.push(s);
-            }
-        }
-    }
-    SignedGraph::from_parts(n, &us, &vs, &ss)
-}
 
 // ─── 1. Uniform-vector parity ─────────────────────────────────────
 
 #[test]
 fn uniform_m_v_parity_with_scalar_m_no_pruner() {
-    let g = synthetic_signed_graph(150, 60, 700, 71);
-    let k = 4;
-    let m = 8;
-    let scalar_out =
-        enumerate_top_k_per_vertex_cycles_par(&g, k, &NoOpPruner, m, scorers::fraction_negative);
-    let n = g.n_nodes as usize;
-    let m_v = vec![m as u32; n];
-    let adaptive_out = enumerate_top_k_per_vertex_cycles_par_adaptive(
-        &g,
-        k,
-        &NoOpPruner,
-        &m_v,
-        scorers::fraction_negative,
-    );
-    assert_eq!(
-        scalar_out.len(),
-        adaptive_out.len(),
-        "scalar-m and uniform-m_v must produce the same cardinality",
+    let graph = SignedGraphGenerator::new(150, 60, 700, 71)
+        .generate()
+        .unwrap();
+    let pruner = NoOpPruner;
+    let caps = vec![8; graph.n_nodes as usize];
+    let case = CycleCase {
+        graph: &graph,
+        pruner: &pruner,
+        length: 4,
+        keep: 8,
+    };
+    case.compare(
+        &ParallelPerVertex,
+        &AdaptivePerVertex(&caps),
+        &CardinalityParity,
     );
 }
 
 #[test]
 fn uniform_m_v_parity_with_scalar_m_balance_pruner() {
-    let g = synthetic_signed_graph(150, 60, 700, 72);
-    let k = 4;
-    let m = 8;
+    let graph = SignedGraphGenerator::new(150, 60, 700, 72)
+        .generate()
+        .unwrap();
     let pruner = CartwrightHararyPruner {
         mode: BalanceMode::OnlyBalanced,
     };
-    let scalar_out =
-        enumerate_top_k_per_vertex_cycles_par(&g, k, &pruner, m, scorers::fraction_negative);
-    let n = g.n_nodes as usize;
-    let m_v = vec![m as u32; n];
-    let adaptive_out = enumerate_top_k_per_vertex_cycles_par_adaptive(
-        &g,
-        k,
-        &pruner,
-        &m_v,
-        scorers::fraction_negative,
+    let caps = vec![8; graph.n_nodes as usize];
+    let case = CycleCase {
+        graph: &graph,
+        pruner: &pruner,
+        length: 4,
+        keep: 8,
+    };
+    case.compare(
+        &ParallelPerVertex,
+        &AdaptivePerVertex(&caps),
+        &CardinalityParity,
     );
-    assert_eq!(scalar_out.len(), adaptive_out.len());
 }
 
 // ─── 2. degree_adaptive_m_v formula ───────────────────────────────
@@ -116,7 +88,9 @@ fn degree_adaptive_m_v_formula() {
 
 #[test]
 fn degree_adaptive_m_v_clamps_at_m_max() {
-    let g = synthetic_signed_graph(50, 200, 700, 81); // dense-ish
+    let g = SignedGraphGenerator::new(50, 200, 700, 81)
+        .generate()
+        .unwrap(); // dense-ish
     let m_v = degree_adaptive_m_v(&g, 1, 16, 4.0);
     for &cap in &m_v {
         assert!(cap <= 16, "cap {cap} exceeds m_max=16");
@@ -126,7 +100,9 @@ fn degree_adaptive_m_v_clamps_at_m_max() {
 
 #[test]
 fn degree_adaptive_m_v_c_zero_is_uniform_m_min() {
-    let g = synthetic_signed_graph(50, 100, 700, 82);
+    let g = SignedGraphGenerator::new(50, 100, 700, 82)
+        .generate()
+        .unwrap();
     let m_v = degree_adaptive_m_v(&g, 5, 16, 0.0);
     for &cap in &m_v {
         assert_eq!(cap, 5, "c=0 must produce uniform m_min");
@@ -146,7 +122,9 @@ fn adaptive_total_output_at_most_sum_of_m_v() {
     // retained by *other* heaps still touch v in the output).
     //
     // This test verifies the loose-but-correct global bound.
-    let g = synthetic_signed_graph(120, 80, 700, 91);
+    let g = SignedGraphGenerator::new(120, 80, 700, 91)
+        .generate()
+        .unwrap();
     let m_v = degree_adaptive_m_v(&g, 1, 8, 2.0);
     let total_cap: u64 = m_v.iter().map(|&c| c as u64).sum();
     let out = enumerate_top_k_per_vertex_cycles_par_adaptive(
@@ -202,7 +180,9 @@ fn full_heap_rate(g: &SignedGraph, m_v: &[u32], k: usize) -> f64 {
 
 #[test]
 fn full_heap_rate_climbs_under_degree_adaptive() {
-    let g = synthetic_signed_graph(150, 60, 700, 101);
+    let g = SignedGraphGenerator::new(150, 60, 700, 101)
+        .generate()
+        .unwrap();
     let n = g.n_nodes as usize;
     let m_max: u32 = 32;
 
@@ -253,7 +233,9 @@ fn full_heap_rate_climbs_under_degree_adaptive() {
 
 #[test]
 fn par_adaptive_is_deterministic_across_calls_with_balance_pruner() {
-    let g = synthetic_signed_graph(150, 60, 700, 72);
+    let g = SignedGraphGenerator::new(150, 60, 700, 72)
+        .generate()
+        .unwrap();
     let k = 4;
     let m = 8u32;
     let pruner = CartwrightHararyPruner {

@@ -34,16 +34,8 @@ use hymeko_pgraph::{IrReadError, MetaResolveError, lower_resolved};
 /// A bare `DeclNode` with the given name and kind: no parent, no children, no
 /// annotation. The one construction seam every builder in this file shares, so
 /// the seven-field literal is written once.
-fn decl_node(name: SymId, kind: DeclKind) -> DeclNode {
-    DeclNode {
-        kind,
-        name,
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    }
+fn decl_node(name: SymId, kind: DeclKind) -> DeclNode<AnnoR> {
+    DeclNode::root(kind, name, AnnoR::default())
 }
 
 /// One deliberate storage fault. Dangling mappings are created by truncating
@@ -146,7 +138,8 @@ impl Pg {
         let mut node_of = BTreeMap::new();
         for d in [RAW, PRODUCT, INTER, MAT_A, MAT_P] {
             let nid = NodeId::new(ir.nodes.len());
-            ir.nodes.push(NodeRec::new(d, Vec::new()));
+            ir.nodes
+                .push(NodeRec::new(d, hymeko::common::ids::BaseListId::NONE));
             node_of.insert(d, nid);
             bind_node(&mut ir, d, nid, perturb);
         }
@@ -154,7 +147,8 @@ impl Pg {
         let mut edge_of = BTreeMap::new();
         for d in [PROCESS, UNIT_U] {
             let eid = EdgeId::new(ir.edges.len());
-            ir.edges.push(EdgeRec::new(d, Vec::new()));
+            ir.edges
+                .push(EdgeRec::new(d, hymeko::common::ids::BaseListId::NONE));
             edge_of.insert(d, eid);
             bind_edge(&mut ir, d, eid, perturb);
         }
@@ -196,64 +190,61 @@ impl Pg {
         let sym = self.it.intern(name);
         let d = self.ir.push_decl(decl_node(sym, DeclKind::Node));
         let nid = NodeId::new(self.ir.nodes.len());
-        self.ir.nodes.push(NodeRec::new(d, Vec::new()));
+        self.ir
+            .nodes
+            .push(NodeRec::new(d, hymeko::common::ids::BaseListId::NONE));
         self.ir.bind_node_decl(d, nid).expect("bind node slot");
         self.node_of.insert(d, nid);
         self.set_isa_base(d, isa_target);
         d
     }
 
-    fn isa_base(&self, target: DeclId) -> SignedRefR {
-        SignedRefR::Neutral(RefAtomR {
-            target,
-            anno: AnnoR {
-                tags: vec![self.isa],
-                value: None,
+    fn isa_base(&mut self, target: DeclId) -> SignedRefR {
+        self.ir.store_reference(hymeko::ir::ir::ReferenceDraft::new(
+            hymeko::ir::ir::IncidenceSign::Neutral,
+            RefAtomR {
+                target,
+                anno: AnnoR {
+                    tags: vec![self.isa],
+                    value: None,
+                },
+                weights: None,
+                direction: Default::default(),
             },
-            weights: None,
-            direction: Default::default(),
-        })
+        ))
+    }
+
+    fn base_slot(&mut self, d: DeclId) -> &mut hymeko::common::ids::BaseListId {
+        if let Some(node) = self.node_of.get(&d) {
+            &mut self.ir.nodes[node.raw()].bases
+        } else {
+            let edge = self.edge_of[&d];
+            &mut self.ir.edges[edge.raw()].bases
+        }
     }
 
     fn set_isa_base(&mut self, d: DeclId, target: DeclId) {
         let base = self.isa_base(target);
-        let nid = self.nid_of(d);
-        self.ir.nodes[nid.raw()].bases.push(base);
-    }
-
-    /// Give an *edge* declaration an `<isa>` base (e.g. `u <isa> process`) so it
-    /// is classified as a unit by the explicit rule even when its incidence is
-    /// not all-material.
-    fn set_isa_base_edge(&mut self, d: DeclId, target: DeclId) {
-        let base = self.isa_base(target);
-        let eid = *self
-            .edge_of
-            .get(&d)
-            .expect("edge decl built in this fixture");
-        self.ir.edges[eid.raw()].bases.push(base);
+        let old = *self.base_slot(d);
+        let mut bases = self.ir[old].to_vec();
+        bases.push(base);
+        let stored = self.ir.store_bases(bases);
+        *self.base_slot(d) = stored;
     }
 
     /// Append an arc to edge `owner` with the given signed material refs.
     fn add_unit_arc(&mut self, owner: DeclId, refs: &[(DeclId, i8)]) {
         let built: Vec<SignedRefR> = refs
             .iter()
-            .map(|&(target, sign)| {
-                let atom = RefAtomR {
-                    target,
-                    anno: AnnoR::default(),
-                    weights: None,
-                    direction: Default::default(),
-                };
-                match sign {
-                    s if s < 0 => SignedRefR::Minus(atom),
-                    s if s > 0 => SignedRefR::Plus(atom),
-                    _ => SignedRefR::Neutral(atom),
-                }
+            .map(|&(target, sign)| match sign {
+                s if s < 0 => SignedRefR::plain(target, hymeko::ir::ir::IncidenceSign::Minus),
+                s if s > 0 => SignedRefR::plain(target, hymeko::ir::ir::IncidenceSign::Plus),
+                _ => SignedRefR::plain(target, hymeko::ir::ir::IncidenceSign::Neutral),
             })
             .collect();
         let aid = HyperArcId::new(self.ir.arcs.len());
         self.ir.arcs.push(ArcRec {
-            anno: AnnoR::default(),
+            anno: hymeko::common::ids::AnnotationId::NONE,
             in_edge: owner,
             refs: built,
         });
@@ -369,7 +360,7 @@ fn dangling_base_target_is_typed() {
     let mut pg = Pg::valid();
     // A's <isa> base points at a declaration that does not exist.
     let nid = pg.nid_of(MAT_A);
-    pg.ir.nodes[nid.raw()].bases.clear();
+    pg.ir.nodes[nid.raw()].bases = hymeko::common::ids::BaseListId::NONE;
     pg.set_isa_base(MAT_A, DeclId::new(500));
     assert_eq!(
         pg.ir_err(),
@@ -415,14 +406,12 @@ fn dangling_incidence_target_is_typed() {
     // Make u an *explicit* unit (u <isa> process) so it is classified even though
     // its incidence is not all-material — otherwise the structural rule would
     // silently drop it before build_incidence ever reads the dangling target.
-    pg.set_isa_base_edge(UNIT_U, PROCESS);
+    pg.set_isa_base(UNIT_U, PROCESS);
     // u's arc references a material id that does not exist.
-    pg.ir.arcs[0].refs = vec![SignedRefR::Minus(RefAtomR {
-        target: DeclId::new(600),
-        anno: AnnoR::default(),
-        weights: None,
-        direction: Default::default(),
-    })];
+    pg.ir.arcs[0].refs = vec![SignedRefR::plain(
+        DeclId::new(600),
+        hymeko::ir::ir::IncidenceSign::Minus,
+    )];
     assert_eq!(
         pg.ir_err(),
         IrReadError::DanglingIncidenceTarget {
@@ -443,8 +432,8 @@ fn inheritance_cycle_terminates_and_is_not_an_error() {
     let mut pg = Pg::valid();
     let na = pg.nid_of(MAT_A);
     let np = pg.nid_of(MAT_P);
-    pg.ir.nodes[na.raw()].bases.clear();
-    pg.ir.nodes[np.raw()].bases.clear();
+    pg.ir.nodes[na.raw()].bases = hymeko::common::ids::BaseListId::NONE;
+    pg.ir.nodes[np.raw()].bases = hymeko::common::ids::BaseListId::NONE;
     pg.set_isa_base(MAT_A, MAT_P);
     pg.set_isa_base(MAT_P, MAT_A);
     let g = pg.lower().expect("a cyclic <isa> lowers without error");
@@ -512,18 +501,8 @@ fn swapping_signs_swaps_input_and_output() {
     let mut pg = Pg::valid();
     // Rebuild u's arc with the signs flipped: +A -P.
     pg.ir.arcs[0].refs = vec![
-        SignedRefR::Plus(RefAtomR {
-            target: MAT_A,
-            anno: AnnoR::default(),
-            weights: None,
-            direction: Default::default(),
-        }),
-        SignedRefR::Minus(RefAtomR {
-            target: MAT_P,
-            anno: AnnoR::default(),
-            weights: None,
-            direction: Default::default(),
-        }),
+        SignedRefR::plain(MAT_A, hymeko::ir::ir::IncidenceSign::Plus),
+        SignedRefR::plain(MAT_P, hymeko::ir::ir::IncidenceSign::Minus),
     ];
     let g = pg.lower().expect("valid");
     let u = g.name_to_decl["u"];
@@ -640,13 +619,11 @@ fn non_material_incidence_is_a_domain_error_not_a_storage_fault() {
     // u <isa> process (explicit unit) with an incidence on `process` — a real
     // declaration that is not a material.
     let mut pg = Pg::valid();
-    pg.set_isa_base_edge(UNIT_U, PROCESS);
-    pg.ir.arcs[0].refs = vec![SignedRefR::Minus(RefAtomR {
-        target: PROCESS,
-        anno: AnnoR::default(),
-        weights: None,
-        direction: Default::default(),
-    })];
+    pg.set_isa_base(UNIT_U, PROCESS);
+    pg.ir.arcs[0].refs = vec![SignedRefR::plain(
+        PROCESS,
+        hymeko::ir::ir::IncidenceSign::Minus,
+    )];
     match pg.lower() {
         Err(MetaResolveError::NonMaterialIo { unit, target }) => {
             assert_eq!(unit, "u");
@@ -659,13 +636,11 @@ fn non_material_incidence_is_a_domain_error_not_a_storage_fault() {
 #[test]
 fn neutral_reference_is_rejected() {
     let mut pg = Pg::valid();
-    pg.set_isa_base_edge(UNIT_U, PROCESS);
-    pg.ir.arcs[0].refs = vec![SignedRefR::Neutral(RefAtomR {
-        target: MAT_A,
-        anno: AnnoR::default(),
-        weights: None,
-        direction: Default::default(),
-    })];
+    pg.set_isa_base(UNIT_U, PROCESS);
+    pg.ir.arcs[0].refs = vec![SignedRefR::plain(
+        MAT_A,
+        hymeko::ir::ir::IncidenceSign::Neutral,
+    )];
     match pg.lower() {
         Err(MetaResolveError::NeutralRef { unit }) => assert_eq!(unit, "u"),
         other => panic!("expected NeutralRef, got {other:?}"),
@@ -677,7 +652,7 @@ fn scalar_cost_is_read_from_the_unit_annotation() {
     use hymeko::ir::ir::ValueR;
     let mut pg = Pg::valid();
     // Annotate u's declaration with a numeric cost.
-    pg.ir.decl_nodes[UNIT_U.raw()].anno.value = Some(ValueR::Num(7.5));
+    pg.ir.decl_annotation_mut(UNIT_U).unwrap().value = Some(ValueR::Num(7.5));
     let g = pg.lower().expect("valid");
     assert_eq!(g.costs[&UNIT_U], 7.5);
 }
@@ -689,7 +664,9 @@ fn ambiguous_archetype_when_two_declarations_share_the_name() {
     let sym = pg.it.intern("raw");
     let d = pg.ir.push_decl(decl_node(sym, DeclKind::Node));
     let nid = NodeId::new(pg.ir.nodes.len());
-    pg.ir.nodes.push(NodeRec::new(d, Vec::new()));
+    pg.ir
+        .nodes
+        .push(NodeRec::new(d, hymeko::common::ids::BaseListId::NONE));
     pg.ir.bind_node_decl(d, nid).expect("bind node slot");
     match pg.lower() {
         Err(MetaResolveError::AmbiguousArchetype("raw")) => {}
@@ -703,16 +680,12 @@ fn a_base_without_the_isa_tag_is_skipped() {
     // dropped — the `continue` in the ancestry walk, exercised.
     let mut pg = Pg::valid();
     let na = pg.nid_of(MAT_A);
-    pg.ir.nodes[na.raw()].bases.clear();
+    pg.ir.nodes[na.raw()].bases = hymeko::common::ids::BaseListId::NONE;
     // A base to `raw` but WITHOUT the isa tag.
-    pg.ir.nodes[na.raw()]
-        .bases
-        .push(SignedRefR::Neutral(RefAtomR {
-            target: RAW,
-            anno: AnnoR::default(),
-            weights: None,
-            direction: Default::default(),
-        }));
+    pg.ir.nodes[na.raw()].bases = pg.ir.store_bases(vec![SignedRefR::plain(
+        RAW,
+        hymeko::ir::ir::IncidenceSign::Neutral,
+    )]);
     let g = pg.lower().expect("valid");
     // A no longer classifies as a material (its base is not <isa>).
     assert!(!g.materials.contains(&MAT_A));
@@ -737,12 +710,18 @@ fn a_program_without_an_isa_symbol_yields_no_materials() {
     }
     for d in [0usize, 1, 2, 4] {
         let nid = NodeId::new(ir.nodes.len());
-        ir.nodes.push(NodeRec::new(DeclId::new(d), Vec::new()));
+        ir.nodes.push(NodeRec::new(
+            DeclId::new(d),
+            hymeko::common::ids::BaseListId::NONE,
+        ));
         ir.bind_node_decl(DeclId::new(d), nid)
             .expect("bind node slot");
     }
     let eid = EdgeId::new(ir.edges.len());
-    ir.edges.push(EdgeRec::new(DeclId::new(3), Vec::new()));
+    ir.edges.push(EdgeRec::new(
+        DeclId::new(3),
+        hymeko::common::ids::BaseListId::NONE,
+    ));
     ir.bind_edge_decl(DeclId::new(3), eid)
         .expect("bind edge slot");
     // "isa" is never interned, so get_id("isa") is None inside meta_resolve.
@@ -762,7 +741,7 @@ fn an_isa_base_pointing_at_a_hyperarc_declaration_contributes_no_bases() {
     let arc_decl = pg.ir.push_decl(decl_node(arc_sym, DeclKind::HyperArc));
     // A <isa> some_arc (instead of raw).
     let na = pg.nid_of(MAT_A);
-    pg.ir.nodes[na.raw()].bases.clear();
+    pg.ir.nodes[na.raw()].bases = hymeko::common::ids::BaseListId::NONE;
     pg.set_isa_base(MAT_A, arc_decl);
     let g = pg
         .lower()
@@ -794,18 +773,27 @@ fn unit_arc_refs_reports_an_edge_backlink_mismatch_without_isa() {
     }
     for d in [0usize, 1, 2] {
         let nid = NodeId::new(ir.nodes.len());
-        ir.nodes.push(NodeRec::new(DeclId::new(d), Vec::new()));
+        ir.nodes.push(NodeRec::new(
+            DeclId::new(d),
+            hymeko::common::ids::BaseListId::NONE,
+        ));
         ir.bind_node_decl(DeclId::new(d), nid)
             .expect("bind node slot");
     }
     // process (decl 3) and u (decl 4) as edge records; u's record back-links
     // to a different declaration.
     let e_proc = EdgeId::new(ir.edges.len());
-    ir.edges.push(EdgeRec::new(DeclId::new(3), Vec::new()));
+    ir.edges.push(EdgeRec::new(
+        DeclId::new(3),
+        hymeko::common::ids::BaseListId::NONE,
+    ));
     ir.bind_edge_decl(DeclId::new(3), e_proc)
         .expect("bind edge slot");
     let e_u = EdgeId::new(ir.edges.len());
-    ir.edges.push(EdgeRec::new(DeclId::new(4), Vec::new()));
+    ir.edges.push(EdgeRec::new(
+        DeclId::new(4),
+        hymeko::common::ids::BaseListId::NONE,
+    ));
     ir.bind_edge_decl(DeclId::new(4), e_u)
         .expect("bind edge slot");
     ir.edges[e_u.raw()].decl = DeclId::new(99); // corrupt after valid binding
@@ -816,5 +804,31 @@ fn unit_arc_refs_reports_an_edge_backlink_mismatch_without_isa() {
             assert_eq!(record_decl, DeclId::new(99));
         }
         other => panic!("expected EdgeBacklinkMismatch, got {other:?}"),
+    }
+}
+
+#[test]
+fn compact_payload_handles_report_typed_storage_faults() {
+    use hymeko::common::ids::{AnnotationId, BaseListId};
+    for (decl, field) in [(MAT_A, "bases"), (UNIT_U, "bases"), (UNIT_U, "annotation")] {
+        let mut pg = Pg::valid();
+        if field == "annotation" {
+            pg.ir.decl_nodes[decl.raw()].anno = AnnotationId::new(999);
+        } else if let Some(node) = pg.ir.as_node(decl) {
+            pg.ir.nodes[node.raw()].bases = BaseListId::new(999);
+        } else {
+            let edge = pg.ir.as_edge(decl).unwrap();
+            pg.ir.edges[edge.raw()].bases = BaseListId::new(999);
+        }
+        let error = pg.ir_err();
+        assert_eq!(
+            error,
+            IrReadError::InvalidPayload {
+                decl,
+                field,
+                id: 999
+            }
+        );
+        assert!(error.to_string().contains(field));
     }
 }

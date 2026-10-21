@@ -92,7 +92,7 @@ pub use msg::{
 #[cfg(feature = "pgip")]
 pub use pgip_io::{PgipError, read_pgip, write_pgip};
 pub use regime::{Canonical, Composite, CostDominance, NoExcess, Regime};
-pub use schema::{PGraphError, PGraphSchema, PNodeKind};
+pub use schema::{PGraphError, PGraphSchema, PGraphSchemaBuilder, PNodeKind};
 pub use ssg::{SolutionStructure, SsgOptions, enumerate as ssg_enumerate};
 pub use ssg_dm::{
     SsgDmOptions, SsgDmResult, enumerate as ssg_dm_enumerate,

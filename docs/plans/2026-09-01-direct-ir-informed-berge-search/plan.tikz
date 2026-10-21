@@ -1,4 +1,6 @@
 % P1.1 informed Berge search --- state space + ownership (standalone-compilable)
+% 2026-10-12: approved indexed frontier; one Entry per DeclId, sparse inverse
+% positions validate membership after constant-time clear; capacity prepared up front.
 \documentclass[tikz,border=6pt]{standalone}
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.geometric}
 \begin{document}
@@ -22,7 +24,7 @@
   \node[draw,dashed,fit=(u)(e1)(v)(e2)(w),inner sep=4mm,label=above:{implicit Berge state space over \texttt{Ir} --- NO explicit Levi/star/clique}] {};
 
   % --- engine ---
-  \node[box,fill=green!12,below=16mm of u] (ws) {InformedSearchWorkspace\\g[] / pred[] / settled\\binary heap (lazy del)\\gen-stamped, warm-alloc-free};
+  \node[box,fill=green!12,below=16mm of u] (ws) {InformedSearchWorkspace\\g[] / pred[] / settled\\indexed heap / inverse positions\\one current entry per DeclId};
   \node[box,fill=blue!8,right=8mm of ws] (astar) {astar\_berge\_path$\langle$C,H,P$\rangle$\\f=g+h, total\_cmp\\+ (tiebreak,DeclId,arc,slot)};
   \node[box,right=8mm of astar] (traits) {C: cost (unit/weight/metric)\\H: heuristic (Zero/metric)\\P: policy (undir/signed/directed)};
   \draw[e] (ws) -- (astar); \draw[e] (traits) -- (astar);
@@ -35,4 +37,67 @@
   \draw[e] (core) -- (graph); \draw[e] (graph) -- node[above,font=\scriptsize]{PGraphView borrows}(pg);
   \node[below=1mm of pg,font=\scriptsize,red] {AND-producibility STAYS (not Berge connectivity)};
 \end{tikzpicture}
+
+\begin{tikzpicture}[node distance=8mm, every node/.style={draw,rounded corners,align=center,font=\small},>=Latex]
+\node (case) {Borrowed SearchCase\\caller-owned workspace};
+\node (runner) [below=of case] {Dijkstra / AStar strategies\\existing public engines};
+\node (bounds) [left=8mm of runner] {Hop / Max heuristics\\declared contracts};
+\node (protocol) [right=8mm of case] {Shared evidence protocol\\cheap sample / strong verification};
+\node (rows) [below=of protocol] {Typed TSV rows\\preserved keys and units};
+\draw[->] (case)--(runner);\draw[->] (bounds)--(runner);\draw[->] (protocol)--(case);\draw[->] (protocol)--(rows);
+\end{tikzpicture}
+
+
+\par\begin{tikzpicture}[node distance=7mm,every node/.style={draw,rounded corners,align=center,font=\small}]
+\node(a){Identical membership and mathematical contract};
+\node(b)[below=of a]{Existing native APIs and full result parity};
+\node(c)[below=of b]{Shared sampler: five processes, nine samples};
+\node(d)[below=of c]{Default-path audit and archived PDF evidence};
+\draw[->](a)--(b);\draw[->](b)--(c);\draw[->](c)--(d);\end{tikzpicture}
+
+
+\par\begin{tikzpicture}[node distance=6mm,every node/.style={draw,rounded corners,align=center,font=\small}]
+\node(a){Canonical Ir + existing incidence owner};
+\node(b)[below=of a]{Shared lazy projection: declaration / node domain};
+\node(c)[below=of b]{One gather / scatter implementation};
+\node(d)[below left=8mm and 2mm of c]{Prepared signed operator\\ordinary sum};
+\node(e)[below right=8mm and 2mm of c]{PageRank policies\\compensated sum};
+\draw[->](a)--(b);\draw[->](b)--(c);\draw[->](c)--(d);\draw[->](c)--(e);\end{tikzpicture}
+
+\par\begin{tikzpicture}[node distance=6mm,every node/.style={draw,rounded corners,align=center,font=\small}]
+\node(a){Verified shared Core projection + PageRank};
+\node(b)[below=of a]{Existing native comparison: smoke, then 5 processes};
+\node(c)[below=of b]{Parity + source checks + median/IQR + PDF};
+\draw[->](a)--(b);\draw[->](b)--(c);\end{tikzpicture}
+\par\begin{tikzpicture}[node distance=6mm,every node/.style={draw,rounded corners,align=center,font=\small}]
+\node(a){Shared canonical incidence projection};
+\node(b)[below=of a]{Exact unit counts + seeded ordered fold};
+\node(c)[below=of b]{Numeric parity + allocation gates};
+\node(d)[below=of c]{Existing selected comparison + PDF};
+\draw[->](a)--(b);\draw[->](b)--(c);\draw[->](c)--(d);\end{tikzpicture}
+\par\begin{tikzpicture}[node distance=6mm,every node/.style={draw,rounded corners,align=center,font=\small}]
+\node(a){Canonical incidence rows};
+\node(b)[below=of a]{Two-slot gather and sequential scatter};
+\node(c)[below=of b]{Same accumulator contract and result checks};
+\node(d)[below=of c]{Existing native comparison: 2 / 32 / 1000};
+\draw[->](a)--(b);\draw[->](b)--(c);\draw[->](c)--(d);\end{tikzpicture}
+\par\begin{tikzpicture}[node distance=6mm,every node/.style={draw,rounded corners,align=center,font=\small}]
+\node(a){Existing fixtures and canonical Core construction};
+\node(b)[below=of a]{Mixed widths / hub / components / chain / scales};
+\node(c)[below=of b]{Small correctness gates and frozen release binaries};
+\node(d)[below=of c]{User quiet-host signal, then existing measurement runners};
+\node(e)[below=of d]{Full parity, distributions, PDF and verified archive};
+\draw[->](a)--(b);\draw[->](b)--(c);\draw[->](c)--(d);\draw[->](d)--(e);\end{tikzpicture}
 \end{document}
+
+% 2026-10-12: sparse typed visitation; no generation wrap; path/allocation gates
+\par\begin{tikzpicture}[node distance=7mm,every node/.style={draw,rounded corners,align=center,font=\small}]
+\node(a){Canonical Ir + typed probability routing};
+\node(b)[below=of a]{One PageRank loop: gather, scatter, teleport};
+\node(c)[below=of b]{Error bound, independent oracle, scratch reuse};
+\node(d)[below=of c]{Existing evidence runner: active workload timings};
+\draw[->](a)--(b);\draw[->](b)--(c);\draw[->](c)--(d);\end{tikzpicture}
+
+% 2026-10-19 execution: native adapter admission cap 2M -> planned 4M; algorithms unchanged.
+
+% 2026-10-19: existing IR -> shared virtual incidence rows -> existing graph algorithms -> matched evidence

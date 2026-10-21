@@ -3,9 +3,12 @@
 lifted verbatim from the P3.2 figures script so both phases share one emitter (§6.1); `line_svg` adds a
 log-log line plot for latency-vs-size."""
 import math
+from collections.abc import Sequence
+from pathlib import Path
 
 
-def bar_svg(title, rows, labels, series, colors, ylabel, path):
+def bar_svg(title: str, rows: Sequence[tuple[str, Sequence[float]]], labels: Sequence[str],
+            series: Sequence[str], colors: Sequence[str], ylabel: str, path: Path) -> None:
     # rows: list of (label, [values per series]); series: list of series names
     w, h, pad = 720, 380, 60
     n = len(rows)
@@ -32,7 +35,8 @@ def bar_svg(title, rows, labels, series, colors, ylabel, path):
     print("wrote", path.name)
 
 
-def line_svg(title, series, xlabel, ylabel, path):
+def line_svg(title: str, series: Sequence[tuple[str, Sequence[tuple[float, float]], str]],
+             xlabel: str, ylabel: str, path: Path) -> None:
     # series: list of (name, [(x, y), ...], color). Log-log axes.
     w, h, pad = 720, 420, 66
     pts = [(x, y) for _, data, _ in series for (x, y) in data if x > 0 and y > 0]
@@ -45,25 +49,25 @@ def line_svg(title, series, xlabel, ylabel, path):
     if ly1 == ly0:
         ly1 += 1
 
-    def px(x):
+    def px(x: float) -> float:
         return pad + (math.log10(x) - lx0) / (lx1 - lx0) * (w - 2 * pad)
 
-    def py(y):
+    def py(y: float) -> float:
         return (h - pad) - (math.log10(y) - ly0) / (ly1 - ly0) * (h - 2 * pad)
 
     svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" font-family="sans-serif">']
     svg.append(f'<text x="{w/2}" y="24" text-anchor="middle" font-size="16" font-weight="bold">{title}</text>')
     # decade gridlines
-    for d in range(math.floor(lx0), math.ceil(lx1) + 1):
-        x = px(10 ** d)
+    for exponent in range(math.floor(lx0), math.ceil(lx1) + 1):
+        x = px(10 ** exponent)
         if pad - 1 <= x <= w - pad + 1:
             svg.append(f'<line x1="{x:.1f}" y1="{pad}" x2="{x:.1f}" y2="{h-pad}" stroke="#eee"/>')
-            svg.append(f'<text x="{x:.1f}" y="{h-pad+16}" text-anchor="middle" font-size="10">1e{d}</text>')
-    for d in range(math.floor(ly0), math.ceil(ly1) + 1):
-        y = py(10 ** d)
+            svg.append(f'<text x="{x:.1f}" y="{h-pad+16}" text-anchor="middle" font-size="10">1e{exponent}</text>')
+    for exponent in range(math.floor(ly0), math.ceil(ly1) + 1):
+        y = py(10 ** exponent)
         if pad - 1 <= y <= h - pad + 1:
             svg.append(f'<line x1="{pad}" y1="{y:.1f}" x2="{w-pad}" y2="{y:.1f}" stroke="#eee"/>')
-            svg.append(f'<text x="{pad-8:.1f}" y="{y+4:.1f}" text-anchor="end" font-size="10">1e{d}</text>')
+            svg.append(f'<text x="{pad-8:.1f}" y="{y+4:.1f}" text-anchor="end" font-size="10">1e{exponent}</text>')
     svg.append(f'<line x1="{pad}" y1="{h-pad}" x2="{w-pad}" y2="{h-pad}" stroke="#333"/>')
     svg.append(f'<line x1="{pad}" y1="{pad}" x2="{pad}" y2="{h-pad}" stroke="#333"/>')
     svg.append(f'<text x="{w/2}" y="{h-24}" text-anchor="middle" font-size="11">{xlabel}</text>')

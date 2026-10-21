@@ -16,6 +16,7 @@
 //! 5. **End-to-end**: the enumerator returns ≤ K cycles, all
 //!    satisfying the pruner, at any α.
 
+use hymeko_graph::signed_graph::{GraphGenerator, SignedGraphGenerator};
 use hymeko_graph::{
     EntropyGainScorer, HybridScorer, InverseDegreeScorer, SignedGraph, UniformityHeuristic,
     UniformityState,
@@ -24,33 +25,6 @@ use hymeko_graph::{
     pruner::NoOpPruner,
     topk_cycles::{BoundedScorer, FractionNegativeScorer},
 };
-
-fn lcg(state: &mut u32) -> u32 {
-    *state = state.wrapping_mul(1664525).wrapping_add(1013904223);
-    *state
-}
-
-fn synthetic_signed_graph(n: u32, edge_prob_pm: u32, pos_prob_pm: u32, seed: u32) -> SignedGraph {
-    let mut rng = seed;
-    let mut us: Vec<u32> = Vec::new();
-    let mut vs: Vec<u32> = Vec::new();
-    let mut ss: Vec<i8> = Vec::new();
-    for u in 0..n {
-        for v in (u + 1)..n {
-            if lcg(&mut rng) % 1_000_000 < edge_prob_pm * 1_000 {
-                us.push(u);
-                vs.push(v);
-                let s = if lcg(&mut rng) % 1_000_000 < pos_prob_pm * 1_000 {
-                    1i8
-                } else {
-                    -1i8
-                };
-                ss.push(s);
-            }
-        }
-    }
-    SignedGraph::from_parts(n, &us, &vs, &ss)
-}
 
 // ─── Boundary collapse ────────────────────────────────────────────
 
@@ -150,31 +124,41 @@ fn check_admissibility_at_alpha(g: &SignedGraph, alpha: f64) {
 
 #[test]
 fn ub_admissible_alpha_zero() {
-    let g = synthetic_signed_graph(60, 100, 700, 31);
+    let g = SignedGraphGenerator::new(60, 100, 700, 31)
+        .generate()
+        .unwrap();
     check_admissibility_at_alpha(&g, 0.0);
 }
 
 #[test]
 fn ub_admissible_alpha_quarter() {
-    let g = synthetic_signed_graph(60, 100, 700, 32);
+    let g = SignedGraphGenerator::new(60, 100, 700, 32)
+        .generate()
+        .unwrap();
     check_admissibility_at_alpha(&g, 0.25);
 }
 
 #[test]
 fn ub_admissible_alpha_half() {
-    let g = synthetic_signed_graph(60, 100, 700, 33);
+    let g = SignedGraphGenerator::new(60, 100, 700, 33)
+        .generate()
+        .unwrap();
     check_admissibility_at_alpha(&g, 0.5);
 }
 
 #[test]
 fn ub_admissible_alpha_three_quarters() {
-    let g = synthetic_signed_graph(60, 100, 700, 34);
+    let g = SignedGraphGenerator::new(60, 100, 700, 34)
+        .generate()
+        .unwrap();
     check_admissibility_at_alpha(&g, 0.75);
 }
 
 #[test]
 fn ub_admissible_alpha_one() {
-    let g = synthetic_signed_graph(60, 100, 700, 35);
+    let g = SignedGraphGenerator::new(60, 100, 700, 35)
+        .generate()
+        .unwrap();
     check_admissibility_at_alpha(&g, 1.0);
 }
 
@@ -182,7 +166,9 @@ fn ub_admissible_alpha_one() {
 
 #[test]
 fn enumerator_returns_k_cycles_at_each_alpha_balance_pruner() {
-    let g = synthetic_signed_graph(150, 60, 700, 41);
+    let g = SignedGraphGenerator::new(150, 60, 700, 41)
+        .generate()
+        .unwrap();
     let pruner = CartwrightHararyPruner {
         mode: BalanceMode::OnlyBalanced,
     };
@@ -205,7 +191,9 @@ fn enumerator_returns_k_cycles_at_each_alpha_balance_pruner() {
 fn enumerator_with_inverse_degree_diversity() {
     // Cross-product check: HybridScorer<FractionNeg, InverseDegree>
     // also enumerates cleanly.
-    let g = synthetic_signed_graph(150, 60, 700, 42);
+    let g = SignedGraphGenerator::new(150, 60, 700, 42)
+        .generate()
+        .unwrap();
     let hybrid = HybridScorer::new(FractionNegativeScorer, InverseDegreeScorer, 0.5);
     let out = enumerate_top_k_cycles_par_entropy(&g, 4, &NoOpPruner, 50, &hybrid);
     assert!(!out.is_empty());

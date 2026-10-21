@@ -2,6 +2,99 @@
 
 Graph theory and hypergraph extensions for analysis and modelling with HyMeKo.
 
+`direct_ir::PageRank` ranks canonical IR nodes without materializing a pairwise
+graph. `PageRank::build(&ir, PageRankModel::default())` prepares an undirected
+vertex–hyperarc–vertex probability walk. `run(config, &mut workspace,
+personalization)` uses reusable `PageRankWorkspace` buffers and returns scores in
+`NodeId` order, iteration count, an L1 error bound and explicit convergence status.
+Reaching the iteration cap returns `converged=false` rather than claiming success.
+
+The default includes self-return and incidence multiplicity. `RankFlow` also
+offers explicit minus-to-plus and In-to-Out routing; algebraic sign and port
+direction remain independent. `RankWeights::Component(i)` selects one nonnegative
+numeric weight-vector component. Dangling nodes redistribute to the normalized
+personalization, uniform when absent. Every canonical node record is included;
+non-node arc targets are rejected. Each iteration takes O(nodes + arcs +
+incidences), with no clique expansion, and a warm run allocates no heap storage.
+
+The default `PageRank::build` now consumes Core's numeric incidence projection
+and shared gather/scatter row operations. Target resolution and sign/port routing
+happen during preparation. Undirected unit incidence needs no coefficient array;
+directed unit incidence stores role bits, and weighted modes store normalized rates.
+The compensated arithmetic, selected vector component and convergence contract
+are unchanged. A fused per-arc apply needs no additional arc-sized scratch vector.
+
+An existing `PreparedIr` or incidence index can share the same topology with
+several consumers:
+
+```rust
+let projection = prepared.incidences()
+    .prepare_projection(hymeko::ir::incidence::IncidenceDomain::Nodes)?;
+let rank = PageRank::from_projection(projection.clone(), model)?;
+```
+
+Projection storage is O(incidences + arcs), with native-size indices preserving
+the canonical ID range. Normalizations remain specific to each PageRank model.
+The earlier timing tables precede this integration; implementation and correctness
+evidence is in `reports/2026-10-18-native-graph-comparison/shared-incidence/report.pdf`.
+
+For directed hyperarcs, construct `PageRankModel { flow: RankFlow::InToOut,
+..Default::default() }` for operator ports, or choose `RankFlow::MinusToPlus`
+for algebraic incidence roles. A hyperarc may have several source and destination
+slots: their mass is gathered and scattered without enumerating every source–target
+pair. Neutral/unspecified slots are inactive in the corresponding directed mode.
+An arc without destination mass is excluded from outgoing normalization; nodes
+without a remaining outgoing transition use the dangling-node rule. The published
+timing table currently characterizes the undirected mode only.
+
+The existing performance-evidence client has an explicit `--suite ranking` mode.
+It separates preparation, complete PageRank convergence and prepared reachability
+from graph construction. Cells require `HYMEKO_RANK_BENCH=1` and remain ignored in
+normal tests. Local unpublished revision sets may be checked through
+`--source-manifest`; files and binaries are hashed and source drift aborts a run.
+See `reports/2026-10-17-pagerank/report.pdf` for exact semantics, tested cases,
+measurement boundaries and the shared archive receipt.
+
+Signed edge-list tools share `signed_graph::{Loader, SignedEdgeListLoader}`.
+`load` accepts a buffered stream; `load_path` uses the same implementation for a
+file. Compatibility rules preserve the former example loaders' malformed-row and
+self-loop skipping, individual space/tab/comma separators, edge order, signs, and
+one-vertex empty-input convention. An unrepresentable vertex count returns an error.
+
+`signed_graph::SignedGraphGenerator` implements Core's `GraphGenerator` and
+`SyntheticGenerator`. It reproduces the existing seeded LCG fixtures while writing
+directly into the final edge/sign buffers. Probabilities use per-mille units.
+Cycle integration tests share typed runners and explicit comparison strategies;
+Core's `util::measurement` owns timing statistics and allocation instrumentation.
+
+`hymeko_pgraph::PGraphSchemaBuilder` builds an explicit-ID schema from material IDs,
+unit IDs and numbered edges. Validation and adjacency remain owned by
+`PGraphSchema::try_new`; conflicting node roles are reported, while repeated edge
+IDs retain the map constructor's last-write behavior. The named, domain-level
+construction API remains `PgraphBuilder`. Unit tests use a shared declarative
+schema case so their inputs and expected failures stay visible.
+
+`direct_ir::HopHeuristic` borrows a prepared DeclId-indexed hop table;
+`MaxHeuristic` composes two borrowed bounds and combines their guarantees by
+conjunction. Hop tables must describe exact undirected distances to the query's
+goal on the same IR, and the supplied step bound must be valid for the cost model.
+Construction checks numeric bounds and finite estimates; it does not certify the
+table's topology or its coupling to the cost model.
+
+Informed-search tests share borrowed cases and static Dijkstra/A* strategies.
+Evidence clients share checksum/work verification and typed TSV result rows;
+timing entry points remain explicitly opt-in. The declaration-permutation test
+compiles two reordered sources, checks actual ID changes and remapped references,
+and rejects use of a stale dense node ID. See
+`reports/2026-10-14-informed-search-runners.pdf` for validation and remaining limits.
+
+These additions currently form an uncommitted Core/Graph integration change.
+The checked-in Core revision predates the new APIs: publish the provider and pin
+Graph to that revision before claiming a portable build. The task report records
+the command-line local Core override used for verification; no path override is
+added to the repository manifests. See `reports/2026-10-14-shared-support.pdf`
+and its archive under `by-repository/graph/branch-feat%2Fnewest-core-e1eee8418382`.
+
 Two crates, laid out the way [`hymeko/core`](http://amaterasu.local:3000/hymeko/core)
 is:
 

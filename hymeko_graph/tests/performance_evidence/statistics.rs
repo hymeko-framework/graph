@@ -18,13 +18,7 @@ pub struct Sample {
     pub checksum: u64,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Distribution {
-    pub median: f64,
-    pub q1: f64,
-    pub q3: f64,
-    pub worst: f64,
-}
+pub use hymeko::util::measurement::Distribution;
 
 #[derive(Debug)]
 pub struct Measurement {
@@ -41,14 +35,7 @@ fn summarize(mut values: Vec<f64>) -> Distribution {
         values.len() >= 5,
         "performance evidence requires at least five samples"
     );
-    values.sort_by(f64::total_cmp);
-    let n = values.len();
-    Distribution {
-        median: values[n / 2],
-        q1: values[n / 4],
-        q3: values[(3 * n) / 4],
-        worst: values[n - 1],
-    }
+    Distribution::summarize(&mut values)
 }
 
 fn finish(warmups: usize, repetitions_per_sample: usize, samples: Vec<Sample>) -> Measurement {

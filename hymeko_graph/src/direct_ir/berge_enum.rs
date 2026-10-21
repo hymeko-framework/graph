@@ -79,13 +79,18 @@ pub fn enumerate_berge_paths(
     let start_decl = node_to_decl(ir, start)?;
     let goal_decl = goal.map(|g| node_to_decl(ir, g)).transpose()?;
 
-    let mut en = Enumerator::new(index, budget, start);
+    let mut en = Enumerator::new(
+        index,
+        budget,
+        start,
+        PathResults {
+            goal: goal_decl,
+            items: Vec::new(),
+        },
+    );
     en.on_path_set(start_decl, true);
-    en.dfs_paths(start_decl, goal_decl)?;
-    Ok(EnumOutcome {
-        items: en.paths,
-        bound: en.bound,
-    })
+    en.dfs(start_decl)?;
+    Ok(en.finish())
 }
 
 /// Enumerate simple Berge cycles through `start`, canonicalised and de-duplicated.
@@ -100,17 +105,117 @@ pub fn enumerate_berge_cycles(
 ) -> Result<EnumOutcome<BergeCycle>, DirectIrError> {
     let ir = index.ir();
     let start_decl = node_to_decl(ir, start)?;
-    let mut en = Enumerator::new(index, budget, start);
+    let mut en = Enumerator::new(
+        index,
+        budget,
+        start,
+        CycleResults {
+            start: start_decl,
+            items: Vec::new(),
+            seen: HashSet::new(),
+        },
+    );
     en.on_path_set(start_decl, true);
-    en.dfs_cycles(start_decl, start_decl)?;
-    Ok(EnumOutcome {
-        items: en.cycles,
-        bound: en.bound,
-    })
+    en.dfs(start_decl)?;
+    Ok(en.finish())
+}
+
+#[derive(Clone, Copy)]
+enum VisitAction {
+    Continue,
+    StopBranch,
+}
+
+/// Output-specific semantics; the walk and all budget accounting stay in Enumerator.
+trait EnumerationResults {
+    type Item;
+    fn close(
+        &mut self,
+        start: NodeId,
+        steps: &[BergeStep],
+        target: DeclId,
+        arc: HyperArcId,
+    ) -> bool;
+    fn arrive(&mut self, start: NodeId, target: DeclId, steps: &[BergeStep]) -> VisitAction;
+    fn count(&self) -> usize;
+    fn into_items(self) -> Vec<Self::Item>;
+}
+
+struct PathResults {
+    goal: Option<DeclId>,
+    items: Vec<BergePath>,
+}
+impl EnumerationResults for PathResults {
+    type Item = BergePath;
+    fn close(&mut self, _: NodeId, _: &[BergeStep], _: DeclId, _: HyperArcId) -> bool {
+        false
+    }
+    fn arrive(&mut self, start: NodeId, target: DeclId, steps: &[BergeStep]) -> VisitAction {
+        let reached = self.goal == Some(target);
+        if reached || self.goal.is_none() {
+            self.items.push(BergePath {
+                start,
+                steps: steps.to_vec(),
+            });
+        }
+        if reached {
+            VisitAction::StopBranch
+        } else {
+            VisitAction::Continue
+        }
+    }
+    fn count(&self) -> usize {
+        self.items.len()
+    }
+    fn into_items(self) -> Vec<BergePath> {
+        self.items
+    }
+}
+
+struct CycleResults {
+    start: DeclId,
+    items: Vec<BergeCycle>,
+    seen: HashSet<Vec<(usize, usize)>>,
+}
+impl EnumerationResults for CycleResults {
+    type Item = BergeCycle;
+    fn close(
+        &mut self,
+        start: NodeId,
+        steps: &[BergeStep],
+        target: DeclId,
+        arc: HyperArcId,
+    ) -> bool {
+        if target != self.start {
+            return false;
+        }
+        // Returning over one arc is not a Berge cycle. Closure precedes the
+        // on-path check and preserves parallel-arc identities in the key.
+        if !steps.is_empty() {
+            let nodes: Vec<_> = std::iter::once(start)
+                .chain(steps.iter().map(|s| s.to.node))
+                .collect();
+            let mut arcs: Vec<_> = steps.iter().map(|s| s.arc).collect();
+            arcs.push(arc);
+            if self.seen.insert(canonical_cycle_key(&nodes, &arcs)) {
+                self.items.push(BergeCycle { nodes, arcs });
+            }
+        }
+        true
+    }
+    fn arrive(&mut self, _: NodeId, _: DeclId, _: &[BergeStep]) -> VisitAction {
+        VisitAction::Continue
+    }
+    fn count(&self) -> usize {
+        self.items.len()
+    }
+    fn into_items(self) -> Vec<BergeCycle> {
+        self.items
+    }
 }
 
 /// Backtracking scratch for one enumeration run.
-struct Enumerator<'a, 'ir> {
+struct Enumerator<'a, 'ir, R> {
     index: &'a IncidenceIndex<'ir>,
     budget: EnumBudget,
     start: NodeId,
@@ -119,13 +224,11 @@ struct Enumerator<'a, 'ir> {
     steps: Vec<BergeStep>,
     expansions: usize,
     bound: Option<BudgetKind>,
-    paths: Vec<BergePath>,
-    cycles: Vec<BergeCycle>,
-    seen_cycles: HashSet<Vec<(usize, usize)>>,
+    results: R,
 }
 
-impl<'a, 'ir> Enumerator<'a, 'ir> {
-    fn new(index: &'a IncidenceIndex<'ir>, budget: EnumBudget, start: NodeId) -> Self {
+impl<'a, 'ir, R: EnumerationResults> Enumerator<'a, 'ir, R> {
+    fn new(index: &'a IncidenceIndex<'ir>, budget: EnumBudget, start: NodeId, results: R) -> Self {
         let ir = index.ir();
         Self {
             index,
@@ -136,9 +239,7 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
             steps: Vec::new(),
             expansions: 0,
             bound: (budget.max_results == 0).then_some(BudgetKind::Results),
-            paths: Vec::new(),
-            cycles: Vec::new(),
-            seen_cycles: HashSet::new(),
+            results,
         }
     }
 
@@ -171,7 +272,7 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
         true
     }
 
-    fn dfs_paths(&mut self, cur: DeclId, goal: Option<DeclId>) -> Result<(), DirectIrError> {
+    fn dfs(&mut self, cur: DeclId) -> Result<(), DirectIrError> {
         if self.stopped() {
             return Ok(());
         }
@@ -204,105 +305,8 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
                         target,
                     });
                 }
-                if self.on_path[target.raw()] {
-                    continue;
-                }
-                let sign = sref.sign();
-                let node_id = match decl_to_node(ir, target) {
-                    Some(n) => n,
-                    None => continue,
-                };
-                self.steps.push(BergeStep {
-                    arc,
-                    from: match BergeIncidence::at(ir, arc, entry_slot) {
-                        Some(i) => i,
-                        None => {
-                            self.used_arc[arc.raw()] = false;
-                            return Err(DirectIrError::TargetNotANode {
-                                arc,
-                                slot: entry_slot,
-                                target: ir.arcs[arc.raw()].refs[entry_slot as usize].target(),
-                            });
-                        }
-                    },
-                    to: BergeIncidence {
-                        node: node_id,
-                        slot: slot as u32,
-                        sign,
-                    },
-                });
-                self.on_path[target.raw()] = true;
-
-                let reached_goal = goal == Some(target);
-                let emit = reached_goal || goal.is_none();
-                if emit {
-                    self.paths.push(BergePath {
-                        start: self.start,
-                        steps: self.steps.clone(),
-                    });
-                    if self.paths.len() >= self.budget.max_results {
-                        self.bound = Some(BudgetKind::Results);
-                    }
-                }
-                if !reached_goal && !self.stopped() {
-                    self.dfs_paths(target, goal)?;
-                }
-
-                self.on_path[target.raw()] = false;
-                self.steps.pop();
-                if self.stopped() {
-                    break;
-                }
-            }
-            self.used_arc[arc.raw()] = false;
-            if self.stopped() {
-                break;
-            }
-        }
-        Ok(())
-    }
-
-    fn dfs_cycles(&mut self, cur: DeclId, start_decl: DeclId) -> Result<(), DirectIrError> {
-        if self.stopped() {
-            return Ok(());
-        }
-        let ir = self.index.ir();
-        // The entry coordinate comes from the index's own per-incidence arrays, which run parallel
-        // to `incident_arcs`. It is recorded while it is known: `cur` may occupy several slots of
-        // one arc, so recovering it afterwards by scanning `refs` has no unique answer.
-        for (&arc, &entry_slot) in self
-            .index
-            .incident_arcs(cur)
-            .iter()
-            .zip(self.index.incident_slots(cur))
-        {
-            if self.used_arc[arc.raw()] {
-                continue;
-            }
-            if !self.charge_expansion() {
-                return Ok(());
-            }
-            self.used_arc[arc.raw()] = true;
-            let n_refs = ir.arcs[arc.raw()].refs.len();
-            for slot in 0..n_refs {
-                let sref = &ir.arcs[arc.raw()].refs[slot];
-                let target = sref.target();
-                if !is_node(ir, target) {
-                    self.used_arc[arc.raw()] = false;
-                    return Err(DirectIrError::TargetNotANode {
-                        arc,
-                        slot: slot as u32,
-                        target,
-                    });
-                }
-                // Closing the cycle: back to start over >= 2 distinct hyperedges.
-                if target == start_decl {
-                    if self.steps.len() + 1 >= 2 {
-                        self.record_cycle(arc);
-                        if self.cycles.len() >= self.budget.max_results {
-                            self.bound = Some(BudgetKind::Results);
-                        }
-                    }
+                if self.results.close(self.start, &self.steps, target, arc) {
+                    self.check_result_limit();
                     if self.stopped() {
                         break;
                     }
@@ -336,7 +340,13 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
                     },
                 });
                 self.on_path[target.raw()] = true;
-                self.dfs_cycles(target, start_decl)?;
+
+                let action = self.results.arrive(self.start, target, &self.steps);
+                self.check_result_limit();
+                if matches!(action, VisitAction::Continue) && !self.stopped() {
+                    self.dfs(target)?;
+                }
+
                 self.on_path[target.raw()] = false;
                 self.steps.pop();
                 if self.stopped() {
@@ -351,19 +361,16 @@ impl<'a, 'ir> Enumerator<'a, 'ir> {
         Ok(())
     }
 
-    /// Record a canonicalised cycle formed by the current step stack closed by `closing_arc`.
-    fn record_cycle(&mut self, closing_arc: HyperArcId) {
-        let mut nodes: Vec<NodeId> = Vec::with_capacity(self.steps.len() + 1);
-        nodes.push(self.start);
-        for st in &self.steps {
-            nodes.push(st.to.node);
+    fn check_result_limit(&mut self) {
+        if self.results.count() >= self.budget.max_results {
+            self.bound = Some(BudgetKind::Results);
         }
-        let mut arcs: Vec<HyperArcId> = self.steps.iter().map(|s| s.arc).collect();
-        arcs.push(closing_arc);
+    }
 
-        let key = canonical_cycle_key(&nodes, &arcs);
-        if self.seen_cycles.insert(key) {
-            self.cycles.push(BergeCycle { nodes, arcs });
+    fn finish(self) -> EnumOutcome<R::Item> {
+        EnumOutcome {
+            items: self.results.into_items(),
+            bound: self.bound,
         }
     }
 }

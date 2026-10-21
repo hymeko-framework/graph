@@ -19,6 +19,12 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+if __package__:
+    from .host import HostBusy, QuietHostGuard
+else:
+    from host import HostBusy, QuietHostGuard
 
 PHASES = (
     (
@@ -61,6 +67,15 @@ PHASES = (
     ),
 )
 
+COMPARISON_WORKLOADS = (
+    "rank2_1m", "rank32_1m", "rank1000_1m",
+    "mixed_1m", "hub32_1m", "components8_1m", "chain65k", "scale_small", "scale_large",
+)
+
+
+GENERATED_WORKLOADS = ("steiner255", "complete32_3", "sunflower1024", "mycielski7")
+TRAVERSAL_SUBJECTS = ("reachable", "dual_reachable", "berge_path", "dijkstra",
+                      "generate_ir", "incidence_index", "levi", "s_components2")
 
 @dataclass(frozen=True)
 class Cell:
@@ -86,12 +101,69 @@ class Cell:
         else:
             result["EVIDENCE_OPERATION"] = self.subject
             result["EVIDENCE_THREADS"] = str(self.threads)
+        if self.test == "ranking::ranking_cell":
+            result["HYMEKO_RANK_BENCH"] = "1"
+            result["RAYON_NUM_THREADS"] = "1"
+        if self.test == "native::native_cell":
+            result["HYMEKO_NATIVE_BENCH"] = "1"
+            result["RAYON_NUM_THREADS"] = "1"
         return result
 
     @staticmethod
-    def matrix(suite: str = "graph", phases: list[str] | None = None) -> list[Cell]:
+    def select(suite: str = "graph", phases: list[str] | None = None,
+               subjects: list[str] | None = None, smoke: bool = False,
+               workloads: list[str] | None = None) -> list[Cell]:
+        """Select an explicit subset of the existing matrix, never another runner."""
+        cells = Cell.matrix(suite, phases, workloads)
+        if subjects is not None:
+            known = set(TRAVERSAL_SUBJECTS) if suite == "traversal" else {cell.subject for cell in cells}
+            if not subjects or len(set(subjects)) != len(subjects) or not set(subjects) <= known:
+                raise ValueError("subjects must be nonempty, unique members of the selected suite")
+            if suite == "traversal":
+                chosen_workloads = list(dict.fromkeys(cell.workload for cell in cells))
+                cells = [Cell("algorithm", "ranking::ranking_cell", workload, subject)
+                         for workload in chosen_workloads for subject in subjects]
+            else:
+                cells = [cell for cell in cells if cell.subject in subjects]
+        if not smoke or workloads is not None:
+            return cells
         if suite == "parsing":
-            workloads = (
+            return [c for c in cells if (
+                c.workload in {"map512", "random1e6"}
+                and c.subject in (subjects or phases or ["compile"])
+            ) or (c.workload, c.subject) == ("grid5", "parse_ast")]
+        if suite in {"ranking", "comparison"}:
+            return [c for c in cells if c.workload == "rank32_1m"]
+        return [cells[0], cells[-1]] if len(cells) > 1 else cells
+
+    @staticmethod
+    def matrix(suite: str = "graph", phases: list[str] | None = None,
+               workloads: list[str] | None = None) -> list[Cell]:
+        if workloads is not None and (
+            suite not in {"comparison", "traversal"} or not workloads or len(set(workloads)) != len(workloads)
+            or not set(workloads) <= set(COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
+        ):
+            raise ValueError("workloads must be nonempty unique names from the comparison/traversal catalog")
+        if suite == "traversal":
+            return [Cell("algorithm", "ranking::ranking_cell", workload, operation)
+                    for workload in (workloads if workloads is not None else
+                                     ("scale_small", "hub32_1m", "components8_1m", "chain65k"))
+                    for operation in ("reachable", "dual_reachable", "berge_path", "dijkstra")]
+        if suite == "comparison":
+            return [
+                Cell("algorithm", "native::native_cell", workload, operation)
+                for workload in (workloads if workloads is not None else COMPARISON_WORKLOADS[:3])
+                for operation in ("rank_hymeko", "rank_hypergraphz", "rank_prepared",
+                                  "components_hymeko", "components_hypergraphz")
+            ]
+        if suite == "ranking":
+            return [
+                Cell("algorithm", "ranking::ranking_cell", workload, operation)
+                for workload in ("rank2_1m", "rank32_1m", "rank1000_1m", "disjoint_1m")
+                for operation in ("prepare", "solve", "reachable")
+            ]
+        if suite == "parsing":
+            parsing_workloads = (
                 "grid200_d80",
                 "map32",
                 "map128",
@@ -120,7 +192,7 @@ class Cell:
                 raise ValueError("unknown parsing phase")
             return [
                 Cell("informed", "parsing::parsing_cell", w, p)
-                for w in workloads
+                for w in parsing_workloads
                 for p in selected
             ]
         if suite != "graph":
@@ -173,6 +245,96 @@ class Cell:
 
 
 class Evidence:
+    @staticmethod
+    def one(records: dict[str, list[dict[str, str]]], kind: str) -> dict[str, str]:
+        values = records.get(kind, [])
+        if len(values) != 1:
+            raise ValueError(f"expected one {kind} record")
+        return values[0]
+
+    @staticmethod
+    def verify_query(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        inputs, queries = records.get("INPUT", []), records.get("QUERY", [])
+        if len(inputs) != 1 or inputs[0].get("construction_timed") != "false" or not inputs[0].get("metric_scope") or len(queries) != 1:
+            raise ValueError("missing query input/boundary/result")
+        query = queries[0]
+        kind = {"reachable": "nodes", "dual_reachable": "arcs", "berge_path": "path", "dijkstra": "path"}.get(cell["subject"])
+        if query.get("kind") != kind or kind is None or query.get("checksum") != cell["checksum"]:
+            raise ValueError("query kind/result mismatch")
+        if query.get("flow") != "undirected" or query.get("weights") != "unit":
+            raise ValueError("query semantic drift")
+        nodes, arcs = int(cell["nodes"]), int(cell["arcs"])
+        visited, hops, cost = int(query["visited"]), int(query["hops"]), float(query["cost"])
+        if not 0 <= visited <= (arcs if kind == "arcs" else nodes) or not math.isfinite(cost):
+            raise ValueError("query count/cost outside domain")
+        if query.get("reachable") != str(visited > 0).lower():
+            raise ValueError("query reachability mismatch")
+        if query.get("start") != "0" or query.get("start_kind") != ("arc" if kind == "arcs" else "node"):
+            raise ValueError("query start mismatch")
+        if kind == "path":
+            if not 0 <= int(query["goal_node"]) < nodes or not 0 <= hops < nodes or cost != hops or visited != (hops + 1 if visited else 0) or (visited == 0 and hops != 0):
+                raise ValueError("unit path cost/hop mismatch")
+        elif visited == 0 or hops != 0 or cost != 0 or query.get("goal_node") != "none":
+            raise ValueError("invalid reachable-set evidence")
+
+    @staticmethod
+    def verify_shape(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        shapes = records.get("SHAPE", [])
+        keys = {f"{kind}_{q}" for kind in ("arity", "degree") for q in ("min", "q1", "median", "q3", "max")}
+        if len(shapes) != 1 or not keys.union({"isolated_nodes", "degree_sum"}) <= shapes[0].keys():
+            raise ValueError("missing native shape statistics")
+        shape = shapes[0]
+        nodes, arcs, incidences = (int(cell[k]) for k in ("nodes", "arcs", "incidences"))
+        for kind, limit in (("arity", nodes), ("degree", arcs)):
+            values = [float(shape[f"{kind}_{q}"]) for q in ("min", "q1", "median", "q3", "max")]
+            if not all(math.isfinite(v) and v.is_integer() and 0 <= v <= limit for v in values) or values != sorted(values):
+                raise ValueError("invalid native shape distribution")
+        isolated = int(shape["isolated_nodes"])
+        if int(shape["degree_sum"]) != incidences or not 0 <= isolated <= nodes:
+            raise ValueError("native shape cardinality mismatch")
+        if nodes and ((isolated > 0) != (float(shape["degree_min"]) == 0)):
+            raise ValueError("native isolated-node statistics mismatch")
+
+    @staticmethod
+    def verify_native(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        source = Evidence.one(records, "INPUT")
+        result = Evidence.one(records, "NATIVE")
+        if source.get("construction_timed") != "false" or not source.get("metric_scope"):
+            raise ValueError("missing native measurement boundary")
+        if records.get("SHAPE") or source.get("shape_reported") == "true":
+            Evidence.verify_shape(records, cell)
+        if result.get("parity") != "true" or result.get("checksum") != cell["checksum"]:
+            raise ValueError("native result/cell mismatch")
+        if result["operation"] == "rank":
+            for key, limit in (("vector_l1", 2e-10), ("hymeko_bound", 1.01e-10), ("hypergraphz_bound", 1.01e-10)):
+                value = float(result[key])
+                if not math.isfinite(value) or not 0 <= value <= limit:
+                    raise ValueError("native PageRank parity/residual violation")
+            if result.get("personalization") != "uniform" or result.get("tolerance") != "1e-10":
+                raise ValueError("native PageRank semantic drift")
+
+    @staticmethod
+    def verify_algebra(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        source = Evidence.one(records, "INPUT")
+        if not source.get("metric_scope"):
+            raise ValueError("missing algorithm provenance")
+        subject = cell["subject"]
+        construction = subject in {"generate_ir", "incidence_index"}
+        proof = Evidence.one(records, "CONSTRUCTION" if construction else "ALGEBRA")
+        if proof.get("verified") != "true" or proof.get("checksum") != cell["checksum"]:
+            raise ValueError("missing verified algorithm result")
+        if source.get("construction_timed") != str(subject == "generate_ir").lower() or source.get("index_timed") != str(subject == "incidence_index").lower():
+            raise ValueError("algorithm measurement boundary mismatch")
+        if construction:
+            if cell["section"] != "construction" or proof.get("destruction_timed") != "false" or proof.get("full_validation") != "retained_result" or cell["checksum"] != source.get("fingerprint"):
+                raise ValueError("construction verification/boundary mismatch")
+        else:
+            if cell["section"] != "algebra" or subject not in {"levi", "s_components2"}:
+                raise ValueError("unknown algebra operation")
+            limit = int(cell["arcs"]) + (int(cell["nodes"]) if subject == "levi" else 0)
+            if not 0 <= int(proof["value"]) <= limit or not 0 <= int(proof["pair_work"]) <= 5_000_000 or proof.get("max_pair_work") != "5000000":
+                raise ValueError("algebra result/work exceeds its domain")
+
     @staticmethod
     def parse(output: str) -> dict[str, list[dict[str, str]]]:
         records: dict[str, list[dict[str, str]]] = {}
@@ -236,20 +398,102 @@ class Evidence:
                 or sources[0].get("file_cache") != "warm"
             ):
                 raise ValueError("missing file I/O measurement boundary")
+        if cell.get("section") == "pagerank":
+            inputs = records.get("INPUT", [])
+            if len(inputs) != 1 or inputs[0].get("construction_timed") != "false":
+                raise ValueError("missing ranking fixture/boundary provenance")
+            if cell["subject"] in {"prepare", "solve"}:
+                ranks = records.get("RANK", [])
+                if len(ranks) != 1:
+                    raise ValueError("missing PageRank convergence evidence")
+                rank = ranks[0]
+                if (
+                    rank["converged"] != "true"
+                    or not math.isfinite(float(rank["error_bound_l1"]))
+                    or not 0 <= float(rank["error_bound_l1"]) <= float(rank["tolerance"])
+                    or abs(float(rank["mass"]) - 1.0) > 1e-9
+                    or not math.isfinite(float(rank["mass"]))
+                ):
+                    raise ValueError("invalid PageRank convergence/mass")
+                expected = rank["score_hash"] if cell["subject"] == "solve" else inputs[0]["fingerprint"]
+                if expected != cell["checksum"]:
+                    raise ValueError("ranking result/cell identity mismatch")
+        if cell.get("section") == "native":
+            Evidence.verify_native(records, cell)
+        if cell.get("section") == "traversal":
+            Evidence.verify_query(records, cell)
+        if cell.get("section") in {"construction", "algebra"}:
+            Evidence.verify_algebra(records, cell)
         return records
 
 
 class ProcessRunner:
     def __init__(self, args: argparse.Namespace):
         self.args = args
-        self.binaries = {
-            "informed": Path(args.informed).resolve(),
-        }
-        if args.suite == "graph":
+        self.binaries = {}
+        if args.suite not in {"ranking", "comparison", "traversal"}:
+            self.binaries["informed"] = Path(args.informed).resolve()
+        if args.suite in {"graph", "ranking", "comparison", "traversal"}:
             self.binaries["algorithm"] = Path(args.algorithm).resolve()
+        self.native_library = Path(args.native_library).resolve() if getattr(args, "native_library", None) else None
+        self.native_sha = hashlib.sha256(self.native_library.read_bytes()).hexdigest() if self.native_library else None
+
+    def dependency_identity(self) -> dict[str, str | None]:
+        if self.native_library and hashlib.sha256(self.native_library.read_bytes()).hexdigest() != self.native_sha:
+            raise ValueError("native library changed during campaign")
+        return {"path": str(self.native_library) if self.native_library else None, "sha256": self.native_sha}
+
+    def cpu_set(self) -> list[int] | None:
+        """Validate explicit processor sets while preserving the single-CPU CLI."""
+        values = getattr(self.args, "cpus", None)
+        if values is None:
+            cpu = getattr(self.args, "cpu", None)
+            values = None if cpu is None else [cpu]
+        if values is None:
+            return None
+        if (not isinstance(values, list) or not values
+                or any(type(cpu) is not int or cpu < 0 for cpu in values)
+                or len(set(values)) != len(values)):
+            raise ValueError("CPU set must contain unique nonnegative integer IDs")
+        if self.args.platform == "arm64":
+            raise ValueError("host CPU pinning is not an ARM64-emulation option")
+        if self.args.platform == "windows" and max(values) >= 8 * ctypes.sizeof(ctypes.c_void_p):
+            raise ValueError("CPU ID is outside the supported Windows processor-group mask")
+        return sorted(values)
 
     @staticmethod
-    def memory(pid: int, process: subprocess.Popen) -> int:
+    def verify_thread_affinity(pid: int, cpus: list[int], previous_peak: int) -> int:
+        """Check every observed Linux thread whenever its population grows."""
+        try:
+            tasks = list(Path(f"/proc/{pid}/task").iterdir())
+        except FileNotFoundError:
+            return previous_peak
+        if len(tasks) <= previous_peak:
+            return previous_peak
+        getter = getattr(os, "sched_getaffinity", None)
+        if getter is None:
+            raise OSError("native thread affinity cannot be verified")
+        checked = 0
+        for task in tasks:
+            try:
+                actual = getter(int(task.name))
+            except ProcessLookupError:
+                continue
+            if actual != set(cpus):
+                raise RuntimeError(f"worker affinity escaped configured CPUs: {actual}")
+            checked += 1
+        return max(previous_peak, checked)
+
+    @staticmethod
+    def windows_handle(process: subprocess.Popen[bytes]) -> ctypes.c_void_p:
+        """Access the Windows-only Popen handle after checking its availability."""
+        handle = getattr(process, "_handle", None)
+        if handle is None:
+            raise OSError("Windows process handle is unavailable")
+        return ctypes.c_void_p(int(handle))
+
+    @staticmethod
+    def memory(pid: int, process: subprocess.Popen[bytes]) -> int:
         if os.name == "nt":
 
             class Counters(ctypes.Structure):
@@ -270,7 +514,7 @@ class ProcessRunner:
             counters = Counters()
             counters.cb = ctypes.sizeof(counters)
             ok = ctypes.windll.psapi.GetProcessMemoryInfo(
-                ctypes.c_void_p(int(process._handle)),
+                ProcessRunner.windows_handle(process),
                 ctypes.byref(counters),
                 counters.cb,
             )
@@ -290,9 +534,17 @@ class ProcessRunner:
 
     def invoke(
         self, suite: str, arguments: list[str], environment: dict[str, str], log: Path
-    ) -> dict:
+    ) -> dict[str, Any]:
         binary = self.binaries[suite]
+        self.dependency_identity()
+        if self.native_library:
+            environment = environment | {"HYMEKO_NATIVE_LIBRARY": str(self.native_library)}
         command = [str(binary), *arguments]
+        cpus = self.cpu_set()
+        if cpus is not None and self.args.platform == "native":
+            # Apply affinity before the Rust test harness or worker pool creates
+            # threads. The post-spawn set below also pins the short-lived wrapper.
+            command = ["taskset", "--cpu-list", ",".join(map(str, cpus)), *command]
         container = None
         if self.args.platform == "arm64":
             container = f"hymeko-graph-cell-{os.getpid()}"
@@ -318,6 +570,8 @@ class ProcessRunner:
         env = os.environ | environment
         start = time.monotonic()
         peak = 0
+        peak_threads = 0
+        verified_affinity = False
         next_update = 10
         with log.open("w", encoding="utf8") as stream:
             process = subprocess.Popen(
@@ -329,6 +583,19 @@ class ProcessRunner:
             )
             pid = process.pid
             try:
+                if cpus is not None:
+                    if self.args.platform == "windows":
+                        if not ctypes.windll.kernel32.SetProcessAffinityMask(
+                            self.windows_handle(process), ctypes.c_size_t(sum(1 << cpu for cpu in cpus))
+                        ):
+                            raise OSError(f"could not pin child to CPUs {cpus}")
+                    elif self.args.platform == "native":
+                        affinity = getattr(os, "sched_setaffinity", None)
+                        if affinity is None:
+                            raise OSError("native CPU affinity is unavailable")
+                        affinity(pid, set(cpus))
+                    else:
+                        raise ValueError("host CPU pinning is not an ARM64-emulation option")
                 if container:
                     for _ in range(40):
                         probe = subprocess.run(
@@ -349,6 +616,9 @@ class ProcessRunner:
                         time.sleep(0.1)
                 while process.poll() is None:
                     peak = max(peak, self.memory(pid, process))
+                    if cpus is not None and self.args.platform == "native":
+                        peak_threads = self.verify_thread_affinity(pid, cpus, peak_threads)
+                        verified_affinity |= peak_threads > 0
                     elapsed = time.monotonic() - start
                     if peak > 16 * 1024**3 or elapsed > self.args.timeout:
                         raise RuntimeError(
@@ -379,6 +649,9 @@ class ProcessRunner:
             "peak_rss_bytes": peak,
             "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
             "command": command,
+            "requested_cpus": cpus,
+            "peak_thread_count": peak_threads,
+            "thread_affinity_verified": verified_affinity,
             "exit_code": process.returncode,
         }
 
@@ -389,9 +662,65 @@ class Campaign:
         self.runner = ProcessRunner(args)
         self.output = Path(args.output).resolve()
         self.output.mkdir(parents=True, exist_ok=True)
+        quiet = getattr(args, "quiet_config", None)
+        self.guard_config = json.loads(Path(quiet).read_text(encoding="utf-8")) if quiet else None
+        self.guard = QuietHostGuard(self.guard_config) if self.guard_config else None
+
+    def admit(self, result: dict[str, Any]) -> dict[str, Any] | None:
+        if self.guard is None:
+            return None
+        try:
+            observation = self.guard.check()
+        except HostBusy as error:
+            result["blocked"] = {"time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                                 "reasons": error.reasons, "observation": error.observation}
+            self.save_checkpoint(result)
+            print("HOST_BUSY: no new workload started", error, flush=True)
+            raise SystemExit(75) from error
+        result.pop("blocked", None)
+        return observation
 
     @staticmethod
-    def resume_checkpoint(current: dict, saved: dict) -> dict:
+    def capture_sources(roots: dict[str, Path], *, inventory: str = "git") -> dict[str, Any]:
+        """Record source bytes for an explicitly unpublished local revision set.
+
+        Git supplies the inventory, including untracked sources but excluding
+        ignored build/report outputs. This records files, not a fabricated commit.
+        """
+        if inventory not in {"git", "snapshot"}:
+            raise ValueError("source inventory must be git or snapshot")
+        files = {}
+        for label, root in roots.items():
+            if inventory == "git":
+                paths = subprocess.check_output(
+                    ["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard", "-z"]
+                ).decode().split("\0")
+            else:
+                # Explicit unpacked source bundle: build/dependency/output directories
+                # live outside these roots. Added source files must fail verification.
+                paths = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
+            for relative in sorted(set(paths)):
+                path = root / relative
+                if path.is_file() and (path.suffix in {".rs", ".py", ".toml", ".zig"} or path.name == "Cargo.lock"):
+                    files[f"{label}/{relative}"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        result: dict[str, Any] = {"roots": {label: str(root.resolve()) for label, root in roots.items()}, "files": files}
+        if inventory != "git":
+            result["inventory"] = inventory
+        return result
+
+    @staticmethod
+    def verify_sources(repo: Path, manifest: Path) -> dict[str, Any]:
+        raw = manifest.read_bytes()
+        saved = json.loads(raw)
+        roots = {label: Path(path) for label, path in saved["roots"].items()}
+        if repo.resolve() not in {root.resolve() for root in roots.values()}:
+            raise ValueError("source manifest omits the measured repository")
+        if not saved["files"] or Campaign.capture_sources(roots, inventory=saved.get("inventory", "git")) != saved:
+            raise ValueError("source manifest is stale or incomplete")
+        return {"path": str(manifest.resolve()), "sha256": hashlib.sha256(raw).hexdigest(), "files": len(saved["files"]), "content_sha256": hashlib.sha256(json.dumps(saved["files"], sort_keys=True).encode()).hexdigest()}
+
+    @staticmethod
+    def resume_checkpoint(current: dict[str, Any], saved: dict[str, Any]) -> dict[str, Any]:
         for key in (
             "source_commit",
             "binaries",
@@ -401,6 +730,12 @@ class Campaign:
             "runs",
             "smoke",
             "phases",
+            "subjects",
+            "workloads",
+            "source_manifest",
+            "cpu_affinity",
+            "native_dependency",
+            "quiet_guard",
         ):
             if current.get(key) != saved.get(key):
                 raise ValueError(f"checkpoint identity changed: {key}")
@@ -409,7 +744,7 @@ class Campaign:
             raise ValueError("duplicate checkpoint cell")
         return saved
 
-    def save_checkpoint(self, result: dict) -> None:
+    def save_checkpoint(self, result: dict[str, Any]) -> None:
         temporary = self.output / "checkpoint.pending.json"
         temporary.write_text(json.dumps(result, indent=2) + "\n", encoding="utf8")
         temporary.replace(self.output / "checkpoint.json")
@@ -425,36 +760,32 @@ class Campaign:
                 ["git", "-C", str(repo), *arguments], text=True
             ).strip()
 
-        source_ref = self.args.source_ref or git("rev-parse", "HEAD")
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(repo),
-                "diff",
-                "--exit-code",
-                source_ref,
-                "--",
-                "Cargo.toml",
-                "Cargo.lock",
-                "hymeko_graph/src",
-                "hymeko_graph/tests",
-            ],
-            check=True,
-            capture_output=True,
-        )
+        manifest = getattr(self.args, "source_manifest", None)
+        source_ref = self.args.source_ref or ("" if manifest else git("rev-parse", "HEAD"))
+        source_identity = self.verify_sources(repo, Path(manifest)) if manifest else None
+        if not manifest:
+            subprocess.run(
+                ["git", "-C", str(repo), "diff", "--exit-code", source_ref, "--",
+                 "Cargo.toml", "Cargo.lock", "hymeko_graph/src", "hymeko_graph/tests"],
+                check=True, capture_output=True,
+            )
         result = {
             "schema_version": 1,
             "suite": self.args.suite,
             "runs": self.args.runs,
             "smoke": self.args.smoke,
             "phases": self.args.phases,
+            "subjects": getattr(self.args, "subjects", None),
+            "workloads": getattr(self.args, "workloads", None),
             "platform": self.args.platform,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "source_commit": git("rev-parse", source_ref),
-            "driver_commit": git("rev-parse", "HEAD"),
+            "source_commit": None if manifest else git("rev-parse", source_ref),
+            "source_manifest": source_identity,
+            "cpu_affinity": getattr(self.args, "cpu", None),
+            "driver_commit": None if manifest else git("rev-parse", "HEAD"),
             "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-            "dirty_paths": git("status", "--porcelain"),
+            "dirty_paths": None if manifest else git("status", "--porcelain"),
+            "quiet_guard": self.guard_config,
             "host": platform.node(),
             "os": platform.platform(),
             "cpu_count": os.cpu_count(),
@@ -471,6 +802,7 @@ class Campaign:
                 }
                 for k, v in self.runner.binaries.items()
             },
+            "native_dependency": self.runner.dependency_identity(),
             "cells": [],
             "correctness": [],
         }
@@ -495,6 +827,7 @@ class Campaign:
         for suite in self.runner.binaries:
             if any(c["suite"] == suite for c in result["correctness"]):
                 continue
+            self.admit(result)
             print(f"correctness {suite}", flush=True)
             log = self.output / f"correctness-{suite}.log"
             observation = self.runner.invoke(
@@ -504,21 +837,10 @@ class Campaign:
                 {"suite": suite, "log": log.name, **observation}
             )
             self.save_checkpoint(result)
-        cells = Cell.matrix(self.args.suite, self.args.phases)
-        if self.args.smoke:
-            cells = (
-                [
-                    c
-                    for c in cells
-                    if (
-                        c.workload in {"map512", "random1e6"}
-                        and c.subject in (self.args.phases or ["compile"])
-                    )
-                    or (c.workload, c.subject) == ("grid5", "parse_ast")
-                ]
-                if self.args.suite == "parsing"
-                else [cells[0], cells[-1]]
-            )
+        cells = Cell.select(
+            self.args.suite, self.args.phases, getattr(self.args, "subjects", None), self.args.smoke,
+            getattr(self.args, "workloads", None),
+        )
         previous = {
             c["id"]: c["records"]["CELL"][0]["checksum"] for c in result["cells"]
         }
@@ -528,10 +850,13 @@ class Campaign:
             for ordinal, cell in enumerate(order, 1):
                 if (run, cell.key) in completed:
                     continue
+                if manifest and self.verify_sources(repo, Path(manifest)) != source_identity:
+                    raise ValueError("source identity changed during campaign")
                 print(
                     f"{self.args.platform} run {run}/{self.args.runs} {ordinal}/{len(cells)} {cell.key}",
                     flush=True,
                 )
+                quiet = self.admit(result)
                 log = self.output / f"run{run}-{cell.key}.log"
                 observation = self.runner.invoke(
                     cell.suite,
@@ -559,6 +884,7 @@ class Campaign:
                         "log": log.name,
                         "records": records,
                         "resources": observation,
+                        "quiet_preflight": quiet,
                     }
                 )
                 self.save_checkpoint(result)
@@ -572,6 +898,8 @@ class Campaign:
                     ),
                     encoding="utf8",
                 )
+        if manifest:
+            self.verify_sources(repo, Path(manifest))
         result["complete"] = True
         result["smoke"] = self.args.smoke
         target.write_text(json.dumps(result, indent=2) + "\n", encoding="utf8")
@@ -583,27 +911,36 @@ class CampaignSummary:
 
     def __init__(self, root: Path):
         self.root = root
-        self.rows = []
-        self.reference = {}
-        self.resources = []
-        self.source_commits = set()
+        self.rows: list[dict[str, Any]] = []
+        self.reference: dict[str, dict[str, Any]] = {}
+        self.resources: list[dict[str, Any]] = []
+        self.source_commits: set[str] = set()
+        self.source_manifests: set[str | None] = set()
+        self.selected_cells: set[str] | None = None
 
-    def accept(self, campaign: dict) -> None:
+    def accept(self, campaign: dict[str, Any]) -> None:
         if not campaign.get("complete") or campaign.get("smoke"):
             raise ValueError("only complete full campaigns may be summarized")
         self.source_commits.add(campaign["source_commit"])
-        if len(self.source_commits) != 1:
+        source_manifest = campaign.get("source_manifest")
+        self.source_manifests.add(source_manifest.get("content_sha256", source_manifest["sha256"]) if source_manifest else None)
+        if len(self.source_commits) != 1 or len(self.source_manifests) != 1:
             raise ValueError("platforms measured different source revisions")
         expected = {
             cell.key
-            for cell in Cell.matrix(
-                campaign.get("suite", "graph"), campaign.get("phases")
+            for cell in Cell.select(
+                campaign.get("suite", "graph"), campaign.get("phases"), campaign.get("subjects"),
+                workloads=campaign.get("workloads"),
             )
         }
-        if len(campaign["cells"]) != 3 * len(expected):
+        if self.selected_cells is not None and self.selected_cells != expected:
+            raise ValueError("platforms measured different selected matrices")
+        self.selected_cells = expected
+        runs = int(campaign.get("runs", 3))
+        if runs < 1 or len(campaign["cells"]) != runs * len(expected):
             raise ValueError("campaign process count does not match declared matrix")
-        groups = {}
-        results = {}
+        groups: dict[str, list[dict[str, Any]]] = {}
+        results: dict[tuple[int, str, str], list[dict[str, str]]] = {}
         for observation in campaign["cells"]:
             key = observation["id"]
             records = observation["records"]
@@ -612,7 +949,7 @@ class CampaignSummary:
                 k: cell[k]
                 for k in ("status", "nodes", "arcs", "incidences", "checksum")
             }
-            for kind in ("RESULT", "WORK", "SOURCE"):
+            for kind in ("RESULT", "WORK", "SOURCE", "INPUT", "SHAPE", "RANK", "REACHABLE", "NATIVE", "QUERY", "LAYOUT", "CONSTRUCTION", "ALGEBRA"):
                 identity[kind] = [
                     {k: v for k, v in r.items() if k != "run"}
                     for r in records.get(kind, [])
@@ -647,7 +984,7 @@ class CampaignSummary:
                 if int(weighted["cost_micros"]) != int(weighted["hops"]) * 1_000_000:
                     raise ValueError(f"unit-cost/hop mismatch: {workload}")
         for key, observations in groups.items():
-            if sorted(o["run"] for o in observations) != [1, 2, 3]:
+            if sorted(o["run"] for o in observations) != list(range(1, runs + 1)):
                 raise ValueError(f"missing/duplicate independent process run: {key}")
             cell = observations[0]["records"]["CELL"][0]
             if cell["status"] != "OK":
@@ -657,7 +994,7 @@ class CampaignSummary:
                 for o in observations
                 for s in o["records"]["SAMPLE"]
             )
-            if len(samples) != 27 or not all(
+            if len(samples) != 9 * runs or not all(
                 math.isfinite(s) and s > 0 for s in samples
             ):
                 raise ValueError(f"invalid pooled samples: {key}")
@@ -668,6 +1005,16 @@ class CampaignSummary:
                 raise ValueError(
                     f"missing process memory or unsuccessful process: {key}"
                 )
+            process_medians = sorted(float(o["records"]["CELL"][0]["wall_median_us"]) for o in observations)
+            rank = observations[0]["records"].get("RANK", [{}])[0]
+            native = observations[0]["records"].get("NATIVE", [{}])[0]
+            if native.get("operation") == "rank":
+                backend = "hypergraphz" if cell["subject"].endswith("_hypergraphz") else "hymeko"
+                rank = {"iterations": native[f"{backend}_iterations"],
+                        "error_bound_l1": native[f"{backend}_bound"]}
+            ranking = cell.get("section") == "pagerank"
+            shape = observations[0]["records"].get("SHAPE", [{}])[0]
+            query = observations[0]["records"].get("QUERY", [{}])[0]
             self.rows.append(
                 {
                     "platform": campaign["platform"],
@@ -677,18 +1024,39 @@ class CampaignSummary:
                     "phase": next(
                         (p[1] for p in PHASES if p[0] == cell["subject"]),
                         "preparation"
-                        if cell.get("section") == "heuristic_preparation"
+                        if cell.get("section") == "heuristic_preparation" or (ranking and cell["subject"] == "prepare")
                         else "execution",
                     ),
-                    "measurement_scope": next(
+                    "measurement_scope": observations[0]["records"].get("INPUT", [{}])[0].get("metric_scope") or next(
                         (p[2] for p in PHASES if p[0] == cell["subject"]),
-                        "See original graph benchmark contract",
+                        ("Prepared incidence walk; IR construction excluded" if cell["subject"] == "prepare"
+                         else "Warm operation including output/workspace reset; graph construction and preparation excluded")
+                        if ranking else observations[0]["records"].get("INPUT", [{}])[0].get("metric_scope", "See original graph benchmark contract"),
                     ),
                     "threads": cell.get("threads", "1"),
-                    "samples": 27,
-                    "median_ns": samples[13] * 1000,
-                    "q1_ns": samples[6] * 1000,
-                    "q3_ns": samples[20] * 1000,
+                    "samples": len(samples),
+                    "processes": runs,
+                    "process_median_ns": process_medians[runs // 2] * 1000,
+                    "process_q1_ns": process_medians[runs // 4] * 1000,
+                    "process_q3_ns": process_medians[3 * runs // 4] * 1000,
+                    "median_ns": samples[len(samples) // 2] * 1000,
+                    "q1_ns": samples[len(samples) // 4] * 1000,
+                    "q3_ns": samples[3 * len(samples) // 4] * 1000,
+                    "nodes": cell["nodes"], "arcs": cell["arcs"], "incidences": cell["incidences"],
+                    **{key: shape.get(key, "") for key in ("arity_min", "arity_median", "arity_max", "degree_min", "degree_median", "degree_max", "isolated_nodes")},
+                    "components": native.get("components", ""),
+                    "algebra_value": observations[0]["records"].get("ALGEBRA", [{}])[0].get("value", ""),
+                    "overlap_pair_work": observations[0]["records"].get("ALGEBRA", [{}])[0].get("pair_work", ""),
+                    "query_kind": query.get("kind", ""),
+                    "query_visited": query.get("visited", ""),
+                    "query_hops": query.get("hops", ""),
+                    "query_cost": query.get("cost", ""),
+                    "query_reachable": query.get("reachable", ""),
+                    "hymeko_prepared_bytes": observations[0]["records"].get("LAYOUT", [{}])[0].get("hymeko_prepared_bytes", ""),
+                    "iterations": rank.get("iterations", ""),
+                    "error_bound_l1": rank.get("error_bound_l1", ""),
+                    "rank_mass": rank.get("mass", ""),
+                    "visited_nodes": observations[0]["records"].get("REACHABLE", [{}])[0].get("visited", ""),
                     "worst_batch_mean_ns": samples[-1] * 1000,
                     "checksum": cell["checksum"],
                     "peak_rss_bytes": max(peaks),
@@ -762,7 +1130,14 @@ class CampaignSummary:
             ("map128", "search_cell-map128-astar_combined-t1"),
             ("transport", "search_cell-transport128-astar_discrete-t1"),
         ]
-        if self.rows[0]["source_bytes"]:
+        if all(c.get("suite") == "ranking" for c in campaigns):
+            selections = [(w, f"ranking_ranking_cell-{w}-solve-t1")
+                          for w in ("rank2_1m", "rank32_1m", "rank1000_1m", "disjoint_1m")]
+        elif all(c.get("suite") == "comparison" for c in campaigns):
+            selections = [(f"{w} {s}", f"native_native_cell-{w}-{s}-t1")
+                          for w in (campaigns[0].get("workloads") or COMPARISON_WORKLOADS[:3])
+                          for s in ("rank_hymeko", "rank_hypergraphz")]
+        elif self.rows[0]["source_bytes"]:
             common = set.intersection(
                 *(
                     {r["algorithm"] for r in self.rows if r["platform"] == p}
@@ -778,14 +1153,22 @@ class CampaignSummary:
                 for w in ("map32", "map128", "map512")
             ]
         indexed = {(row["platform"], row["benchmark"]): row for row in self.rows}
+        selections = [(label, key) for label, key in selections
+                      if all((platform_name, key) in indexed for platform_name in platforms)]
+        if not selections:
+            selections = [(row["benchmark"], row["benchmark"]) for row in self.rows
+                          if row["platform"] == platforms[0]
+                          and all((p, row["benchmark"]) in indexed for p in platforms)]
         plotted = [
             (label, [indexed[p, key]["median_ns"] / 1000 for p in platforms])
             for label, key in selections
         ]
         bar_svg(
-            "Selected pipeline medians (ARM64, where present, is QEMU)"
-            if self.rows[0]["source_bytes"]
-            else "Selected graph search medians (ARM64 is QEMU)",
+            "PageRank to convergence: one million incidences"
+            if campaigns[0].get("suite") == "ranking" else (
+                "Selected pipeline medians (ARM64, where present, is QEMU)"
+                if self.rows[0]["source_bytes"] else "Matched native PageRank API medians"
+                if campaigns[0].get("suite") == "comparison" else "Selected graph search medians (ARM64 is QEMU)"),
             plotted,
             [],
             platforms,
@@ -795,7 +1178,11 @@ class CampaignSummary:
         )
         provenance = {
             "source_commit": next(iter(self.source_commits)),
-            "measurement_contract": "Separate measured phases; totals measured directly, never summed. Generation constructs fixture IR. File phases use warm OS cache. Final returned-object destruction excluded. RSS includes fixture construction and validation.",
+            "measurement_contract": (
+                "Matched native API calls include normalized output copying and temporary-result destruction. Rank preparation/workspace allocation is included except in the separately labeled rank_prepared cell. Component reverse indexes and graph construction are excluded. Whole-process RSS includes both resident graphs and parity verification."
+                if campaigns[0].get("suite") == "comparison" else
+                "Separate measured phases; totals measured directly, never summed. Generation constructs fixture IR. File phases use warm OS cache. Final returned-object destruction excluded. RSS includes fixture construction and validation."
+            ),
             "external_map_import": "not measured; current inputs are deterministic graph fixtures",
             "phases": [{"algorithm": a, "phase": p, "scope": s} for a, p, s in PHASES],
             "platforms": [
@@ -844,9 +1231,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--platform", choices=("windows", "native", "arm64"), required=True
     )
-    parser.add_argument("--informed", required=True)
+    parser.add_argument("--informed")
     parser.add_argument("--algorithm")
-    parser.add_argument("--suite", choices=("graph", "parsing"), default="graph")
+    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal"), default="graph")
+    parser.add_argument("--subjects", nargs="+", help="explicit operations from the selected suite's existing matrix")
+    parser.add_argument("--workloads", nargs="+", choices=COMPARISON_WORKLOADS + GENERATED_WORKLOADS,
+                        help="explicit comparison/traversal fixtures; omitted keeps each suite's default matrix")
+    parser.add_argument("--native-library", help="explicit pinned Windows native comparison adapter")
+    parser.add_argument("--source-manifest", help="explicit source-byte snapshot for unpublished local source and dependency roots")
     parser.add_argument(
         "--phases",
         nargs="+",
@@ -864,6 +1256,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=180)
+    parser.add_argument("--cpu", type=int, help="pin each measurement process to this logical CPU")
+    parser.add_argument("--quiet-config", help="explicit Linux quiet-host thresholds; blocks before each workload")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--resume", action="store_true")
     arguments = parser.parse_args()
@@ -872,8 +1266,20 @@ if __name__ == "__main__":
         or len(set(arguments.phases)) != len(arguments.phases)
     ):
         parser.error("unique --phases are supported only for the parsing suite")
-    if arguments.suite == "graph" and not arguments.algorithm:
-        parser.error("--algorithm is required for the graph suite")
+    if arguments.suite in {"graph", "ranking", "comparison", "traversal"} and not arguments.algorithm:
+        parser.error("--algorithm is required for graph/ranking/comparison/traversal suites")
+    if arguments.suite == "comparison" and (arguments.platform not in {"windows", "native"} or not arguments.native_library):
+        parser.error("comparison requires native Windows/Linux and an explicit --native-library")
+    if arguments.suite not in {"ranking", "comparison", "traversal"} and not arguments.informed:
+        parser.error("--informed is required for graph/parsing suites")
+    if arguments.source_manifest and arguments.source_ref:
+        parser.error("choose an exact source ref or an unpublished source manifest")
+    if arguments.cpu is not None and not 0 <= arguments.cpu < (os.cpu_count() or 1):
+        parser.error("--cpu is outside this host's logical CPU range")
     if arguments.runs < 1 or (arguments.platform == "arm64" and not arguments.qemu):
         parser.error("positive --runs and an ARM64 --qemu path are required")
+    try:
+        Cell.select(arguments.suite, arguments.phases, arguments.subjects, arguments.smoke, arguments.workloads)
+    except ValueError as error:
+        parser.error(str(error))
     Campaign(arguments).run()

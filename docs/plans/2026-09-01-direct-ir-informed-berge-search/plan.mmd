@@ -33,3 +33,77 @@ flowchart TD
     NONE -.oracle.-> ORA["tests: unit==BFS, weighted==test-Dijkstra, Zero==Dijkstra, admissible==same cost"]
     OUT -.oracle.-> ORA
     ORA --> HARD["HARD STOP: no promotion, no pgraph migration, no P2"]
+    UPD --> INDEXED["2026-10-12 approved: replace or insert one indexed entry per DeclId"]
+    INDEXED --> CAP["Preallocated frontier bounded by declaration count; sparse inverse positions"]
+    CAP --> POP
+
+%% 2026-10-12: sparse typed visitation -> constant-time clear -> path/allocation oracles
+
+ subgraph shared_runners[Shared runners: 2026-10-14]
+  query[Borrowed SearchCase and caller workspace] --> strategy[Dijkstra / AStar SearchRunner]
+  strategy --> existing[Existing public Graph algorithms]
+  hops[Borrowed HopHeuristic] --> maximum[MaxHeuristic: conjunctive guarantees]
+  maximum --> strategy
+  operation[Weighted / shortest / path / cycle / preparation operation] --> verify[One hash and work verification protocol]
+  verify --> sampler[Existing calibrated sampler or deterministic test sampler]
+  verify --> rows[Typed cell and result TSV rows]
+  real_parser[Two reordered source fixtures] --> permutation[Changed IDs and remapped references]
+ end
+
+ subgraph pagerank[PageRank: 2026-10-17]
+  canonical[Canonical Ir] --> normal[Validate targets and probability masses]
+  normal --> gather[Vertex mass to arc aggregate]
+  gather --> scatter[Arc mass to vertex plus teleport]
+  scatter --> stop[L1 contraction bound or iteration cap]
+  stop --> gather
+  oracle[Small independent dense transition solve] --> verify_rank[Correctness and reusable scratch]
+  verify_rank --> evidence_rank[Existing opt-in measurement client]
+ end
+
+ subgraph native_comparison[Matched native comparison 2026-10-18]
+  same_input[Canonical membership and matched semantics] --> native_calls[Existing HyMeKo and upstream hypergraphz APIs]
+  native_calls --> parity[Full vector and component partition parity]
+  parity --> repeated[Existing sampler and five fresh processes]
+  repeated --> defaults[Audit default production ownership and PDF evidence]
+ end
+
+ subgraph shared_incidence[Shared incidence preparation]
+ ir_shared[Canonical Ir] --> projection_shared[Cached structural projection]
+ projection_shared --> row_shared[Shared gather / scatter rows]
+ row_shared --> signed_shared[Prepared signed operator]
+ row_shared --> rank_shared[PageRank routing and normalization]
+ end
+
+ subgraph measured_shared[Measured shared incidence]
+ verified_shared[Verified shared implementation] --> measured_native[Existing matched native runner]
+ measured_native --> final_evidence[Parity and repeated samples to PDF]
+ end
+
+ subgraph exact_count_reduction[Exact unit counts and seeded fold]
+ shared_projection --> exact_counts[Exact counts from shared rows]
+ shared_projection --> seeded_fold[First-term initialization preserving fold order]
+ exact_counts --> correctness_gate[Numerical and allocation gates]
+ seeded_fold --> correctness_gate
+ correctness_gate --> selected_comparison[Existing selected native comparison]
+ end
+
+ subgraph pair_incidence[Two-slot shared incidence rows]
+ canonical_rows --> pair_gather[Policy-owned exact pair reduction]
+ canonical_rows --> pair_scatter[Sequential unrolled scatter]
+ pair_gather --> pair_validation[Same result and precision gates]
+ pair_scatter --> pair_validation
+ pair_validation --> pair_comparison[Existing native comparison]
+ end
+
+ subgraph broad_validation[Diverse graph comparison]
+ fixture_owner[Existing fixture owner] --> canonical_population[Core IrConstruction]
+ canonical_population --> correctness[Topology and native parity gates]
+ correctness --> user_signal[Wait for quiet-host signal]
+ user_signal --> existing_campaign[Existing comparison and construction runners]
+ existing_campaign --> evidence_bundle[Distributions and PDF]
+ end
+
+%% 2026-10-19 execution: native adapter admission cap 2M -> planned 4M; algorithms unchanged.
+
+flowchart LR
+ existing_IR --> shared_virtual_rows --> existing_graph_algorithms --> matched_evidence

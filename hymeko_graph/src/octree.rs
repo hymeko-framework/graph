@@ -12,8 +12,6 @@ use hymeko::{
 };
 use std::collections::{HashMap, HashSet};
 
-
-
 /// One authored axis-aligned cubic cell; identity belongs to Core.
 #[derive(Clone, Debug)]
 pub struct Cell {
@@ -448,7 +446,7 @@ impl<'a> Frontier<'a> {
 pub fn field<'a>(ir: &'a Ir, it: &Interner, decl: DeclId, name: &str) -> Option<&'a ValueR> {
     ir.decl_children(decl)
         .find(|&id| it.resolve(ir.decl_nodes[id.raw()].name) == name)
-        .and_then(|id| ir.decl_nodes[id.raw()].anno.value.as_ref())
+        .and_then(|id| ir.decl_annotation(id).unwrap().value.as_ref())
 }
 fn vector(ir: &Ir, it: &Interner, decl: DeclId, name: &str) -> Result<[f64; 3], String> {
     match field(ir, it, decl, name) {

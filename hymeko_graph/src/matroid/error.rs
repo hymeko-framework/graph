@@ -8,6 +8,15 @@ use hymeko::common::ids::HyperArcId;
 /// Typed failure of a matroid operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MatroidError {
+    /// A graded-cell Levi coordinate is outside its borrowed topology.
+    CellIncidenceOutOfRange {
+        /// Upper-cell rank, starting at one.
+        rank: usize,
+        /// Upper-cell position within its rank.
+        cell: usize,
+        /// Incidence position within the cell.
+        slot: usize,
+    },
     /// A canonical hyperarc ID is outside the bound snapshot's arc table.
     UnknownArc {
         /// The out-of-range hyperarc ID.
@@ -54,6 +63,10 @@ pub enum MatroidError {
 impl fmt::Display for MatroidError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::CellIncidenceOutOfRange { rank, cell, slot } => write!(
+                f,
+                "invalid cell incidence at rank {rank}, cell {cell}, slot {slot}"
+            ),
             Self::UnknownArc { arc } => {
                 write!(f, "unknown hyperarc {} in the bound snapshot", arc.raw())
             }
