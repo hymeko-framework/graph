@@ -206,48 +206,33 @@ of one thing. `axioms` validates A1–A5 against a lowered model and reports
 which failed and why — a verdict you read. The pruner is a predicate in a hot
 loop, and only A0/A1/A3 have a cycle-enumeration reading at all.
 
-## And `hotaru::hypergraph`?
+## Hypergraph ownership
 
-A third thing, in a third repo, and the distinction matters because the names
-all sound alike:
-
-| | shape |
-|---|---|
-| `hymeko_graph` | pairwise signed graphs — `edges: Vec<(u32, u32)>` |
-| `hymeko_pgraph` | bipartite P-graphs over the HyMeKo IR |
-| [`hotaru::hypergraph`](https://github.com/hymeko-framework/hotaru) | hypergraphs as hypergraphs — Berge paths, Levi/2-section/dual/s-line, transversals, acyclicity, s-connectivity |
-
-A hypergraph reaches `hymeko_graph`'s algorithms only by being star-expanded
-first, which is what `BipartiteOnlyPruner` exists for. If your question is
-*"which cycles satisfy this axiom, in a graph too big to enumerate naively"*,
-it is `hymeko_graph`. If it is *"is this process model feasible, and why
-not"*, it is `hymeko_pgraph`. If it is *"what does this relation structure
-look like, and where is it fragile"*, it is `hotaru`.
-
-There is **one remaining duplication** across the three, and it is not
-resolved: `hotaru::hypergraph` carries its own balance predicates, BFS,
-components and pruner trait — roughly 400 lines that restate what
-`hymeko_graph` already has, for hypergraphs instead of graphs. It stays that
-way only because `hotaru` is dependency-free by default and this crate needs
-`rayon` and `dashmap`. Collapsing it means deciding which of those two
-properties matters more.
+`hymeko_graph::direct_ir` traverses canonical Core hyperarcs directly. Berge
+paths, components, dual traversal, informed search, PageRank and Levi matroids
+use Core incidence views; this path does not require star or clique expansion.
+The separate `SignedGraph` API serves explicitly pairwise signed-graph workloads.
+`hymeko_pgraph` owns process-network semantics, and `hymeko_sbsh` supplies a spatial
+overlay while retaining Core declaration identity.
 
 ## Layout
 
 ```
-hymeko_graph/     the signed-graph crate, its tests and examples
-hymeko_pgraph/    the P-graph crate, its tests and two binaries
+hymeko_graph/     canonical hypergraph and signed-graph algorithms, tests and examples
+hymeko_pgraph/    P-graph semantics, tests and optional binaries
+hymeko_sbsh/      spatial orthtree overlays and width certificates
 data/             fixtures both crates' tests read with include_str!
 benchmarks/       every bench, as a separate crate with its own workspace root
 ```
 
-`benchmarks/` is parked: the sources are all there, unchanged, in a crate
-with its own workspace root so neither library resolves criterion. Wiring it
-up properly is a later job.
+`benchmarks/` has its own workspace so Criterion stays outside the library
+build. The retained comparison above uses the explicit performance-evidence test
+client. Publication checks resolve the separate benchmark dependencies; they do
+not execute every historical Criterion target.
 
 ## Notes on the extraction
 
-- Every source file is byte-identical to the monorepo except `hymeko_graph/src/lib.rs`,
+- At the original extraction, source files were preserved except `hymeko_graph/src/lib.rs`,
   whose doc comment was stale — it claimed the cycle enumerator still lived in
   `hymeko_py/src/cycles.rs`.
 - `hymeko_pgraph`'s path dependencies on `../hymeko_core` and `../parser`
