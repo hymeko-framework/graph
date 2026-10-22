@@ -2,6 +2,33 @@
 
 Graph theory and hypergraph extensions for analysis and modelling with HyMeKo.
 
+`direct_ir::Christofides::solve(&index, &arc_costs, TourLimits::default())`
+constructs a closed walk visiting every canonical node. `arc_costs` contains one
+finite nonnegative symmetric traversal cost per canonical hyperarc. The returned
+`BergeTour` contains the metric visiting order, the expanded incidence walk,
+total cost, MST/matching costs and the number of odd tree vertices. Repeated
+nodes and hyperarcs are allowed and each traversal is charged again.
+
+This applies metric Christofides to shortest Berge distances; it does not solve
+the simple Berge-Hamilton-cycle or pay-once hyperedge-cover problem. The classical
+3/2 guarantee applies in exact arithmetic. The implementation uses the existing
+canonical-IR Dijkstra engine for metric closure and path expansion. It stores a
+derived quadratic distance table, with no second IR or alternate search engine.
+Its initial exact minimum matching backend is bounded subset dynamic programming,
+not polynomial-time blossom: default limits are 256 nodes, `2^20` matching states
+and 1,000,000 returned steps. Exceeding a limit returns `TourError::Budget`;
+there is no silent greedy fallback. General floating-point inputs do not carry
+an interval-certified approximation guarantee. Correctness checks and full-route
+comparison evidence are in `reports/2026-10-22-path-tour-comparison/`.
+
+The larger-input follow-up is in `reports/2026-10-22-path-tour-scaling/report.pdf`:
+262,144-node / 1,046,528-incidence path input and 24-, 32- and 64-node tours,
+with the same production solver and default budgets. The 64-node street input
+hits the matching-state cap; the 64-node corridor with transport hyperarc completes.
+On the 24- and 32-node inputs the faster HyMeKo tour has a slightly higher cost
+than the external Christofides composition. The report keeps latency, returned
+cost, lower-bound certificates and unsupported budget cases separate.
+
 `direct_ir::PageRank` ranks canonical IR nodes without materializing a pairwise
 graph. `PageRank::build(&ir, PageRankModel::default())` prepares an undirected
 vertex–hyperarc–vertex probability walk. `run(config, &mut workspace,
@@ -80,6 +107,31 @@ conjunction. Hop tables must describe exact undirected distances to the query's
 goal on the same IR, and the supplied step bound must be valid for the cost model.
 Construction checks numeric bounds and finite estimates; it does not certify the
 table's topology or its coupling to the cost model.
+
+`PreparedBergeSearch::build(&index, goal, &mut traversal_workspace)` also retains
+exact incidence links toward the goal and a relaxed hop bound per hyperarc.
+`search_with_heuristic(start, &cost, &heuristic, &policy, &mut workspace)` uses
+`f = g + max(caller_bound, hop_bound)` in the same A* engine. The supplied bound
+must be admissible and consistent for this goal, cost model and policy. Entropy
+only orders equal-f candidates. `search` supplies the zero caller bound.
+
+Each query checks the recorded route's forward direction and costs before using
+its cost as an initial upper bound. A rejected or overflowing optional route
+falls back to ordinary search. Certified hyperarc bounds can skip whole member
+expansions; equal-cost and floating-point-ambiguous candidates remain eligible.
+`SearchStats` includes skipped arcs, witness checks and acceptance of the initial
+bound. The prepared view borrows one immutable canonical IR; rebuilding it after
+topology changes and its preparation cost must be counted in lifecycle benchmarks.
+The initial kato21 timing control covers three fixed query pairs, five processes
+per cell. Prepared assisted queries took 5.224 us on the 40,000-node grid,
+2.840 ms on the 16,384-node weighted road graph, and 0.276 us on its one-hop
+transport example. Relative to plain A*, the grid and transport queries were
+2.40x and 1.64x faster; the weighted road query was 15.43% slower. Fresh
+index/setup/search from resident IR took 7.033, 5.391 and 2.286 ms respectively,
+and was slower than plain A* in all three cases. IR construction is excluded.
+These are separate prepared-query and first-result boundaries, not universal
+speedup claims. Raw samples, source identities and phase definitions are in
+`reports/2026-10-22-berge-bound-timing/report.pdf` and its sibling evidence files.
 
 Informed-search tests share borrowed cases and static Dijkstra/A* strategies.
 Evidence clients share checksum/work verification and typed TSV result rows;

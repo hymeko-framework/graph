@@ -12,6 +12,26 @@
 schema_version: 1
 
 approved_edits:
+  - slug: path-tour-scaling
+    date: 2026-10-22
+    authority: user requests larger graph and TSP measurements overnight and explicitly requires releasing kato21 and closing our connections afterward
+    scope: extend existing evidence fixtures, selection, bounds/route validation and guarded campaign; keep production algorithms, default matching limits and dependency revisions unchanged
+    plan: docs/plans/2026-10-22-path-tour-comparison/plan.pdf
+  - slug: path-tour-comparison
+    date: 2026-10-22
+    authority: user requests full shortest-path comparison including route size and a hypergraph Christofides TSP case; confirms a closed walk visiting every vertex
+    scope: additive bounded Graph tour owner, existing search and external evidence clients, guarded kato21 measurements and full route/cost verification; no dependency or IR changes
+    plan: docs/plans/2026-10-22-path-tour-comparison/plan.pdf
+  - slug: berge-assist-timing
+    date: 2026-10-22
+    authority: user explicitly asks to measure shortest-path time after Berge-assisted A-star implementation
+    scope: extend existing informed evidence adapter and Campaign selection; matched query/preparation/first-result cells on kato21, explicit measurement opt-in and unchanged quiet-host gate
+    plan: reports/2026-10-22-berge-bound-timing/plan.json
+  - slug: berge-astar-bound-assist
+    date: 2026-10-22
+    authority: user explicitly requests Berge-based branch-and-bound assistance in A-star, retaining the caller heuristic
+    scope: existing informed-search engine and PreparedBergeSearch; feasible incidence-route upper certificate, hyperarc lower bounds, MaxHeuristic composition and focused correctness checks; no new IR, dependencies or performance runs
+    plan: reports/2026-10-22-berge-bound-assist/plan.json
   - slug: ordered-parallel-source-pagerank
     date: 2026-10-20
     authority: user requests fixing vertex-number dependence, then parallel execution and Hymeko-based model/execution handling

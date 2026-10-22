@@ -9,6 +9,8 @@ mod execution;
 #[path = "informed_berge_evidence/reporting.rs"]
 mod reporting;
 use execution::*;
+#[path = "informed_berge_evidence/assisted.rs"]
+mod assisted;
 use reporting::{EvidenceCell, ResultSummary};
 
 use hymeko_graph::direct_ir::{HopHeuristic, MaxHeuristic};
@@ -131,7 +133,12 @@ fn search_fixture(name: &str) -> (Ir, NodeId, NodeId) {
                 NodeId::new(row * side + column + distance),
             )
         }
-        "map32" | "map128" | "map512" => {
+        "grid512_d511" => (
+            workloads::grid_ir(512, 512),
+            NodeId::new(256 * 512),
+            NodeId::new(256 * 512 + 511),
+        ),
+        "map32" | "map128" | "map256" | "map512" => {
             let side = name
                 .strip_prefix("map")
                 .and_then(|value| value.parse::<usize>().ok())
@@ -149,6 +156,39 @@ fn search_fixture(name: &str) -> (Ir, NodeId, NodeId) {
             let ir = workloads::map_grid_with_transport_ir(128, 128, &HashSet::new(), 16, 0.5);
             let goal = NodeId::new(ir.nodes.len() - 1);
             (ir, NodeId::new(0), goal)
+        }
+        "transport256_off" => {
+            let ir = workloads::map_grid_with_transport_ir(256, 256, &HashSet::new(), 32, 0.5);
+            let goal = NodeId::new(ir.nodes.len() - 2);
+            (ir, NodeId::new(1), goal)
+        }
+        "tour8" | "tour16" | "tour24" | "tour32" | "tour64" => {
+            let (width, height, stations) = match name {
+                "tour8" => (4, 2, 4),
+                "tour16" => (4, 4, 4),
+                "tour24" => (4, 6, 6),
+                "tour32" => (4, 8, 8),
+                "tour64" => (8, 8, 8),
+                _ => unreachable!(),
+            };
+            let ir = workloads::map_grid_with_transport_ir(
+                width,
+                height,
+                &HashSet::new(),
+                stations,
+                0.5,
+            );
+            let goal = NodeId::new(ir.nodes.len() - 1);
+            (ir, NodeId::new(0), goal)
+        }
+        "tour64_corridor" => {
+            let mut ir = workloads::corridor_map_ir(8, 8);
+            let refs = [0, 21, 42, 63]
+                .into_iter()
+                .map(|v| workloads::plus_ref(ir.nodes[v].decl, Some(0.5)))
+                .collect();
+            workloads::push_arc(&mut ir, refs);
+            (ir, NodeId::new(0), NodeId::new(63))
         }
         other => panic!("unknown informed-search workload {other}"),
     }
@@ -171,8 +211,8 @@ fn search_cell() {
     cell.phase("canonical_ir");
     let index = build_incidence_index(&ir).expect("incidence index");
     cell.phase("incidence_index");
-    if workload == "grid256" {
-        let positions = Positions::from_grid(256, 256);
+    if workload.starts_with("grid200_d") {
+        let positions = Positions::from_grid(200, 200);
         let goal_decl = ir.nodes[goal.raw()].decl;
         match subject.as_str() {
             "dijkstra_unit" => {

@@ -74,6 +74,12 @@ COMPARISON_WORKLOADS = (
 
 
 GENERATED_WORKLOADS = ("steiner255", "complete32_3", "sunflower1024", "mycielski7")
+ASSISTED_WORKLOADS = ("grid200_d80", "map128", "transport128")
+ASSISTED_SUBJECTS = ("dijkstra", "astar", "assisted", "prepare", "first_dijkstra", "first_astar", "first_assisted")
+ROUTING_WORKLOADS = ASSISTED_WORKLOADS + ("tour16",)
+SCALING_WORKLOADS = ("grid512_d511", "map256", "transport256_off", "tour24", "tour32", "tour64", "tour64_corridor")
+EXTERNAL_FRAMEWORKS = ("hypernetx", "xgi", "hypergraphx", "reticula")
+EXTERNAL_OPERATIONS = ("components", "reachable", "distance", "path", "astarpath", "unitpath", "tour")
 TRAVERSAL_SUBJECTS = ("reachable", "dual_reachable", "berge_path", "dijkstra",
                       "generate_ir", "incidence_index", "levi", "s_components2")
 
@@ -107,6 +113,12 @@ class Cell:
         if self.test == "native::native_cell":
             result["HYMEKO_NATIVE_BENCH"] = "1"
             result["RAYON_NUM_THREADS"] = "1"
+        if self.test in {"assisted::assisted_cell", "assisted::tour_cell"}:
+            result.update({"HYMEKO_ASSISTED_BENCH": "1", "RAYON_NUM_THREADS": "1"})
+        if self.suite == "external":
+            result.update({"HYMEKO_EXTERNAL_BENCH": "1", "RAYON_NUM_THREADS": "1",
+                           "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1",
+                           "MKL_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"})
         return result
 
     @staticmethod
@@ -140,10 +152,38 @@ class Cell:
     def matrix(suite: str = "graph", phases: list[str] | None = None,
                workloads: list[str] | None = None) -> list[Cell]:
         if workloads is not None and (
-            suite not in {"comparison", "traversal"} or not workloads or len(set(workloads)) != len(workloads)
-            or not set(workloads) <= set(COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
+            suite not in {"comparison", "traversal", "external", "assisted", "routing", "routing_unit", "routing_scale"} or not workloads or len(set(workloads)) != len(workloads)
+            or not set(workloads) <= set(SCALING_WORKLOADS if suite=="routing_scale" else ("grid200_d80",) if suite=="routing_unit" else ROUTING_WORKLOADS if suite=="routing" else ASSISTED_WORKLOADS if suite=="assisted" else COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
         ):
             raise ValueError("workloads must be nonempty unique names from the comparison/traversal catalog")
+        if suite == "assisted":
+            return [Cell("informed", "assisted::assisted_cell", w, s)
+                    for w in (workloads or ASSISTED_WORKLOADS) for s in ASSISTED_SUBJECTS]
+        if suite in {"routing", "routing_scale"}:
+            cells=[]
+            for w in workloads or (SCALING_WORKLOADS if suite=="routing_scale" else ROUTING_WORKLOADS):
+                if w.startswith("tour"):
+                    cells.append(Cell("informed","assisted::tour_cell",w,"christofides"))
+                    operations=("tour",)
+                else:
+                    cells.extend(Cell("informed","assisted::assisted_cell",w,s) for s in ("first_dijkstra","first_astar","first_assisted"))
+                    operations=("path","astarpath")
+                cells.extend(Cell("external","external_cell",w,f"{b}-{op}-first") for b in EXTERNAL_FRAMEWORKS for op in operations)
+                if w == "grid512_d511":
+                    cells.append(Cell("external","external_cell",w,"reticula-unitpath-first"))
+            return cells
+        if suite == "routing_unit":
+            return [Cell("external","external_cell","grid200_d80",f"{b}-unitpath-first") for b in EXTERNAL_FRAMEWORKS]
+        if suite == "external":
+            selected = workloads or ["chain65k", "hub32_1m", "components8_1m", *GENERATED_WORKLOADS]
+            foreign = [Cell("external", "external_cell", w, f"{backend}-{operation}-{mode}")
+                       for w in selected for backend in EXTERNAL_FRAMEWORKS
+                       for operation in ("components","reachable","distance") for mode in ("prepared", "cold")]
+            native = [Cell("algorithm", "native::native_cell", w, subject)
+                      for w in selected for subject in ("components_hymeko", "components_hypergraphz")]
+            searches = [Cell("algorithm", "ranking::ranking_cell", w, subject)
+                        for w in selected for subject in ("reachable", "berge_path", "dijkstra")]
+            return foreign + native + searches
         if suite == "traversal":
             return [Cell("algorithm", "ranking::ranking_cell", workload, operation)
                     for workload in (workloads if workloads is not None else
@@ -246,6 +286,31 @@ class Cell:
 
 class Evidence:
     @staticmethod
+    def verify_assisted(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        source=Evidence.one(records,"INPUT")
+        result=Evidence.one(records,"RESULT")
+        subject=cell["subject"]
+        first=subject.startswith("first_")
+        prep=subject=="prepare"
+        if source.get("pipeline")!="berge_bound_assist" or source.get("verified")!="true" or source.get("flow")!="undirected":
+            raise ValueError("missing assisted-search validation")
+        expected={"construction_timed":"false","index_timed":str(first).lower(),
+                  "caller_setup_timed":str(first).lower(),"goal_preparation_timed":str(prep or subject=="first_assisted").lower()}
+        scope=("resident_ir_to_index_caller_setup_search_and_drop" if first else
+               "prepared_index_to_goal_certificate_and_drop_reused_traversal_workspace" if prep else
+               "prepared_index_bounds_reused_search_workspace_query_result_drop")
+        if any(source.get(k)!=v for k,v in expected.items()) or source.get("metric_scope")!=scope:
+            raise ValueError("assisted-search timing boundary drift")
+        nodes=int(cell["nodes"])
+        if not all(0<=int(source[k])<nodes for k in ("start","goal")):
+            raise ValueError("assisted-search endpoint outside IR")
+        if prep:
+            if result.get("items")!=str(nodes) or cell["section"]!="heuristic_preparation":
+                raise ValueError("invalid prepared-goal result")
+        elif result.get("cost_micros")!=source.get("expected_cost_micros") or cell["section"]!="informed_search":
+            raise ValueError("assisted-search optimal cost mismatch")
+
+    @staticmethod
     def one(records: dict[str, list[dict[str, str]]], kind: str) -> dict[str, str]:
         values = records.get(kind, [])
         if len(values) != 1:
@@ -336,6 +401,30 @@ class Evidence:
                 raise ValueError("algebra result/work exceeds its domain")
 
     @staticmethod
+    def verify_external(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        source = Evidence.one(records, "INPUT")
+        external = Evidence.one(records, "EXTERNAL")
+        backend, operation, mode = cell["subject"].split("-")
+        if backend not in EXTERNAL_FRAMEWORKS or operation not in EXTERNAL_OPERATIONS or mode not in {"prepared", "cold", "first"}:
+            raise ValueError("unknown external query")
+        if external.get("backend") != backend or external.get("operation") != operation or external.get("mode") != mode:
+            raise ValueError("external query identity mismatch")
+        if external.get("full_result") != "true" or external.get("checksum") != cell["checksum"]:
+            raise ValueError("external result was not fully verified")
+        if source.get("construction_timed") != "false" or source.get("cache_policy") != mode or not source.get("metric_scope"):
+            raise ValueError("external measurement boundary drift")
+        if len(source.get("fixture_sha256", "")) != 64 or len(external.get("implementation_sha256", "")) != 64:
+            raise ValueError("missing external input/implementation hash")
+        if not external.get("version") or not external.get("python") or external.get("interface") != "python_api":
+            raise ValueError("missing external runtime identity")
+        if int(cell["threads"]) != 1 or int(cell["warmups"]) != 2 or (mode == "cold" and int(cell["repetitions"]) != 1):
+            raise ValueError("external sampling contract drift")
+        nodes = int(cell["nodes"])
+        completed = int(external["completed_isolates"])
+        if not 0 <= completed <= int(external["declared_isolates"]) <= nodes or int(external["native_nodes"]) + completed != nodes:
+            raise ValueError("external isolate/domain mismatch")
+
+    @staticmethod
     def parse(output: str) -> dict[str, list[dict[str, str]]]:
         records: dict[str, list[dict[str, str]]] = {}
         for line in output.splitlines():
@@ -384,6 +473,8 @@ class Evidence:
             len(results) != 1 or results[0]["path_hash"] != cell["checksum"]
         ):
             raise ValueError("result/cell mismatch")
+        if cell.get("section") in {"informed_search","heuristic_preparation"} and cell.get("subject") in ASSISTED_SUBJECTS:
+            Evidence.verify_assisted(records,cell)
         if cell.get("section") == "parsing":
             sources = records.get("SOURCE", [])
             if len(sources) != 1 or int(sources[0]["bytes"]) <= 0:
@@ -424,6 +515,8 @@ class Evidence:
             Evidence.verify_query(records, cell)
         if cell.get("section") in {"construction", "algebra"}:
             Evidence.verify_algebra(records, cell)
+        if cell.get("section") == "external_graph":
+            Evidence.verify_external(records, cell)
         return records
 
 
@@ -431,17 +524,33 @@ class ProcessRunner:
     def __init__(self, args: argparse.Namespace):
         self.args = args
         self.binaries = {}
-        if args.suite not in {"ranking", "comparison", "traversal"}:
+        if args.suite not in {"ranking", "comparison", "traversal", "external", "routing_unit"}:
             self.binaries["informed"] = Path(args.informed).resolve()
         if args.suite in {"graph", "ranking", "comparison", "traversal"}:
             self.binaries["algorithm"] = Path(args.algorithm).resolve()
+        if args.suite in {"external", "routing", "routing_unit", "routing_scale"}:
+            # Preserve the venv symlink: resolving it selects system Python and
+            # silently discards the pinned framework environment on Linux.
+            self.binaries["external"] = Path(args.external_python).absolute()
+            if getattr(args, "algorithm", None):
+                self.binaries["algorithm"] = Path(args.algorithm).resolve()
+        self.external_files = {}
+        if args.suite in {"external", "routing", "routing_unit", "routing_scale"}:
+            self.external_files = {"external_input": Path(args.external_input).resolve(),
+                                   "external_client": Path(__file__).with_name("external.py"),
+                                   "external_tests": Path(__file__).with_name("test_external.py"),
+                                   "external_lock": Path(__file__).with_name("external-requirements.txt")}
+            self.external_files["routing_client"] = Path(__file__).with_name("routing.py")
+        self.external_hashes = {key: hashlib.sha256(path.read_bytes()).hexdigest() for key,path in self.external_files.items()}
         self.native_library = Path(args.native_library).resolve() if getattr(args, "native_library", None) else None
         self.native_sha = hashlib.sha256(self.native_library.read_bytes()).hexdigest() if self.native_library else None
 
     def dependency_identity(self) -> dict[str, str | None]:
         if self.native_library and hashlib.sha256(self.native_library.read_bytes()).hexdigest() != self.native_sha:
             raise ValueError("native library changed during campaign")
-        return {"path": str(self.native_library) if self.native_library else None, "sha256": self.native_sha}
+        if {key: hashlib.sha256(path.read_bytes()).hexdigest() for key,path in self.external_files.items()} != self.external_hashes:
+            raise ValueError("external input, client or dependency lock changed")
+        return {"path": str(self.native_library) if self.native_library else None, "sha256": self.native_sha, **self.external_hashes}
 
     def cpu_set(self) -> list[int] | None:
         """Validate explicit processor sets while preserving the single-CPU CLI."""
@@ -540,6 +649,10 @@ class ProcessRunner:
         if self.native_library:
             environment = environment | {"HYMEKO_NATIVE_LIBRARY": str(self.native_library)}
         command = [str(binary), *arguments]
+        if suite == "external":
+            command = [str(binary), str(self.external_files["external_client"]), *arguments]
+            environment = environment | {"HYMEKO_EXTERNAL_INPUT": str(self.external_files["external_input"]),
+                "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"}
         cpus = self.cpu_set()
         if cpus is not None and self.args.platform == "native":
             # Apply affinity before the Rust test harness or worker pool creates
@@ -954,6 +1067,10 @@ class CampaignSummary:
                     {k: v for k, v in r.items() if k != "run"}
                     for r in records.get(kind, [])
                 ]
+            identity["EXTERNAL"] = [
+                {k: v for k, v in r.items() if k not in {"construction_us", "first_query_us"}}
+                for r in records.get("EXTERNAL", [])
+            ]
             if key in self.reference and identity != self.reference[key]:
                 raise ValueError(
                     f"semantic/work-counter drift: {campaign['platform']} {key}"
@@ -1021,6 +1138,8 @@ class CampaignSummary:
                     "benchmark": key,
                     "workload": cell["workload"],
                     "algorithm": cell["subject"],
+                    **{key: observations[0]["records"].get("EXTERNAL", [{}])[0].get(key, "")
+                       for key in ("backend", "version", "mode", "operation", "query_strategy", "interface", "completed_isolates")},
                     "phase": next(
                         (p[1] for p in PHASES if p[0] == cell["subject"]),
                         "preparation"
@@ -1233,9 +1352,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--informed")
     parser.add_argument("--algorithm")
-    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal"), default="graph")
+    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal", "external", "assisted", "routing", "routing_unit", "routing_scale"), default="graph")
+    parser.add_argument("--external-python", help="isolated Python interpreter for external framework cells")
+    parser.add_argument("--external-input", help="immutable canonical-IR fixture export")
     parser.add_argument("--subjects", nargs="+", help="explicit operations from the selected suite's existing matrix")
-    parser.add_argument("--workloads", nargs="+", choices=COMPARISON_WORKLOADS + GENERATED_WORKLOADS,
+    parser.add_argument("--workloads", nargs="+", choices=COMPARISON_WORKLOADS + GENERATED_WORKLOADS + ROUTING_WORKLOADS + SCALING_WORKLOADS,
                         help="explicit comparison/traversal fixtures; omitted keeps each suite's default matrix")
     parser.add_argument("--native-library", help="explicit pinned Windows native comparison adapter")
     parser.add_argument("--source-manifest", help="explicit source-byte snapshot for unpublished local source and dependency roots")
@@ -1270,7 +1391,9 @@ if __name__ == "__main__":
         parser.error("--algorithm is required for graph/ranking/comparison/traversal suites")
     if arguments.suite == "comparison" and (arguments.platform not in {"windows", "native"} or not arguments.native_library):
         parser.error("comparison requires native Windows/Linux and an explicit --native-library")
-    if arguments.suite not in {"ranking", "comparison", "traversal"} and not arguments.informed:
+    if arguments.suite in {"external", "routing", "routing_unit", "routing_scale"} and (arguments.platform not in {"windows", "native"} or not arguments.external_python or not arguments.external_input):
+        parser.error("external requires Windows/Linux, --external-python and --external-input")
+    if arguments.suite not in {"ranking", "comparison", "traversal", "external", "routing_unit"} and not arguments.informed:
         parser.error("--informed is required for graph/parsing suites")
     if arguments.source_manifest and arguments.source_ref:
         parser.error("choose an exact source ref or an unpublished source manifest")
@@ -1279,7 +1402,12 @@ if __name__ == "__main__":
     if arguments.runs < 1 or (arguments.platform == "arm64" and not arguments.qemu):
         parser.error("positive --runs and an ARM64 --qemu path are required")
     try:
-        Cell.select(arguments.suite, arguments.phases, arguments.subjects, arguments.smoke, arguments.workloads)
+        selected = Cell.select(arguments.suite, arguments.phases, arguments.subjects, arguments.smoke, arguments.workloads)
+        if arguments.suite == "external":
+            if any(c.suite == "algorithm" for c in selected) and not arguments.algorithm:
+                parser.error("selected native baselines require --algorithm")
+            if any(c.test == "native::native_cell" for c in selected) and not arguments.native_library:
+                parser.error("selected Hypergraphz/native parity cells require --native-library")
     except ValueError as error:
         parser.error(str(error))
     Campaign(arguments).run()
