@@ -1,0 +1,10 @@
+\begin{figure}[h]\centering
+\begin{tikzpicture}[>={Stealth}, box/.style={draw, rounded corners, align=center, font=\small, inner sep=4pt}]
+  \node[box, fill=orange!12] (view) at (0,0) {\texttt{RankIncidence<'a, F = f32>}\\ \scriptsize members, \texttt{Signs<F>}, scales\texttt{<F>}};
+  \node[box] (topo) at (-4,1.8) {\texttt{CellTopology}\\ \scriptsize f32 storage};
+  \node[box] (f32) at (0,1.8) {HSiKAN, conv, messages\\ \scriptsize \texttt{F = f32}, bits unchanged};
+  \node[box] (f64) at (4,1.8) {one-form operator\\ \scriptsize \texttt{F = f64}};
+  \draw[->] (topo) -- (view); \draw[->] (f32) -- (view); \draw[->] (f64) -- (view);
+\end{tikzpicture}
+\caption{One view, two scalars.}
+\end{figure}

@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 621 public symbol(s).**
+**8 package(s), 628 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -61,9 +61,11 @@ _No public symbols._
 - `BergeCost` — `hymeko_graph/src/direct_ir/informed.rs`
 - `BergeHeuristic` — `hymeko_graph/src/direct_ir/informed.rs`
 - `BoundedScorer` — `hymeko_graph/src/topk_cycles.rs`
+- `CofaceLabel` — `hymeko_graph/src/cell_topology.rs`
 - `CyclePruner` — `hymeko_graph/src/pruner.rs`
 - `CycleSampler` — `hymeko_graph/src/cycle_sampler.rs`
 - `Heuristic` — `hymeko_graph/src/traversal_heuristic.rs`
+- `IncidenceScalar` — `hymeko_graph/src/cell_topology.rs`
 - `PositionProvider` — `hymeko_graph/src/direct_ir/informed.rs`
 - `TransitionPolicy` — `hymeko_graph/src/direct_ir/informed.rs`
 - `UniformityHeuristic` — `hymeko_graph/src/topk_cycles.rs`
@@ -86,6 +88,7 @@ _No public symbols._
 - `BipartiteOnlyPruner` — `hymeko_graph/src/balance.rs`
 - `BuildOpts` — `hymeko_graph/src/incidence.rs`
 - `CartwrightHararyPruner` — `hymeko_graph/src/balance.rs`
+- `Cell` — `hymeko_graph/src/cell_topology.rs`
 - `Cell` — `hymeko_graph/src/octree.rs`
 - `CellRank` — `hymeko_graph/src/cell_topology.rs`
 - `CellTopology` — `hymeko_graph/src/cell_topology.rs`
@@ -133,6 +136,7 @@ _No public symbols._
 - `OrientedMaterialisationDigest` — `hymeko_graph/src/direct_ir/informed.rs`
 - `PathClosureSampler` — `hymeko_graph/src/path_closure.rs`
 - `PathHash` — `hymeko_graph/src/direct_ir/informed.rs`
+- `Position` — `hymeko_graph/src/cell_topology.rs`
 - `PrunerStats` — `hymeko_graph/src/pruner.rs`
 - `QuadtreeAnchors` — `hymeko_graph/src/quadtree.rs`
 - `QuadtreeConfig` — `hymeko_graph/src/quadtree.rs`
@@ -246,6 +250,7 @@ _No public symbols._
 - `clifford_fir_backward` — `hymeko_graph/src/spine.rs`
 - `clifford_fir_backward_with` — `hymeko_graph/src/spine.rs`
 - `clifford_fir_forward` — `hymeko_graph/src/spine.rs`
+- `coface_positions` — `hymeko_graph/src/cell_topology.rs`
 - `cofaces` — `hymeko_graph/src/cell_topology.rs`
 - `component_of` — `hymeko_graph/src/direct_ir/components.rs`
 - `component_of` — `hymeko_graph/src/direct_ir/s_connect.rs`
@@ -462,12 +467,14 @@ _No public symbols._
 - `targets` — `hymeko_graph/src/sphf.rs`
 - `tiered_m_v_by_degree` — `hymeko_graph/src/topk_cycles.rs`
 - `to_vec` — `hymeko_graph/src/cell_topology.rs`
+- `unit_incidence` — `hymeko_graph/src/cell_topology.rs`
 - `vertices` — `hymeko_graph/src/cell_topology.rs`
 - `volume` — `hymeko_graph/src/octree.rs`
 - `with` — `hymeko_graph/src/pruner.rs`
 - `with_capacity` — `hymeko_graph/src/topk_cycles.rs`
 - `with_capacity` — `hymeko_graph/src/traversal.rs`
 - `with_capacity` — `hymeko_graph/src/traversal_heuristic.rs`
+- `with_cofaces` — `hymeko_graph/src/cell_topology.rs`
 - `with_rank` — `hymeko_graph/src/cell_topology.rs`
 - `with_signs` — `hymeko_graph/src/cell_topology.rs`
 - `within` — `hymeko_graph/src/sphf.rs`
