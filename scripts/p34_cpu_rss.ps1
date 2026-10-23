@@ -9,10 +9,22 @@ param(
     [string]$OutTsv = "reports/data/2026-09-03-p34-cpu-scaling.tsv"
 )
 $ErrorActionPreference = 'Stop'
-$target = $env:CARGO_TARGET_DIR
-if (-not $target) { $target = "D:\h\graph-matroid-p34\target" }
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $Exe) {
-    $Exe = (Get-ChildItem "$target\release\deps\p34_cell-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+    # Ask Cargo for this checkout's artifact rather than searching all cached
+    # revisions in a shared directory. This only compiles; it does not run tests.
+    Push-Location $repoRoot
+    try {
+        $buildMessages = @(& cargo test -p hymeko_graph --release --test p34_cell --no-run --message-format=json-render-diagnostics |
+            ForEach-Object { $_ | ConvertFrom-Json })
+        if ($LASTEXITCODE -ne 0) { throw "p34_cell build failed with exit $LASTEXITCODE" }
+    } finally { Pop-Location }
+    $artifacts = @($buildMessages | Where-Object {
+        $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'p34_cell' -and
+        $_.target.kind -contains 'test' -and $_.executable
+    })
+    if ($artifacts.Count -ne 1) { throw "Expected one p34_cell executable; got $($artifacts.Count)" }
+    $Exe = (Get-Item -LiteralPath $artifacts[0].executable).FullName
 }
 $hostMax = [Environment]::ProcessorCount
 Write-Host "cell exe: $Exe   host cores: $hostMax"

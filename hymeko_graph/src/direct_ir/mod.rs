@@ -46,6 +46,7 @@ pub mod dual;
 pub mod informed;
 pub mod pagerank;
 pub mod s_connect;
+pub mod tour;
 pub mod traversal;
 pub mod workspace;
 
@@ -70,6 +71,7 @@ pub use pagerank::{
     PageRankWorkspace, RankFlow, RankOrdering, RankWeights,
 };
 pub use s_connect::{SComponentLabeling, s_connected_components};
+pub use tour::{BergeTour, Christofides, TourError, TourLimits};
 pub use traversal::{BergeIncidence, BergePath, BergeStep, HyperTraversal, NodeSet};
 pub use workspace::TraversalWorkspace;
 

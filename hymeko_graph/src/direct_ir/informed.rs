@@ -247,6 +247,15 @@ impl Default for IncidenceWeightCost {
     }
 }
 impl BergeCost for IncidenceWeightCost {
+    fn minimum_step_cost(&self) -> f64 {
+        // Invalid/negative bases do not certify a positive global bound. The
+        // actual transition cost is still checked when a legal step is used.
+        if self.base.is_finite() && self.base > 0.0 {
+            self.base
+        } else {
+            0.0
+        }
+    }
     #[inline]
     fn step_cost(&self, _from: DeclId, to: &IncidenceRef<'_>) -> f64 {
         self.base + first_num_weight(to.weights).abs()
@@ -584,9 +593,17 @@ impl WeightedBergePath {
 /// Per-query instrumentation (never gates results; observability for the benchmark).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SearchStats {
-    /// Improving relaxations omitted because their certified f exceeds an
-    /// already discovered complete goal path. Equal-cost ties are preserved.
+    /// Improving relaxations omitted because their certified f exceeds a
+    /// complete-route incumbent (prepared witness or discovered goal), outside
+    /// its rounding envelope. Equal-cost ties are preserved.
     pub bound_pruned: usize,
+    /// Whole hyperarc expansions omitted by a certified Berge completion bound.
+    pub bound_pruned_arcs: usize,
+    /// Incidence transitions checked while probing the prepared goal-tree route.
+    /// Includes a rejected transition; this work is part of the query.
+    pub witness_steps: usize,
+    /// A complete legal route supplied a finite initial incumbent cost.
+    pub seeded_bound: bool,
     /// Nodes popped-and-settled (each once).
     pub expanded_nodes: usize,
     /// Arc expansions. Entry-independent policies and costs reuse an expansion
@@ -904,124 +921,261 @@ where
     H: BergeHeuristic,
     P: TransitionPolicy,
 {
-    if !H::CONSISTENT || !H::ADMISSIBLE {
-        return Err(InformedSearchError::InconsistentHeuristicInOptimalMode);
+    InformedSearch::new(traversal, cost, heuristic, policy)?.run(
+        start,
+        goal,
+        ws,
+        BergeBounds::default(),
+    )
+}
+
+/// Query-specific certificates over the borrowed IR, never another graph.
+struct BergeBounds<'a> {
+    upper: f64,
+    arc_hops: &'a [u32],
+    minimum_step: f64,
+    witness_steps: usize,
+    comparison_scale: f64,
+    pruning_limit: f64,
+}
+
+impl Default for BergeBounds<'_> {
+    fn default() -> Self {
+        Self {
+            upper: f64::INFINITY,
+            arc_hops: &[],
+            minimum_step: 0.0,
+            witness_steps: 0,
+            comparison_scale: 1.0,
+            pruning_limit: f64::INFINITY,
+        }
     }
-    let ir = traversal.ir();
-    let index = traversal.index();
-    let start_decl = node_to_decl(ir, start)?;
-    let goal_decl = node_to_decl(ir, goal)?;
-    ws.ensure(ir.decl_nodes.len(), ir.arcs.len());
-    ws.begin();
+}
 
-    if start_decl == goal_decl {
-        return Ok(Some(WeightedBergePath {
-            start,
-            steps: Vec::new(),
-            total_cost: 0.0,
-        }));
+impl BergeBounds<'_> {
+    fn for_domain(mut self, nodes: usize) -> Self {
+        // Positive path sums contain at most V-1 additions. Bound formation
+        // adds a multiplication and an addition. Use a conservative relative
+        // roundoff envelope on BOTH sides, rounded outward. Ambiguous near-ties
+        // are explored, never discarded (e.g. 9*0.1 versus nine additions).
+        // EPSILON is twice the round-to-nearest unit roundoff; q therefore
+        // also covers the usual gamma_n = n*u/(1-n*u) bound when q < 1/2.
+        let q = (nodes as f64 + 2.0) * f64::EPSILON;
+        self.comparison_scale = if q < 0.5 {
+            ((1.0 + q) / (1.0 - q)).next_up()
+        } else {
+            f64::INFINITY
+        };
+        self.refresh_limit();
+        self
     }
 
-    ws.set_g(start_decl, 0.0);
-    let h0 = finite_or_zero(heuristic.h(ir, start_decl));
-    ws.heap.insert(Entry {
-        key: Key {
-            f: h0,
-            tie: heuristic.tiebreak(ir, start_decl),
-            decl: start_decl.raw(),
-            arc: HyperArcId::NONE.raw(),
-            slot: 0,
-        },
-        node: start_decl,
-        g_at_push: 0.0,
-    });
-    ws.stats.pushes += 1;
+    fn after_arc(&self, arc: HyperArcId) -> f64 {
+        match self.arc_hops.get(arc.raw()).copied() {
+            None => 0.0,
+            Some(u32::MAX) => f64::INFINITY,
+            Some(hops) => (f64::from(hops) + 1.0) * self.minimum_step,
+        }
+    }
 
-    while let Some(entry) = ws.heap.pop() {
-        ws.stats.pops += 1;
-        let node = entry.node;
-        // Retain the settled-state guard; superseded frontier entries are replaced in place.
-        if ws.settled(node) || entry.g_at_push > ws.g(node) {
-            if ws.settled(node) && entry.g_at_push < ws.g(node) {
-                ws.stats.reopened += 1; // never happens with a consistent heuristic; observed, not assumed
+    fn refresh_limit(&mut self) {
+        // An absent/nonrepresentable upper certificate cannot justify pruning.
+        self.pruning_limit = if self.upper.is_finite() && self.comparison_scale.is_finite() {
+            (self.upper * self.comparison_scale).next_up()
+        } else {
+            f64::INFINITY
+        };
+    }
+
+    fn observe_goal(&mut self, cost: f64) {
+        if cost < self.upper {
+            self.upper = cost;
+            self.refresh_limit();
+        }
+    }
+
+    #[inline]
+    fn prunes(&self, lower: f64) -> bool {
+        lower > self.pruning_limit
+    }
+}
+
+/// The sole informed-search engine. Public facades select costs, heuristics and
+/// certificates; they share expansion, frontier, validation and reconstruction.
+struct InformedSearch<'a, 'index, 'ir, C, H, P> {
+    traversal: &'a HyperTraversal<'index, 'ir>,
+    cost: &'a C,
+    heuristic: &'a H,
+    policy: &'a P,
+}
+
+impl<'a, 'index, 'ir, C: BergeCost, H: BergeHeuristic, P: TransitionPolicy>
+    InformedSearch<'a, 'index, 'ir, C, H, P>
+{
+    fn new(
+        traversal: &'a HyperTraversal<'index, 'ir>,
+        cost: &'a C,
+        heuristic: &'a H,
+        policy: &'a P,
+    ) -> Result<Self, InformedSearchError> {
+        if !H::CONSISTENT || !H::ADMISSIBLE {
+            return Err(InformedSearchError::InconsistentHeuristicInOptimalMode);
+        }
+        Ok(Self {
+            traversal,
+            cost,
+            heuristic,
+            policy,
+        })
+    }
+
+    fn step_cost(&self, from: DeclId, to: &IncidenceRef<'_>) -> Result<f64, InformedSearchError> {
+        let cost = self.cost.step_cost(from, to);
+        if !cost.is_finite() || cost < 0.0 {
+            return Err(InformedSearchError::BadCost {
+                arc: to.arc,
+                slot: to.slot,
+                value_bits: cost.to_bits(),
+            });
+        }
+        Ok(cost)
+    }
+
+    fn run(
+        &self,
+        start: NodeId,
+        goal: NodeId,
+        ws: &mut InformedSearchWorkspace,
+        bounds: BergeBounds<'_>,
+    ) -> Result<Option<WeightedBergePath>, InformedSearchError> {
+        let Self {
+            traversal,
+            heuristic,
+            policy,
+            ..
+        } = self;
+        let ir = traversal.ir();
+        let index = traversal.index();
+        let start_decl = node_to_decl(ir, start)?;
+        let goal_decl = node_to_decl(ir, goal)?;
+        let mut bounds = bounds.for_domain(ir.nodes.len());
+        ws.ensure(ir.decl_nodes.len(), ir.arcs.len());
+        ws.begin();
+        ws.stats.witness_steps = bounds.witness_steps;
+        ws.stats.seeded_bound = bounds.upper.is_finite();
+
+        if start_decl == goal_decl {
+            return Ok(Some(WeightedBergePath {
+                start,
+                steps: Vec::new(),
+                total_cost: 0.0,
+            }));
+        }
+
+        ws.set_g(start_decl, 0.0);
+        let h0 = finite_or_zero(heuristic.h(ir, start_decl));
+        ws.heap.insert(Entry {
+            key: Key {
+                f: h0,
+                tie: heuristic.tiebreak(ir, start_decl),
+                decl: start_decl.raw(),
+                arc: HyperArcId::NONE.raw(),
+                slot: 0,
+            },
+            node: start_decl,
+            g_at_push: 0.0,
+        });
+        ws.stats.pushes += 1;
+
+        while let Some(entry) = ws.heap.pop() {
+            ws.stats.pops += 1;
+            let node = entry.node;
+            // Retain the settled-state guard; superseded frontier entries are replaced in place.
+            if ws.settled(node) || entry.g_at_push > ws.g(node) {
+                if ws.settled(node) && entry.g_at_push < ws.g(node) {
+                    ws.stats.reopened += 1; // never happens with a consistent heuristic; observed, not assumed
+                }
+                ws.stats.stale_pops += 1;
+                continue;
             }
-            ws.stats.stale_pops += 1;
-            continue;
-        }
-        ws.mark_settled(node);
-        ws.stats.expanded_nodes += 1;
-        if node == goal_decl {
-            let total_cost = ws.g(goal_decl);
-            return reconstruct(ws, index, ir, start, start_decl, goal_decl, total_cost).map(Some);
-        }
-        let gu = ws.g(node);
-        let arcs = index.incident_arcs(node);
-        let entry_slots = index.incident_slots(node);
-        debug_assert_eq!(arcs.len(), entry_slots.len());
-        for (&arc, &entry_slot) in arcs.iter().zip(entry_slots) {
-            if C::EXIT_INDEPENDENT && policy.entry_independent() {
-                // A* settles by f, so the first member need not have the best g.
-                // Only an entry with no lower g is dominated by prior work.
-                if ws.arc_active(arc) && gu >= ws.arc_entry_g[arc.raw()] {
+            ws.mark_settled(node);
+            ws.stats.expanded_nodes += 1;
+            if node == goal_decl {
+                let total_cost = ws.g(goal_decl);
+                return reconstruct(ws, index, ir, start, start_decl, goal_decl, total_cost)
+                    .map(Some);
+            }
+            let gu = ws.g(node);
+            let arcs = index.incident_arcs(node);
+            let entry_slots = index.incident_slots(node);
+            debug_assert_eq!(arcs.len(), entry_slots.len());
+            for (&arc, &entry_slot) in arcs.iter().zip(entry_slots) {
+                // Every permitted exit is among these undirected members. A lower
+                // bound over all of them also bounds any policy-filtered subset.
+                if !bounds.arc_hops.is_empty() && bounds.prunes(gu + bounds.after_arc(arc)) {
+                    ws.stats.bound_pruned_arcs += 1;
                     continue;
                 }
-                ws.mark_arc_active(arc, gu);
-            }
-            ws.stats.expanded_arcs += 1;
-            let from_iref = index.resolve(arc, entry_slot);
-            let refs = &ir.arcs[arc.raw()].refs;
-            for (slot, sref) in refs.iter().enumerate() {
-                let target = sref.target();
-                if !is_node(ir, target) {
-                    return Err(InformedSearchError::TargetNotANode {
-                        arc,
-                        slot: slot as u32,
-                        target,
-                    });
-                }
-                if target == node {
-                    continue; // self / entry incidence — no self-transition
-                }
-                let to_iref = index.resolve(arc, slot as u32);
-                ws.stats.resolved_incidences += 1;
-                if !policy.allows(&from_iref, &to_iref) {
-                    continue;
-                }
-                let c = cost.step_cost(node, &to_iref);
-                if !c.is_finite() || c < 0.0 {
-                    return Err(InformedSearchError::BadCost {
-                        arc,
-                        slot: slot as u32,
-                        value_bits: c.to_bits(),
-                    });
-                }
-                let tentative = gu + c;
-                if tentative < ws.g(target) {
-                    ws.stats.heuristic_evals += 1;
-                    let f = tentative + finite_or_zero(heuristic.h(ir, target));
-                    if f > ws.g(goal_decl) {
-                        ws.stats.bound_pruned += 1;
+                if C::EXIT_INDEPENDENT && policy.entry_independent() {
+                    // A* settles by f, so the first member need not have the best g.
+                    // Only an entry with no lower g is dominated by prior work.
+                    if ws.arc_active(arc) && gu >= ws.arc_entry_g[arc.raw()] {
                         continue;
                     }
-                    ws.set_g(target, tentative);
-                    ws.set_pred(target, node, arc, entry_slot, slot as u32);
-                    ws.heap.insert(Entry {
-                        key: Key {
-                            f,
-                            tie: heuristic.tiebreak(ir, target),
-                            decl: target.raw(),
-                            arc: arc.raw(),
+                    ws.mark_arc_active(arc, gu);
+                }
+                ws.stats.expanded_arcs += 1;
+                let from_iref = index.resolve(arc, entry_slot);
+                let refs = &ir.arcs[arc.raw()].refs;
+                for (slot, sref) in refs.iter().enumerate() {
+                    let target = sref.target();
+                    if !is_node(ir, target) {
+                        return Err(InformedSearchError::TargetNotANode {
+                            arc,
                             slot: slot as u32,
-                        },
-                        node: target,
-                        g_at_push: tentative,
-                    });
-                    ws.stats.pushes += 1;
+                            target,
+                        });
+                    }
+                    if target == node {
+                        continue; // self / entry incidence — no self-transition
+                    }
+                    let to_iref = index.resolve(arc, slot as u32);
+                    ws.stats.resolved_incidences += 1;
+                    if !policy.allows(&from_iref, &to_iref) {
+                        continue;
+                    }
+                    let c = self.step_cost(node, &to_iref)?;
+                    let tentative = gu + c;
+                    if tentative < ws.g(target) {
+                        ws.stats.heuristic_evals += 1;
+                        let f = tentative + finite_or_zero(heuristic.h(ir, target));
+                        if bounds.prunes(f) {
+                            ws.stats.bound_pruned += 1;
+                            continue;
+                        }
+                        ws.set_g(target, tentative);
+                        ws.set_pred(target, node, arc, entry_slot, slot as u32);
+                        if target == goal_decl {
+                            bounds.observe_goal(tentative);
+                        }
+                        ws.heap.insert(Entry {
+                            key: Key {
+                                f,
+                                tie: heuristic.tiebreak(ir, target),
+                                decl: target.raw(),
+                                arc: arc.raw(),
+                                slot: slot as u32,
+                            },
+                            node: target,
+                            g_at_push: tentative,
+                        });
+                        ws.stats.pushes += 1;
+                    }
                 }
             }
         }
+        Ok(None)
     }
-    Ok(None)
 }
 
 /// Uniform-cost / Dijkstra shortest Berge path — [`astar_berge_path`] with a [`ZeroHeuristic`]. The
@@ -1128,6 +1282,41 @@ fn euclidean(a: &[f64], b: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn berge_certificates_preserve_roundoff_ties_and_require_a_finite_incumbent() {
+        let hops = [0, 2, u32::MAX];
+        let mut bounds = BergeBounds {
+            upper: 10.0,
+            arc_hops: &hops,
+            minimum_step: 0.25,
+            ..BergeBounds::default()
+        }
+        .for_domain(10);
+        assert_eq!(bounds.after_arc(HyperArcId::new(0)), 0.25);
+        assert_eq!(bounds.after_arc(HyperArcId::new(1)), 0.75);
+        assert_eq!(bounds.after_arc(HyperArcId::new(2)), f64::INFINITY);
+        assert_eq!(bounds.after_arc(HyperArcId::new(3)), 0.0);
+        assert!(!bounds.prunes(10.0));
+        assert!(!bounds.prunes(10.0_f64.next_up()));
+        assert!(bounds.prunes(11.0));
+        bounds.observe_goal(8.0);
+        assert!(bounds.prunes(9.0));
+        bounds.observe_goal(12.0);
+        assert!(
+            bounds.prunes(9.0),
+            "a worse goal must not loosen the incumbent"
+        );
+        assert!(!BergeBounds::default().for_domain(10).prunes(f64::MAX));
+        assert!(
+            !BergeBounds {
+                upper: 1.0,
+                ..BergeBounds::default()
+            }
+            .for_domain(usize::MAX)
+            .prunes(2.0)
+        );
+    }
 
     #[test]
     fn sparse_queries_reset_g_settlement_and_arc_activation() {

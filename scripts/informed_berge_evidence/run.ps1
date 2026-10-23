@@ -75,15 +75,19 @@ if (-not $SkipQuietHostGate) {
 
 Push-Location $repoRoot
 try {
-    & cargo test -p hymeko_graph --release --test informed_berge_evidence --no-run
+    $buildMessages = @(& cargo test -p hymeko_graph --release --test informed_berge_evidence --no-run --message-format=json-render-diagnostics |
+        ForEach-Object { $_ | ConvertFrom-Json })
     if ($LASTEXITCODE -ne 0) { throw "informed_berge_evidence build failed with exit $LASTEXITCODE" }
 } finally {
     Pop-Location
 }
 
-$exe = (Get-ChildItem -LiteralPath (Join-Path $targetDir 'release\deps') -Filter 'informed_berge_evidence-*.exe' |
-    Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-if (-not $exe) { throw 'compiled informed_berge_evidence executable was not found' }
+$artifacts = @($buildMessages | Where-Object {
+    $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'informed_berge_evidence' -and
+    $_.target.kind -contains 'test' -and $_.executable
+})
+if ($artifacts.Count -ne 1) { throw "Expected one informed_berge_evidence executable; got $($artifacts.Count)" }
+$exe = (Get-Item -LiteralPath $artifacts[0].executable).FullName
 $exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLowerInvariant()
 
 $processRows = [Collections.Generic.List[object]]::new()
