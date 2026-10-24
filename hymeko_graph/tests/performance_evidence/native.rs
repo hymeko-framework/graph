@@ -23,6 +23,9 @@ use std::{
 
 #[path = "native/library.rs"]
 mod library;
+#[cfg(target_os = "linux")]
+#[path = "native/memory.rs"]
+mod memory;
 
 #[derive(Clone, Copy)]
 enum Operation {

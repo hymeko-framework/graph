@@ -81,6 +81,33 @@ class EvidenceContract(unittest.TestCase):
         self.assertEqual({c.test for c in selected if c.suite == "algorithm"},
                          {"native::native_cell", "ranking::ranking_cell"})
 
+    def test_external_ranking_matrix_keeps_native_controls_and_all_numberings(self):
+        cells=Cell.select('external_ranking')
+        self.assertEqual(len(cells),48)
+        self.assertEqual(len({c.workload for c in cells}),8)
+        selected=Cell.select('external_ranking',workloads=['hub32_1m@17'],
+                             subjects=['xgi-pagerank-first','rank_hymeko','rank_hypergraphz'])
+        self.assertEqual(len(selected),3)
+        self.assertEqual(selected[0].environment(1)['HYMEKO_EXTERNAL_BENCH'],'1')
+        with self.assertRaises(ValueError):Cell.select('external_ranking',workloads=['steiner255'])
+
+    def test_external_ranking_requires_full_residual_and_composition_attribution(self):
+        cell=dict(subject='xgi-pagerank-first',checksum='verified',threads='1',warmups='2',nodes='5')
+        records={'INPUT':[dict(construction_timed='false',cache_policy='first',metric_scope='full_rank',fixture_sha256='a'*64)],
+                 'EXTERNAL':[dict(backend='xgi',operation='pagerank',mode='first',full_result='true',checksum='verified',
+                    version='0.10.2',python='3.12.3',interface='python_api',completed_isolates='0',declared_isolates='2',
+                    native_nodes='5',implementation_sha256='b'*64,native_pagerank='composed_scipy_gmres',query_strategy='factorized')],
+                 'EXTERNAL_RANK':[dict(solver='scipy_gmres',solver_version='1.18.1',flow='undirected',weights='unit',
+                    self_return='true',personalization='uniform',converged='true',score_hash='verified',composition='factorized',
+                    damping='.85',tolerance='1e-10',residual_bound='1e-12',reference_l1='1e-12',mass='1',
+                    max_iterations='200',iterations='8',matvecs='10')]}
+        Evidence.verify_external(records,cell)
+        for key,value in [('solver','native'),('self_return','false'),('converged','false'),('score_hash','wrong'),
+                          ('residual_bound','nan'),('residual_bound','1e-8'),('reference_l1','1e-8'),('mass','0.9'),
+                          ('iterations','201'),('composition','native')]:
+            invalid=copy.deepcopy(records);invalid['EXTERNAL_RANK'][0][key]=value
+            with self.subTest(field=key),self.assertRaises(ValueError):Evidence.verify_external(invalid,cell)
+
     def test_external_contract_rejects_unverified_domain_and_cache_drift(self):
         source = self.fixture().replace("EVIDENCE_CELL\t", "EVIDENCE_CELL\tsection=external_graph\tsubject=hypernetx-components-cold\tthreads=1\twarmups=2\trepetitions=1\tnodes=5\t")
         source += "\nEVIDENCE_INPUT\tconstruction_timed=false\tcache_policy=cold\tmetric_scope=first_query\tfixture_sha256=" + "a"*64

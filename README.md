@@ -82,6 +82,25 @@ normal tests. Local unpublished revision sets may be checked through
 See `reports/2026-10-17-pagerank/report.pdf` for exact semantics, tested cases,
 measurement boundaries and the shared archive receipt.
 
+The same controller also provides `--suite external_ranking` and Linux-only
+`--suite memory`. External PageRank combines each framework's native incidence
+export with the pinned SciPy GMRES solver; these rows are explicitly composed
+workflows. Full-vector and independent residual checks preserve the canonical
+node domain, isolates and duplicate-hyperedge multiplicity.
+
+For isolated memory evidence, `MemoryEvidence.split(source, destination)` in
+`scripts/performance_evidence/memory.py` splits an existing canonical export into
+one JSON and compact binary input per case. Pass the resulting `manifest.json`
+as the controller's `--external-input`, together with the native evidence binary,
+native library and pinned external Python environment. Each cell owns one
+framework and releases fixture/oracle data after graph construction. Runtime,
+input, retained graph, preparation and solve RSS are reported separately; Linux
+phase peaks reset via `clear_refs=5`. Verification runs in the controller after
+the child exits. Measurement requires the explicit `HYMEKO_MEMORY_BENCH=1` gate;
+normal tests never run it. RSS includes allocator-retained pages and is not an
+intrinsic live-object byte count. The five-process control and PDF are in
+`reports/2026-10-24-isolated-memory/`.
+
 Signed edge-list tools share `signed_graph::{Loader, SignedEdgeListLoader}`.
 `load` accepts a buffered stream; `load_path` uses the same implementation for a
 file. Compatibility rules preserve the former example loaders' malformed-row and

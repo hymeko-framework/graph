@@ -7,7 +7,7 @@ This is explicitly a composed workflow, not four native weighted TSP engines.
 from dataclasses import dataclass
 import math
 import networkx as nx
-from external import BACKENDS, HyperNetXBackend, CanonicalCase
+from external import ComposedBackend, HyperNetXBackend, CanonicalCase
 
 
 class RoutingHyperNetX(HyperNetXBackend):
@@ -24,22 +24,14 @@ class Route:
     cost: float
 
 
-class RoutingBackend:
+class RoutingBackend(ComposedBackend):
     def __init__(self, case, backend):
-        self.case = case
-        self.native = (RoutingHyperNetX if backend == "hypernetx" else BACKENDS[backend])(case)
-        self.name = backend
-        self.version = self.native.version
-        self.completed_isolates = self.native.completed_isolates
+        super().__init__(case, backend, RoutingHyperNetX if backend == "hypernetx" else None)
         self.first = None
         if len(case.data["costs"]) != len(case.edges) or any(not math.isfinite(c) or c < 0 for c in case.data["costs"]):
             raise ValueError("invalid symmetric traversal weights")
         if len({tuple(sorted(e)) for e in case.edges}) != len(case.edges):
             raise ValueError("this composed input adapter requires unique hyperedges")
-
-    def nodes(self): return self.native.nodes()
-    def edge_count(self): return self.native.edge_count()
-    def implementation_hash(self): return self.native.implementation_hash()
 
     def projection(self):
         native = self.native.graph

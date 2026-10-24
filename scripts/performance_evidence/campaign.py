@@ -79,7 +79,9 @@ ASSISTED_SUBJECTS = ("dijkstra", "astar", "assisted", "prepare", "first_dijkstra
 ROUTING_WORKLOADS = ASSISTED_WORKLOADS + ("tour16",)
 SCALING_WORKLOADS = ("grid512_d511", "map256", "transport256_off", "tour24", "tour32", "tour64", "tour64_corridor")
 EXTERNAL_FRAMEWORKS = ("hypernetx", "xgi", "hypergraphx", "reticula")
-EXTERNAL_OPERATIONS = ("components", "reachable", "distance", "path", "astarpath", "unitpath", "tour")
+EXTERNAL_OPERATIONS = ("components", "reachable", "distance", "path", "astarpath", "unitpath", "tour", "pagerank")
+RANKING_WORKLOADS = tuple(w + suffix for w in ("chain65k","rank2_1m","hub32_1m","components8_1m")
+                         for suffix in ("","@17"))
 TRAVERSAL_SUBJECTS = ("reachable", "dual_reachable", "berge_path", "dijkstra",
                       "generate_ir", "incidence_index", "levi", "s_components2")
 
@@ -119,6 +121,8 @@ class Cell:
             result.update({"HYMEKO_EXTERNAL_BENCH": "1", "RAYON_NUM_THREADS": "1",
                            "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1",
                            "MKL_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"})
+        if self.test in {"memory_cell", "native::memory::memory_cell"}:
+            result.update({"HYMEKO_MEMORY_BENCH": "1", "RAYON_NUM_THREADS": "1"})
         return result
 
     @staticmethod
@@ -152,8 +156,8 @@ class Cell:
     def matrix(suite: str = "graph", phases: list[str] | None = None,
                workloads: list[str] | None = None) -> list[Cell]:
         if workloads is not None and (
-            suite not in {"comparison", "traversal", "external", "assisted", "routing", "routing_unit", "routing_scale"} or not workloads or len(set(workloads)) != len(workloads)
-            or not set(workloads) <= set(SCALING_WORKLOADS if suite=="routing_scale" else ("grid200_d80",) if suite=="routing_unit" else ROUTING_WORKLOADS if suite=="routing" else ASSISTED_WORKLOADS if suite=="assisted" else COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
+            suite not in {"comparison", "traversal", "external", "external_ranking", "memory", "assisted", "routing", "routing_unit", "routing_scale"} or not workloads or len(set(workloads)) != len(workloads)
+            or not set(workloads) <= set(RANKING_WORKLOADS if suite in {"external_ranking", "memory"} else SCALING_WORKLOADS if suite=="routing_scale" else ("grid200_d80",) if suite=="routing_unit" else ROUTING_WORKLOADS if suite=="routing" else ASSISTED_WORKLOADS if suite=="assisted" else COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
         ):
             raise ValueError("workloads must be nonempty unique names from the comparison/traversal catalog")
         if suite == "assisted":
@@ -174,6 +178,17 @@ class Cell:
             return cells
         if suite == "routing_unit":
             return [Cell("external","external_cell","grid200_d80",f"{b}-unitpath-first") for b in EXTERNAL_FRAMEWORKS]
+        if suite == "memory":
+            selected = workloads or RANKING_WORKLOADS
+            return ([Cell("external", "memory_cell", w, b) for w in selected for b in EXTERNAL_FRAMEWORKS]
+                    + [Cell("algorithm", "native::memory::memory_cell", w, b)
+                       for w in selected for b in ("hymeko", "hypergraphz")])
+        if suite == "external_ranking":
+            selected = workloads or RANKING_WORKLOADS
+            return ([Cell("external","external_cell",w,f"{b}-pagerank-first")
+                     for w in selected for b in EXTERNAL_FRAMEWORKS]
+                    + [Cell("algorithm","native::native_cell",w,s)
+                       for w in selected for s in ("rank_hymeko","rank_hypergraphz")])
         if suite == "external":
             selected = workloads or ["chain65k", "hub32_1m", "components8_1m", *GENERATED_WORKLOADS]
             foreign = [Cell("external", "external_cell", w, f"{backend}-{operation}-{mode}")
@@ -423,6 +438,22 @@ class Evidence:
         completed = int(external["completed_isolates"])
         if not 0 <= completed <= int(external["declared_isolates"]) <= nodes or int(external["native_nodes"]) + completed != nodes:
             raise ValueError("external isolate/domain mismatch")
+        if operation == "pagerank":
+            rank = Evidence.one(records, "EXTERNAL_RANK")
+            if (mode != "first" or rank.get("solver") != "scipy_gmres" or not rank.get("solver_version")
+                    or rank.get("flow") != "undirected" or rank.get("weights") != "unit"
+                    or rank.get("self_return") != "true" or rank.get("personalization") != "uniform"
+                    or rank.get("converged") != "true" or rank.get("score_hash") != cell["checksum"]
+                    or external.get("native_pagerank") != "composed_scipy_gmres"
+                    or rank.get("composition") != external.get("query_strategy")):
+                raise ValueError("external ranking attribution/semantics mismatch")
+            numbers = [float(rank[k]) for k in ("damping","tolerance","residual_bound","reference_l1","mass")]
+            if (not all(math.isfinite(v) for v in numbers) or numbers[0] != .85 or numbers[1] != 1e-10
+                    or not 0 <= numbers[2] <= 1.01e-10 or not 0 <= numbers[3] <= 2.01e-10
+                    or abs(numbers[4] - (1 if nodes else 0)) > 1e-10
+                    or int(rank["max_iterations"]) != 200 or not 0 <= int(rank["iterations"]) <= 200
+                    or int(rank["matvecs"]) < 0):
+                raise ValueError("external ranking error/convergence contract drift")
 
     @staticmethod
     def parse(output: str) -> dict[str, list[dict[str, str]]]:
@@ -437,6 +468,10 @@ class Evidence:
         if len(cells) != 1:
             raise ValueError(f"expected one CELL, got {len(cells)}")
         cell = cells[0]
+        if cell.get("section") == "memory":
+            from memory import MemoryEvidence
+            MemoryEvidence.verify(records)
+            return records
         samples = records.get("SAMPLE", [])
         if cell["status"] == "NA":
             if samples or not cell.get("reason"):
@@ -524,23 +559,32 @@ class ProcessRunner:
     def __init__(self, args: argparse.Namespace):
         self.args = args
         self.binaries = {}
-        if args.suite not in {"ranking", "comparison", "traversal", "external", "routing_unit"}:
+        if args.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "memory", "routing_unit"}:
             self.binaries["informed"] = Path(args.informed).resolve()
         if args.suite in {"graph", "ranking", "comparison", "traversal"}:
             self.binaries["algorithm"] = Path(args.algorithm).resolve()
-        if args.suite in {"external", "routing", "routing_unit", "routing_scale"}:
+        if args.suite in {"external", "external_ranking", "memory", "routing", "routing_unit", "routing_scale"}:
             # Preserve the venv symlink: resolving it selects system Python and
             # silently discards the pinned framework environment on Linux.
             self.binaries["external"] = Path(args.external_python).absolute()
             if getattr(args, "algorithm", None):
                 self.binaries["algorithm"] = Path(args.algorithm).resolve()
         self.external_files = {}
-        if args.suite in {"external", "routing", "routing_unit", "routing_scale"}:
+        if args.suite in {"external", "external_ranking", "memory", "routing", "routing_unit", "routing_scale"}:
             self.external_files = {"external_input": Path(args.external_input).resolve(),
                                    "external_client": Path(__file__).with_name("external.py"),
                                    "external_tests": Path(__file__).with_name("test_external.py"),
                                    "external_lock": Path(__file__).with_name("external-requirements.txt")}
             self.external_files["routing_client"] = Path(__file__).with_name("routing.py")
+            self.external_files["ranking_client"] = Path(__file__).with_name("ranking.py")
+            self.external_files["ranking_tests"] = Path(__file__).with_name("test_ranking.py")
+        if args.suite == "memory":
+            self.external_files["memory_client"] = Path(__file__).with_name("memory.py")
+            self.external_files["memory_tests"] = Path(__file__).with_name("test_memory.py")
+            directory = Path(args.external_input).resolve().parent
+            for path in sorted(directory.glob("*")):
+                if path.is_file():
+                    self.external_files["memory_input_" + path.name] = path
         self.external_hashes = {key: hashlib.sha256(path.read_bytes()).hexdigest() for key,path in self.external_files.items()}
         self.native_library = Path(args.native_library).resolve() if getattr(args, "native_library", None) else None
         self.native_sha = hashlib.sha256(self.native_library.read_bytes()).hexdigest() if self.native_library else None
@@ -650,9 +694,13 @@ class ProcessRunner:
             environment = environment | {"HYMEKO_NATIVE_LIBRARY": str(self.native_library)}
         command = [str(binary), *arguments]
         if suite == "external":
-            command = [str(binary), str(self.external_files["external_client"]), *arguments]
+            command = [str(binary), str(self.external_files["memory_client" if self.args.suite == "memory" else "external_client"]), *arguments]
             environment = environment | {"HYMEKO_EXTERNAL_INPUT": str(self.external_files["external_input"]),
                 "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"}
+        if self.args.suite == "memory":
+            environment = environment | {
+                "HYMEKO_MEMORY_INPUT": str(Path(self.args.external_input).resolve().parent),
+                "HYMEKO_MEMORY_SCORES": str(log.with_suffix(".scores"))}
         cpus = self.cpu_set()
         if cpus is not None and self.args.platform == "native":
             # Apply affinity before the Rust test harness or worker pool creates
@@ -903,7 +951,8 @@ class Campaign:
             "os": platform.platform(),
             "cpu_count": os.cpu_count(),
             "python": platform.python_version(),
-            "metric_scope": "iteration batch means, not request tails",
+            "metric_scope": ("phase resident RSS and reset VmHWM; single framework; controller verification"
+                             if self.args.suite == "memory" else "iteration batch means, not request tails"),
             "runtime": {
                 "image": self.args.image if self.args.platform == "arm64" else None,
                 "emulated": self.args.platform == "arm64",
@@ -944,7 +993,9 @@ class Campaign:
             print(f"correctness {suite}", flush=True)
             log = self.output / f"correctness-{suite}.log"
             observation = self.runner.invoke(
-                suite, ["--test-threads=1"], {"RAYON_NUM_THREADS": "4"}, log
+                suite, (["native::memory::single_input_roundtrip_rejects_corruption_and_uses_canonical_builder", "--exact", "--test-threads=1"]
+                        if self.args.suite == "memory" and suite == "algorithm" else ["--test-threads=1"]),
+                {"RAYON_NUM_THREADS": "4"}, log
             )
             result["correctness"].append(
                 {"suite": suite, "log": log.name, **observation}
@@ -986,6 +1037,11 @@ class Campaign:
                 observation["peak_rss_bytes"] = max(
                     [observation["peak_rss_bytes"], *observed_peaks]
                 )
+                if self.args.suite == "memory":
+                    from memory import MemoryEvidence
+                    observation["memory_verification"] = MemoryEvidence.verify_scores(
+                        Path(self.args.external_input).resolve().parent, cell.workload,
+                        log.with_suffix(".scores"), records["MEMORY"][0]["fingerprint"])
                 checksum = records["CELL"][0]["checksum"]
                 if cell.key in previous and previous[cell.key] != checksum:
                     raise ValueError(f"cross-run checksum drift: {cell.key}")
@@ -1352,11 +1408,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--informed")
     parser.add_argument("--algorithm")
-    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal", "external", "assisted", "routing", "routing_unit", "routing_scale"), default="graph")
+    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal", "external", "external_ranking", "memory", "assisted", "routing", "routing_unit", "routing_scale"), default="graph")
     parser.add_argument("--external-python", help="isolated Python interpreter for external framework cells")
     parser.add_argument("--external-input", help="immutable canonical-IR fixture export")
     parser.add_argument("--subjects", nargs="+", help="explicit operations from the selected suite's existing matrix")
-    parser.add_argument("--workloads", nargs="+", choices=COMPARISON_WORKLOADS + GENERATED_WORKLOADS + ROUTING_WORKLOADS + SCALING_WORKLOADS,
+    parser.add_argument("--workloads", nargs="+", choices=COMPARISON_WORKLOADS + GENERATED_WORKLOADS + ROUTING_WORKLOADS + SCALING_WORKLOADS + RANKING_WORKLOADS,
                         help="explicit comparison/traversal fixtures; omitted keeps each suite's default matrix")
     parser.add_argument("--native-library", help="explicit pinned Windows native comparison adapter")
     parser.add_argument("--source-manifest", help="explicit source-byte snapshot for unpublished local source and dependency roots")
@@ -1391,10 +1447,12 @@ if __name__ == "__main__":
         parser.error("--algorithm is required for graph/ranking/comparison/traversal suites")
     if arguments.suite == "comparison" and (arguments.platform not in {"windows", "native"} or not arguments.native_library):
         parser.error("comparison requires native Windows/Linux and an explicit --native-library")
-    if arguments.suite in {"external", "routing", "routing_unit", "routing_scale"} and (arguments.platform not in {"windows", "native"} or not arguments.external_python or not arguments.external_input):
+    if arguments.suite in {"external", "external_ranking", "memory", "routing", "routing_unit", "routing_scale"} and (arguments.platform not in {"windows", "native"} or not arguments.external_python or not arguments.external_input):
         parser.error("external requires Windows/Linux, --external-python and --external-input")
-    if arguments.suite not in {"ranking", "comparison", "traversal", "external", "routing_unit"} and not arguments.informed:
+    if arguments.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "memory", "routing_unit"} and not arguments.informed:
         parser.error("--informed is required for graph/parsing suites")
+    if arguments.suite == "memory" and arguments.platform != "native":
+        parser.error("isolated phase memory currently requires native Linux")
     if arguments.source_manifest and arguments.source_ref:
         parser.error("choose an exact source ref or an unpublished source manifest")
     if arguments.cpu is not None and not 0 <= arguments.cpu < (os.cpu_count() or 1):
@@ -1403,10 +1461,10 @@ if __name__ == "__main__":
         parser.error("positive --runs and an ARM64 --qemu path are required")
     try:
         selected = Cell.select(arguments.suite, arguments.phases, arguments.subjects, arguments.smoke, arguments.workloads)
-        if arguments.suite == "external":
+        if arguments.suite in {"external", "external_ranking", "memory"}:
             if any(c.suite == "algorithm" for c in selected) and not arguments.algorithm:
                 parser.error("selected native baselines require --algorithm")
-            if any(c.test == "native::native_cell" for c in selected) and not arguments.native_library:
+            if any(c.test in {"native::native_cell", "native::memory::memory_cell"} for c in selected) and not arguments.native_library:
                 parser.error("selected Hypergraphz/native parity cells require --native-library")
     except ValueError as error:
         parser.error(str(error))

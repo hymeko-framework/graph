@@ -5,3 +5,9 @@ flowchart LR
     Adapters --> Validate[Full partition or rank-vector/residual verification]
     Validate --> Timings[Explicitly authorized bounded measurements]
     Timings --> Report[Raw samples, provenance and PDF]
+    Export --> Single[One immutable case per input file]
+    Single --> Isolated[One framework per fresh process]
+    Guard --> Isolated
+    Isolated --> Memory[Runtime / graph / preparation / solve RSS and phase peaks]
+    Memory --> Oracle[Full-vector verification after child exit]
+    Oracle --> Report

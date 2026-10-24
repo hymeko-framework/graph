@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 679 public symbol(s).**
+**8 package(s), 704 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -83,6 +83,7 @@ _No public symbols._
 - `BergeIncidence` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BergePath` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BergeStep` — `hymeko_graph/src/direct_ir/traversal.rs`
+- `BergeTour` — `hymeko_graph/src/direct_ir/tour.rs`
 - `BfsScratch` — `hymeko_graph/src/traversal.rs`
 - `BipartiteOnlyPruner` — `hymeko_graph/src/balance.rs`
 - `BuildOpts` — `hymeko_graph/src/incidence.rs`
@@ -93,6 +94,7 @@ _No public symbols._
 - `CellLeviSession` — `hymeko_graph/src/matroid/cell.rs`
 - `CellRank` — `hymeko_graph/src/cell_topology.rs`
 - `CellTopology` — `hymeko_graph/src/cell_topology.rs`
+- `Christofides` — `hymeko_graph/src/direct_ir/tour.rs`
 - `CliffordFIR` — `hymeko_graph/src/spine.rs`
 - `ColorCodingSampler` — `hymeko_graph/src/color_coding.rs`
 - `CommunityAxiomPruner` — `hymeko_graph/src/community.rs`
@@ -172,6 +174,7 @@ _No public symbols._
 - `TopKBuilder` — `hymeko_graph/src/topk_cycles.rs`
 - `TopKCyclesBatch` — `hymeko_graph/src/topk_cycles.rs`
 - `TopKWalksBatch` — `hymeko_graph/src/topk_walks.rs`
+- `TourLimits` — `hymeko_graph/src/direct_ir/tour.rs`
 - `TraversalWorkspace` — `hymeko_graph/src/direct_ir/workspace.rs`
 - `TriangleFilter` — `hymeko_graph/src/vertex_filter.rs`
 - `TupleEnumeration` — `hymeko_graph/src/signed_tuples.rs`
@@ -210,6 +213,7 @@ _No public symbols._
 - `Sign` — `hymeko_graph/src/signed_graph.rs`
 - `SignedTupleFamily` — `hymeko_graph/src/signed_tuples.rs`
 - `Sink` — `hymeko_graph/src/unsigned_cycles/sink.rs`
+- `TourError` — `hymeko_graph/src/direct_ir/tour.rs`
 
 ### functions
 
@@ -491,6 +495,7 @@ _No public symbols._
 - `scales` — `hymeko_graph/src/cell_topology.rs`
 - `score` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `search` — `hymeko_graph/src/direct_ir/informed/prepared.rs`
+- `search_with_heuristic` — `hymeko_graph/src/direct_ir/informed/prepared.rs`
 - `set_workers` — `hymeko_graph/src/direct_ir/pagerank/workspace.rs`
 - `sign` — `hymeko_graph/src/sphf.rs`
 - `sign_product_abs` — `hymeko_graph/src/topk_cycles.rs`
@@ -498,6 +503,7 @@ _No public symbols._
 - `signs` — `hymeko_graph/src/cell_topology.rs`
 - `signs` — `hymeko_graph/src/hyper_operator.rs`
 - `snapshot` — `hymeko_graph/src/pruner.rs`
+- `solve` — `hymeko_graph/src/direct_ir/tour.rs`
 - `sort_by_score_desc` — `hymeko_graph/src/topk_cycles.rs`
 - `sources` — `hymeko_graph/src/sphf.rs`
 - `spanning_basis` — `hymeko_graph/src/matroid/cell.rs`
@@ -778,12 +784,31 @@ _No public symbols._
 
 - `Campaign` — `scripts/performance_evidence/campaign.py`
 - `CampaignSummary` — `scripts/performance_evidence/campaign.py`
+- `CanonicalCase` — `scripts/performance_evidence/external.py`
 - `Cell` — `scripts/performance_evidence/campaign.py`
+- `ComponentBackend` — `scripts/performance_evidence/external.py`
+- `ComposedBackend` — `scripts/performance_evidence/external.py`
 - `Evidence` — `scripts/performance_evidence/campaign.py`
+- `ExternalCell` — `scripts/performance_evidence/external.py`
 - `HostBusy` — `scripts/performance_evidence/host.py`
 - `HostState` — `scripts/performance_evidence/host.py`
+- `HyperNetXBackend` — `scripts/performance_evidence/external.py`
+- `HypergraphxBackend` — `scripts/performance_evidence/external.py`
+- `LinuxMemory` — `scripts/performance_evidence/memory.py`
+- `MemoryEvidence` — `scripts/performance_evidence/memory.py`
+- `MemorySummary` — `scripts/performance_evidence/memory.py`
+- `OperationLimit` — `scripts/performance_evidence/external.py`
+- `PreparedRanking` — `scripts/performance_evidence/ranking.py`
 - `ProcessRunner` — `scripts/performance_evidence/campaign.py`
+- `QueryDeadline` — `scripts/performance_evidence/external.py`
 - `QuietHostGuard` — `scripts/performance_evidence/host.py`
+- `RankResult` — `scripts/performance_evidence/ranking.py`
+- `RankingBackend` — `scripts/performance_evidence/ranking.py`
+- `ReticulaBackend` — `scripts/performance_evidence/external.py`
+- `Route` — `scripts/performance_evidence/routing.py`
+- `RoutingBackend` — `scripts/performance_evidence/routing.py`
+- `RoutingHyperNetX` — `scripts/performance_evidence/routing.py`
+- `XGIBackend` — `scripts/performance_evidence/external.py`
 
 ### functions
 
