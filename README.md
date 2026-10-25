@@ -101,6 +101,96 @@ normal tests never run it. RSS includes allocator-retained pages and is not an
 intrinsic live-object byte count. The five-process control and PDF are in
 `reports/2026-10-24-isolated-memory/`.
 
+`--suite ranking_phases` prepares a paired HyMeKo/HyperNetX+SciPy timing matrix:
+the same four graph families and both numberings, each with uninstrumented and
+phase-observed whole calls (32 cells, five processes per cell for a full control).
+The observer records incidence extraction/binding, operator preparation,
+solve/result handling and temporary disposal within each sampled call. It reuses
+the existing production entry points and numerical checks. Phase totals are
+checked against their own whole-call sample; independent phase medians must not
+be added and presented as an end-to-end time. `phase-samples.csv` retains the
+same-call observations alongside the standard whole-call summary.
+
+Observed cells require `HYMEKO_PHASE_BENCH=1` in addition to the existing explicit
+benchmark gate. Ordinary tests use fake clocks or boundary-only callbacks and
+do not run these measurements. The prepared Linux command uses the existing
+controller with `--suite ranking_phases --runs 5`, the native evidence binary,
+Hypergraphz parity library, pinned external Python environment, canonical export,
+source manifest, `--quiet-config` and `--cpu`. A one-process four-cell pilot on
+`--workloads rank2_1m` must pass before the full matrix is started. The phase
+study has release builds on Windows and Amaterasu/Linux. The Amaterasu phase
+control completed 160 fresh processes with 1,440 retained samples and 720
+same-call partitions. The solve/result stage accounts for 86--94% of HyMeKo's
+observed call time. The Windows timing control still awaits a quiet host.
+The host gate checks CPU activity, memory and interactive users. Declared Linux
+service identities match an exact UID, command and cgroup; their CPU activity
+remains subject to the same limits. Transient activity can be given a bounded
+wait without weakening admission thresholds.
+
+`PageRank::run_with_solver` now selects `PageRankSolver::PowerIteration`,
+`OrderedPowerIteration`, or `Gmres { restart: 20 }` on the same prepared model.
+`run` and the default strategy retain structural power iteration. The ordered
+power strategy retains canonical incidence order. GMRES reuses Tensor's
+`hymeko_numerics` implementation and the same structural range contraction as
+power iteration when the prepared model selects it; directed, weighted and
+unstructured inputs retain the ordered contraction. Signed Krylov vectors do not
+pass through probability clipping or mass validation during operator application.
+No transition matrix is constructed, and GMRES currently requires one worker.
+Its basis costs O(nodes * restart) additional storage. The final
+canonical probability update certifies the same global L1 bound; Tensor's L2
+stopping flag alone cannot certify convergence. The iteration budget includes
+this final update.
+
+`--suite ranking_solvers` compares the three HyMeKo strategies, Hypergraphz and
+HyperNetX+SciPy: 40 configurations across the eight existing inputs. The default
+strategy remains structural power: the five-process Amaterasu comparison, before
+structural contraction was connected to GMRES, found GMRES faster on both
+two-member and hub layouts, but slower on chains and regions. That comparison
+does not measure the subsequent structural GMRES integration. Its matched follow-up
+is summarized below; signed-vector and dense-oracle checks pass on Windows and Linux.
+For the original two-member case (65,536 nodes, 500,000 arcs), median whole-call
+times are 192.81 ms for structural power, 103.63 ms for GMRES, 248.69 ms for
+Hypergraphz, and 112.00 ms for HyperNetX+SciPy. HyperNetX's median time is 1.081
+times the GMRES time on that case; this is not a universal framework ranking.
+The solver control contains 200 fresh processes and 1,800 retained samples.
+Full-scale correctness checks also pass on both hosts. Native process RSS includes
+both parity graphs and fixture validation; it does not isolate Krylov workspace memory.
+Build identities, guarded pilot commands, checks and the PDF are retained under
+`reports/2026-10-25-pagerank-multihost/` and the repository's Samba report archive.
+
+The structural GMRES follow-up on Amaterasu retains the same inputs and L1 target:
+
+| Input | GMRES before (ms) | GMRES with ranges (ms) | Hypergraphz (ms) | HyperNetX + SciPy (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Hub | 117.58 | 88.55 | 181.06 | 76.16 |
+| Hub, relabeled | 162.20 | 97.75 | 220.19 | 102.23 |
+| Eight regions | 133.47 | 90.14 | 166.36 | 100.71 |
+| Eight regions, relabeled | 184.19 | 101.93 | 210.82 | 140.05 |
+
+These are medians of five process medians: 100 fresh control processes and 900
+retained batches, including the separately reported default-power controls.
+All cases have 65,536 nodes, 31,250 hyperarcs and one million incidences. Reusing
+the shared range contraction improves GMRES by 1.33--1.81 times, with unchanged
+22/25 step counts. GMRES has a lower median than Hypergraphz in four cases and
+HyperNetX+SciPy in three; the original hub remains faster with HyperNetX+SciPy.
+Two CPU profiles confirm range execution and retain substantial GMRES/vector
+cost. This does not establish a global solver default. Raw data, quartiles,
+profiles, exact source/binary identities and the two-page PDF are in
+`reports/2026-10-25-pagerank-multihost/structural-control/` and the Samba archive.
+
+The workspace follow-up (25 October) makes PageRank retain Tensor's shared
+`GmresWorkspace`, its right-hand side and output buffers. It passes an absolute
+L2 target to avoid a duplicate right-hand-side norm; the final canonical L1
+certificate is unchanged. A warm GMRES call allocates no storage in the focused
+structured/directed checks. The workspace retains its basis capacity; this is
+not a lower-RSS or newly measured speed claim.
+
+The manifest and lockfile pin the published Tensor provider revision; no sibling
+checkout override is required. Mathematical background is in the Tensor
+repository's `docs/gmres/mathematical-summary.pdf`, with its LaTeX source beside
+it. Detailed validation evidence is retained in Tensor's
+`reports/2026-10-25-gmres-workspace/` and the Samba archive.
+
 Signed edge-list tools share `signed_graph::{Loader, SignedEdgeListLoader}`.
 `load` accepts a buffered stream; `load_path` uses the same implementation for a
 file. Compatibility rules preserve the former example loaders' malformed-row and

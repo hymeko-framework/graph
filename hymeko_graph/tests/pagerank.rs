@@ -12,8 +12,8 @@ use hymeko::ir::incidence::{IncidenceDomain, PreparedIr, build_incidence_index};
 use hymeko::ir::ir::{IncidenceSign, Ir, IrBuilder, PortDirection, ReferenceDraft, ValueR};
 use hymeko_graph::rand_lcg::Lcg;
 use hymeko_graph::{
-    PageRank, PageRankConfig, PageRankError, PageRankModel, PageRankWorkspace, RankFlow,
-    RankWeights, TraversalWorkspace, connected_components,
+    PageRank, PageRankConfig, PageRankError, PageRankModel, PageRankSolver, PageRankWorkspace,
+    RankFlow, RankWeights, TraversalWorkspace, connected_components,
 };
 use support::{Case, Fixture, Membership};
 
@@ -203,7 +203,227 @@ impl DenseOracle {
 }
 
 struct Verification;
+#[test]
+fn krylov_matches_dense_oracle_for_routes_weights_duplicates_and_dangling_nodes() {
+    let mut workspace = PageRankWorkspace::new();
+    let config = PageRankConfig {
+        tolerance: 1e-12,
+        ..Default::default()
+    };
+    for seed in 0..24 {
+        let mut rng = Lcg::new(seed);
+        let mut case = Case::unsigned(9, &[&[], &[0, 0, 1], &[1, 2, 3], &[3, 4, 5], &[5, 6], &[7]]);
+        for edge in &mut case.arcs {
+            for reference in edge {
+                reference.sign = if rng.next_in_range(2) == 0 {
+                    IncidenceSign::Minus
+                } else {
+                    IncidenceSign::Plus
+                };
+                reference.atom.direction = if rng.next_in_range(2) == 0 {
+                    PortDirection::In
+                } else {
+                    PortDirection::Out
+                };
+                reference.atom.weights = Some(vec![ValueR::Num(rng.next_in_range(13) as f64)]);
+            }
+        }
+        let p: Vec<_> = (0..9)
+            .map(|i| if i == seed % 9 { 3.0 } else { 1.0 })
+            .collect();
+        let ir = case.clone().build().unwrap();
+        for flow in [
+            RankFlow::Undirected,
+            RankFlow::MinusToPlus,
+            RankFlow::InToOut,
+        ] {
+            for weights in [RankWeights::Unit, RankWeights::Component(0)] {
+                let model = PageRankModel { flow, weights };
+                let rank = PageRank::build(&ir, model).unwrap();
+                let expected = DenseOracle::solve(&case, model, config.damping, &p);
+                let result = rank
+                    .run_with_solver(
+                        config,
+                        &mut workspace,
+                        Some(&p),
+                        PageRankSolver::Gmres { restart: 9 },
+                    )
+                    .unwrap();
+                assert!(
+                    result.progress.converged,
+                    "{seed}, {model:?}: {:?}",
+                    result.progress
+                );
+                Verification::scores(
+                    result.scores,
+                    &expected,
+                    result.progress.error_bound_l1 + 3e-14,
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn krylov_budget_degenerate_inputs_restart_and_workspace_reuse_are_explicit() {
+    let mut ws = PageRankWorkspace::new();
+    let gmres = PageRankSolver::Gmres { restart: 20 };
+    let config = PageRankConfig::default();
+    for case in [
+        Case::unsigned(0, &[]),
+        Case::unsigned(3, &[]),
+        Case::unsigned(3, &[&[0, 1], &[1, 2]]),
+    ] {
+        let ir = case.build().unwrap();
+        let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+        let expected = rank.run(config, &mut ws, None).unwrap().scores.to_vec();
+        let result = rank
+            .run_with_solver(config, &mut ws, None, PageRankSolver::default())
+            .unwrap();
+        assert_eq!(result.scores, expected);
+        let result = rank.run_with_solver(config, &mut ws, None, gmres).unwrap();
+        assert!(result.progress.converged);
+        Verification::scores(result.scores, &expected, 1e-10);
+        let zero = rank
+            .run_with_solver(
+                PageRankConfig {
+                    damping: 0.0,
+                    ..config
+                },
+                &mut ws,
+                None,
+                gmres,
+            )
+            .unwrap();
+        assert_eq!(zero.progress.iterations, 0);
+        assert!(zero.progress.converged);
+    }
+    let ir = Case::unsigned(5, &[&[0, 1], &[1, 2], &[2, 3]])
+        .build()
+        .unwrap();
+    let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+    let p = [1.0, 0.0, 0.0, 0.0, 0.0];
+    let one = PageRankConfig {
+        max_iterations: 1,
+        tolerance: 1e-15,
+        ..config
+    };
+    let power = rank.run(one, &mut ws, Some(&p)).unwrap().scores.to_vec();
+    let limited = rank.run_with_solver(one, &mut ws, Some(&p), gmres).unwrap();
+    assert_eq!(limited.scores, power);
+    assert_eq!(limited.progress.iterations, 1);
+    assert!(!limited.progress.converged);
+    assert!(matches!(
+        rank.run_with_solver(config, &mut ws, None, PageRankSolver::Gmres { restart: 0 }),
+        Err(PageRankError::InvalidConfig)
+    ));
+    assert!(matches!(
+        rank.run_with_solver(
+            PageRankConfig {
+                damping: 1.0,
+                ..config
+            },
+            &mut ws,
+            None,
+            gmres
+        ),
+        Err(PageRankError::InvalidConfig)
+    ));
+    assert!(matches!(
+        rank.run_with_solver(config, &mut ws, Some(&[0.0; 5]), gmres),
+        Err(PageRankError::InvalidPersonalization)
+    ));
+    ws.set_workers(2).unwrap();
+    assert!(matches!(
+        rank.run_with_solver(config, &mut ws, None, gmres),
+        Err(PageRankError::InvalidWorkers { workers: 2 })
+    ));
+    ws.set_workers(1).unwrap();
+    let restarted = rank
+        .run_with_solver(
+            config,
+            &mut ws,
+            Some(&p),
+            PageRankSolver::Gmres { restart: 1 },
+        )
+        .unwrap();
+    assert!(restarted.progress.converged);
+}
+
 impl Verification {
+    fn krylov(rank: &PageRank<'_>, expected: &[f64], teleport: &[f64]) {
+        let mut workspace = PageRankWorkspace::new();
+        let config = PageRankConfig {
+            tolerance: 1e-12,
+            ..Default::default()
+        };
+        for restart in [1, 8, 20] {
+            let solver = PageRankSolver::Gmres { restart };
+            let result = rank
+                .run_with_solver(config, &mut workspace, Some(teleport), solver)
+                .unwrap();
+            assert!(
+                result.progress.converged,
+                "{restart}: {:?}",
+                result.progress
+            );
+            assert!(result.progress.iterations <= config.max_iterations);
+            Self::scores(
+                result.scores,
+                expected,
+                result.progress.error_bound_l1 + 2e-13,
+            );
+            let bits: Vec<_> = result.scores.iter().map(|v| v.to_bits()).collect();
+            let repeated = rank
+                .run_with_solver(config, &mut workspace, Some(teleport), solver)
+                .unwrap();
+            assert_eq!(
+                bits,
+                repeated
+                    .scores
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>()
+            );
+        }
+        for max_iterations in [1, 2, 7] {
+            let result = rank
+                .run_with_solver(
+                    PageRankConfig {
+                        max_iterations,
+                        ..config
+                    },
+                    &mut workspace,
+                    Some(teleport),
+                    PageRankSolver::Gmres { restart: 20 },
+                )
+                .unwrap();
+            assert!(result.progress.iterations <= max_iterations);
+            Self::scores(
+                result.scores,
+                expected,
+                result.progress.error_bound_l1 + 2e-13,
+            );
+            assert_eq!(
+                result.progress.converged,
+                result.progress.error_bound_l1 <= config.tolerance
+            );
+        }
+    }
+
+    fn scores(actual: &[f64], expected: &[f64], bound: f64) {
+        assert_eq!(actual.len(), expected.len());
+        let error: f64 = actual
+            .iter()
+            .zip(expected)
+            .map(|(a, b)| (a - b).abs())
+            .sum();
+        assert!(error <= bound, "L1 error {error} exceeds {bound}");
+        assert!(actual.iter().all(|v| v.is_finite() && *v >= 0.0));
+        if !actual.is_empty() {
+            assert!((actual.iter().sum::<f64>() - 1.0).abs() < 1e-13);
+        }
+    }
     fn compare(case: &Case, model: PageRankModel, teleport: &[f64]) {
         let ir = case.clone().build().unwrap();
         let rank = PageRank::build(&ir, model).unwrap();
@@ -212,6 +432,7 @@ impl Verification {
             ..Default::default()
         };
         let expected = DenseOracle::solve(case, model, config.damping, teleport);
+        Self::krylov(&rank, &expected, teleport);
         let mut workspace = PageRankWorkspace::new();
         let result = rank.run(config, &mut workspace, Some(teleport)).unwrap();
         assert!(result.progress.converged);
@@ -220,21 +441,11 @@ impl Verification {
             rank.incidence_count(),
             case.arcs.iter().map(Vec::len).sum::<usize>()
         );
-        let error: f64 = result
-            .scores
-            .iter()
-            .zip(&expected)
-            .map(|(a, b)| (a - b).abs())
-            .sum();
-        assert!(
-            error <= result.progress.error_bound_l1 + 2e-13,
-            "error {error}, bound {:?}",
-            result.progress
+        Self::scores(
+            result.scores,
+            &expected,
+            result.progress.error_bound_l1 + 2e-13,
         );
-        assert!(result.scores.iter().all(|v| v.is_finite() && *v >= 0.0));
-        if case.nodes != 0 {
-            assert!((result.scores.iter().sum::<f64>() - 1.0).abs() < 2e-13);
-        }
         assert_eq!(result.score(NodeId::new(case.nodes)), None);
         let bits: Vec<_> = result.scores.iter().map(|s| s.to_bits()).collect();
         let repeated = rank.run(config, &mut workspace, Some(teleport)).unwrap();

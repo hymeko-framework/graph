@@ -23,11 +23,12 @@ from typing import Any
 import numpy as np
 
 VERSIONS = {"hypernetx": "2.4.3", "xgi": "0.10.2", "hypergraphx": "1.8.0", "reticula": "0.13.0"}
-MODES = ("prepared", "cold", "first")
+MODES = ("prepared", "cold", "first", "profile")
 SCOPES = {
     "prepared": "prepared_native_graph_component_query_normalize_drop_reused_output",
     "cold": "fresh_native_graph_lazy_component_query_normalize_drop_build_excluded",
     "first": "resident_native_hypergraph_to_projection_weight_binding_full_route_drop",
+    "profile": "resident_native_hypergraph_rank_same_call_phase_observation",
 }
 OPERATIONS = ("components", "reachable", "distance", "path", "astarpath", "unitpath", "tour", "pagerank")
 
@@ -315,13 +316,17 @@ class ExternalCell:
             raise ValueError("unknown cache policy")
         if operation not in OPERATIONS:
             raise ValueError("unknown operation")
-        if (operation in {"path","astarpath","unitpath","tour","pagerank"}) != (mode == "first"):
+        if mode == "profile" and operation != "pagerank":
+            raise ValueError("phase observation is restricted to PageRank")
+        if (operation in {"path","astarpath","unitpath","tour","pagerank"}) != (mode in {"first", "profile"}):
             raise ValueError("full routes require the first-result boundary")
         self.case, self.backend, self.mode = case, backend, mode
         self.operation = operation
         self.checksum = case.checksums.get(operation, "pending_route_verification")
 
     def run(self) -> None:
+        if self.mode == "profile" and os.environ.get("HYMEKO_PHASE_BENCH") != "1":
+            raise SystemExit("phase measurement disabled; explicit HYMEKO_PHASE_BENCH=1 required")
         scope = SCOPES[self.mode].replace("component", self.operation)
         if self.operation == "pagerank":
             scope = "resident_native_hypergraph_incidence_export_normalize_scipy_gmres_full_vector_drop"
@@ -340,8 +345,8 @@ class ExternalCell:
         routing = self.operation in {"path", "astarpath", "unitpath", "tour"}
         ranking = self.operation == "pagerank"
         if ranking:
-            from ranking import RankingBackend
-            adapter = RankingBackend(case,self.backend)
+            from ranking import RankingBackend, PhaseObserver
+            adapter = RankingBackend(case,self.backend,PhaseObserver() if mode == "profile" else None)
         elif routing:
             from routing import RoutingBackend
             adapter = RoutingBackend(case,self.backend)
@@ -402,6 +407,8 @@ class ExternalCell:
             self.emit_na("predicted_process_budget_exceeds_160_seconds")
             return
         observations = []
+        phase_observations = []
+        observer = getattr(adapter, "observer", None)
         for ordinal in range(-2, 9):
             if self.operation == "unitpath":
                 # Fresh native input outside timing prevents a cached HNX
@@ -409,6 +416,8 @@ class ExternalCell:
                 adapter = RoutingBackend(case,self.backend)
             elif mode == "cold":
                 adapter = BACKENDS[self.backend](case)
+            if observer is not None:
+                observer.reset()
             with QueryDeadline():
                 cpu_start = time.process_time_ns()
                 wall_start = time.perf_counter_ns()
@@ -416,6 +425,8 @@ class ExternalCell:
                     count = adapter.query(self.operation, materialize=False)
                 wall = (time.perf_counter_ns()-wall_start)/1000/repetitions
                 cpu = (time.process_time_ns()-cpu_start)/1000/repetitions
+            if observer is not None and ordinal >= 0:
+                phase_observations.append((ordinal, observer.means_us(repetitions)))
             with QueryDeadline():
                 checked = adapter.query(self.operation)
             adapter.verify(checked, self.operation)
@@ -426,6 +437,10 @@ class ExternalCell:
                 return
             if ordinal >= 0:
                 observations.append((ordinal, wall, cpu))
+        for ordinal, phases in phase_observations:
+            self.emit("STAGE_SAMPLE", ordinal=ordinal, repetitions=repetitions,
+                      **{name:f"{value:.6f}" for name,value in phases.items()},
+                      inner_total_us=f"{sum(phases.values()):.6f}", boundary="same_call_partition")
         for ordinal, wall, cpu in observations:
             self.emit("SAMPLE", run=os.environ.get("EVIDENCE_RUN", "external"), section="external_graph",
                       subject=f"{self.backend}-{self.operation}-{mode}", workload=case.name, threads=1, ordinal=ordinal,

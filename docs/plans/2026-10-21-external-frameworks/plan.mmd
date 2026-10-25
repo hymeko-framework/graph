@@ -11,3 +11,12 @@ flowchart LR
     Isolated --> Memory[Runtime / graph / preparation / solve RSS and phase peaks]
     Memory --> Oracle[Full-vector verification after child exit]
     Oracle --> Report
+    Adapters --> Observer[Optional same-call phase observer]
+    Observer --> Partition[Incidence / preparation / solve-result / disposal]
+    Partition --> Contract[Boundary and vector-parity tests]
+    Core --> Operator[Shared ordered incidence contraction]
+    Operator --> Power[Ordered power control]
+    Operator --> Krylov[Existing Tensor GMRES]
+    Power --> Certificate[Canonical L1 certification update]
+    Krylov --> Certificate
+    Certificate --> Guard

@@ -123,6 +123,8 @@ class Cell:
                            "MKL_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"})
         if self.test in {"memory_cell", "native::memory::memory_cell"}:
             result.update({"HYMEKO_MEMORY_BENCH": "1", "RAYON_NUM_THREADS": "1"})
+        if self.subject == "rank_phases" or self.subject.endswith("-profile"):
+            result["HYMEKO_PHASE_BENCH"] = "1"
         return result
 
     @staticmethod
@@ -156,8 +158,8 @@ class Cell:
     def matrix(suite: str = "graph", phases: list[str] | None = None,
                workloads: list[str] | None = None) -> list[Cell]:
         if workloads is not None and (
-            suite not in {"comparison", "traversal", "external", "external_ranking", "memory", "assisted", "routing", "routing_unit", "routing_scale"} or not workloads or len(set(workloads)) != len(workloads)
-            or not set(workloads) <= set(RANKING_WORKLOADS if suite in {"external_ranking", "memory"} else SCALING_WORKLOADS if suite=="routing_scale" else ("grid200_d80",) if suite=="routing_unit" else ROUTING_WORKLOADS if suite=="routing" else ASSISTED_WORKLOADS if suite=="assisted" else COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
+            suite not in {"comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "assisted", "routing", "routing_unit", "routing_scale"} or not workloads or len(set(workloads)) != len(workloads)
+            or not set(workloads) <= set(RANKING_WORKLOADS if suite in {"external_ranking", "ranking_phases", "ranking_solvers", "memory"} else SCALING_WORKLOADS if suite=="routing_scale" else ("grid200_d80",) if suite=="routing_unit" else ROUTING_WORKLOADS if suite=="routing" else ASSISTED_WORKLOADS if suite=="assisted" else COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
         ):
             raise ValueError("workloads must be nonempty unique names from the comparison/traversal catalog")
         if suite == "assisted":
@@ -183,6 +185,17 @@ class Cell:
             return ([Cell("external", "memory_cell", w, b) for w in selected for b in EXTERNAL_FRAMEWORKS]
                     + [Cell("algorithm", "native::memory::memory_cell", w, b)
                        for w in selected for b in ("hymeko", "hypergraphz")])
+        if suite == "ranking_solvers":
+            selected = workloads or RANKING_WORKLOADS
+            return ([Cell("external", "external_cell", w, "hypernetx-pagerank-first") for w in selected]
+                    + [Cell("algorithm", "native::native_cell", w, subject)
+                       for w in selected for subject in ("rank_hymeko", "rank_ordered", "rank_gmres", "rank_hypergraphz")])
+        if suite == "ranking_phases":
+            selected = workloads or RANKING_WORKLOADS
+            return ([Cell("external", "external_cell", w, "hypernetx-pagerank-" + mode)
+                     for w in selected for mode in ("first", "profile")]
+                    + [Cell("algorithm", "native::native_cell", w, subject)
+                       for w in selected for subject in ("rank_hymeko", "rank_phases")])
         if suite == "external_ranking":
             selected = workloads or RANKING_WORKLOADS
             return ([Cell("external","external_cell",w,f"{b}-pagerank-first")
@@ -420,8 +433,10 @@ class Evidence:
         source = Evidence.one(records, "INPUT")
         external = Evidence.one(records, "EXTERNAL")
         backend, operation, mode = cell["subject"].split("-")
-        if backend not in EXTERNAL_FRAMEWORKS or operation not in EXTERNAL_OPERATIONS or mode not in {"prepared", "cold", "first"}:
+        if backend not in EXTERNAL_FRAMEWORKS or operation not in EXTERNAL_OPERATIONS or mode not in {"prepared", "cold", "first", "profile"}:
             raise ValueError("unknown external query")
+        if mode == "profile" and operation != "pagerank":
+            raise ValueError("phase observations require the PageRank contract")
         if external.get("backend") != backend or external.get("operation") != operation or external.get("mode") != mode:
             raise ValueError("external query identity mismatch")
         if external.get("full_result") != "true" or external.get("checksum") != cell["checksum"]:
@@ -440,7 +455,7 @@ class Evidence:
             raise ValueError("external isolate/domain mismatch")
         if operation == "pagerank":
             rank = Evidence.one(records, "EXTERNAL_RANK")
-            if (mode != "first" or rank.get("solver") != "scipy_gmres" or not rank.get("solver_version")
+            if (mode not in {"first", "profile"} or rank.get("solver") != "scipy_gmres" or not rank.get("solver_version")
                     or rank.get("flow") != "undirected" or rank.get("weights") != "unit"
                     or rank.get("self_return") != "true" or rank.get("personalization") != "uniform"
                     or rank.get("converged") != "true" or rank.get("score_hash") != cell["checksum"]
@@ -454,6 +469,30 @@ class Evidence:
                     or int(rank["max_iterations"]) != 200 or not 0 <= int(rank["iterations"]) <= 200
                     or int(rank["matvecs"]) < 0):
                 raise ValueError("external ranking error/convergence contract drift")
+
+    @staticmethod
+    def verify_stages(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        profiled = cell.get("subject") == "rank_phases" or cell.get("subject", "").endswith("-profile")
+        stages = records.get("STAGE_SAMPLE", [])
+        if not profiled:
+            if stages:
+                raise ValueError("phase observations attached to an uninstrumented control")
+            return
+        if len(stages) != 9 or {int(s["ordinal"]) for s in stages} != set(range(9)):
+            raise ValueError("missing or duplicate stage samples")
+        totals = {int(s["ordinal"]):s for s in records["SAMPLE"]}
+        for stage in stages:
+            total = totals[int(stage["ordinal"])]
+            values = [float(stage[name+"_us"]) for name in ("incidence", "preparation", "solve", "cleanup")]
+            inner = float(stage["inner_total_us"])
+            if (stage.get("boundary") != "same_call_partition"
+                    or int(stage["repetitions"]) <= 0
+                    or int(stage["repetitions"]) != int(cell["repetitions"])
+                    or int(stage["repetitions"]) != int(total["repetitions"])
+                    or not all(math.isfinite(v) and v >= 0 for v in [*values,inner])
+                    or abs(sum(values)-inner) > .00001
+                    or inner > float(total["wall_us"]) + .002):
+                raise ValueError("stage partition exceeds or differs from its same-call total")
 
     @staticmethod
     def parse(output: str) -> dict[str, list[dict[str, str]]]:
@@ -544,6 +583,7 @@ class Evidence:
                 expected = rank["score_hash"] if cell["subject"] == "solve" else inputs[0]["fingerprint"]
                 if expected != cell["checksum"]:
                     raise ValueError("ranking result/cell identity mismatch")
+        Evidence.verify_stages(records, cell)
         if cell.get("section") == "native":
             Evidence.verify_native(records, cell)
         if cell.get("section") == "traversal":
@@ -559,18 +599,18 @@ class ProcessRunner:
     def __init__(self, args: argparse.Namespace):
         self.args = args
         self.binaries = {}
-        if args.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "memory", "routing_unit"}:
+        if args.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing_unit"}:
             self.binaries["informed"] = Path(args.informed).resolve()
         if args.suite in {"graph", "ranking", "comparison", "traversal"}:
             self.binaries["algorithm"] = Path(args.algorithm).resolve()
-        if args.suite in {"external", "external_ranking", "memory", "routing", "routing_unit", "routing_scale"}:
+        if args.suite in {"external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing", "routing_unit", "routing_scale"}:
             # Preserve the venv symlink: resolving it selects system Python and
             # silently discards the pinned framework environment on Linux.
             self.binaries["external"] = Path(args.external_python).absolute()
             if getattr(args, "algorithm", None):
                 self.binaries["algorithm"] = Path(args.algorithm).resolve()
         self.external_files = {}
-        if args.suite in {"external", "external_ranking", "memory", "routing", "routing_unit", "routing_scale"}:
+        if args.suite in {"external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing", "routing_unit", "routing_scale"}:
             self.external_files = {"external_input": Path(args.external_input).resolve(),
                                    "external_client": Path(__file__).with_name("external.py"),
                                    "external_tests": Path(__file__).with_name("test_external.py"),
@@ -1086,6 +1126,20 @@ class CampaignSummary:
         self.source_commits: set[str] = set()
         self.source_manifests: set[str | None] = set()
         self.selected_cells: set[str] | None = None
+        self.stage_rows: list[dict[str, Any]] = []
+
+    @staticmethod
+    def phase_rows(platform_name: str, observation: dict[str, Any]) -> list[dict[str, Any]]:
+        records = observation["records"]
+        cell = records["CELL"][0]
+        Evidence.verify_stages(records, cell)
+        samples = {int(row["ordinal"]):row for row in records.get("SAMPLE", [])}
+        return [dict(platform=platform_name, benchmark=observation["id"],
+                     workload=cell["workload"], algorithm=cell["subject"], run=observation["run"],
+                     ordinal=int(stage["ordinal"]), repetitions=int(stage["repetitions"]),
+                     total_us=float(samples[int(stage["ordinal"])]["wall_us"]),
+                     **{key:float(stage[key]) for key in ("incidence_us", "preparation_us", "solve_us", "cleanup_us", "inner_total_us")})
+                for stage in records.get("STAGE_SAMPLE", [])]
 
     def accept(self, campaign: dict[str, Any]) -> None:
         if not campaign.get("complete") or campaign.get("smoke"):
@@ -1114,6 +1168,8 @@ class CampaignSummary:
             key = observation["id"]
             records = observation["records"]
             cell = records["CELL"][0]
+            if cell["status"] == "OK":
+                self.stage_rows.extend(self.phase_rows(campaign["platform"], observation))
             identity = {
                 k: cell[k]
                 for k in ("status", "nodes", "arcs", "incidences", "checksum")
@@ -1220,18 +1276,17 @@ class CampaignSummary:
                     "nodes": cell["nodes"], "arcs": cell["arcs"], "incidences": cell["incidences"],
                     **{key: shape.get(key, "") for key in ("arity_min", "arity_median", "arity_max", "degree_min", "degree_median", "degree_max", "isolated_nodes")},
                     "components": native.get("components", ""),
-                    "algebra_value": observations[0]["records"].get("ALGEBRA", [{}])[0].get("value", ""),
-                    "overlap_pair_work": observations[0]["records"].get("ALGEBRA", [{}])[0].get("pair_work", ""),
-                    "query_kind": query.get("kind", ""),
-                    "query_visited": query.get("visited", ""),
-                    "query_hops": query.get("hops", ""),
-                    "query_cost": query.get("cost", ""),
-                    "query_reachable": query.get("reachable", ""),
-                    "hymeko_prepared_bytes": observations[0]["records"].get("LAYOUT", [{}])[0].get("hymeko_prepared_bytes", ""),
-                    "iterations": rank.get("iterations", ""),
-                    "error_bound_l1": rank.get("error_bound_l1", ""),
-                    "rank_mass": rank.get("mass", ""),
-                    "visited_nodes": observations[0]["records"].get("REACHABLE", [{}])[0].get("visited", ""),
+                    **{column: observations[0]["records"].get(record, [{}])[0].get(field, "")
+                       for column, record, field in (
+                           ("algebra_value", "ALGEBRA", "value"),
+                           ("overlap_pair_work", "ALGEBRA", "pair_work"),
+                           ("hymeko_prepared_bytes", "LAYOUT", "hymeko_prepared_bytes"),
+                           ("visited_nodes", "REACHABLE", "visited_nodes"))},
+                    **{"query_"+field: query.get(field, "")
+                       for field in ("kind", "visited", "hops", "cost", "reachable")},
+                    **{column: rank.get(field, "") for column, field in (
+                        ("iterations", "iterations"), ("error_bound_l1", "error_bound_l1"),
+                        ("rank_mass", "mass"))},
                     "worst_batch_mean_ns": samples[-1] * 1000,
                     "checksum": cell["checksum"],
                     "peak_rss_bytes": max(peaks),
@@ -1269,10 +1324,13 @@ class CampaignSummary:
                 raise ValueError("campaign platform/path mismatch")
             campaigns.append(campaign)
             self.accept(campaign)
-        for filename, rows in (
+        tables = [
             ("platform-summary.csv", self.rows),
             ("process-resources.csv", self.resources),
-        ):
+        ]
+        if self.stage_rows:
+            tables.append(("phase-samples.csv", self.stage_rows))
+        for filename, rows in tables:
             with (self.root / filename).open(
                 "w", encoding="utf8", newline=""
             ) as stream:
@@ -1339,7 +1397,10 @@ class CampaignSummary:
             for label, key in selections
         ]
         bar_svg(
-            "PageRank to convergence: one million incidences"
+            "PageRank solver strategies on the same canonical incidence walk"
+            if campaigns[0].get("suite") == "ranking_solvers" else
+            "PageRank observed and unobserved whole-call controls"
+            if campaigns[0].get("suite") == "ranking_phases" else "PageRank to convergence: one million incidences"
             if campaigns[0].get("suite") == "ranking" else (
                 "Selected pipeline medians (ARM64, where present, is QEMU)"
                 if self.rows[0]["source_bytes"] else "Matched native PageRank API medians"
@@ -1354,7 +1415,10 @@ class CampaignSummary:
         provenance = {
             "source_commit": next(iter(self.source_commits)),
             "measurement_contract": (
-                "Matched native API calls include normalized output copying and temporary-result destruction. Rank preparation/workspace allocation is included except in the separately labeled rank_prepared cell. Component reverse indexes and graph construction are excluded. Whole-process RSS includes both resident graphs and parity verification."
+                "Resident graph to prepared operator, fresh solve workspace and complete rank result. HyMeKo compares structural power, ordered power and matrix-free GMRES; HyperNetX uses SciPy. Graph construction is excluded. Native process RSS includes both parity graphs; this is not isolated solver memory."
+                if campaigns[0].get("suite") == "ranking_solvers" else
+                "Same-call phase attribution with separate uninstrumented whole-call controls. Phase sums are checked per sample, never reconstructed by summing independent medians. Solve includes workspace, convergence and output handling; source loading and graph construction excluded."
+                if campaigns[0].get("suite") == "ranking_phases" else "Matched native API calls include normalized output copying and temporary-result destruction. Rank preparation/workspace allocation is included except in the separately labeled rank_prepared cell. Component reverse indexes and graph construction are excluded. Whole-process RSS includes both resident graphs and parity verification."
                 if campaigns[0].get("suite") == "comparison" else
                 "Separate measured phases; totals measured directly, never summed. Generation constructs fixture IR. File phases use warm OS cache. Final returned-object destruction excluded. RSS includes fixture construction and validation."
             ),
@@ -1408,7 +1472,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--informed")
     parser.add_argument("--algorithm")
-    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal", "external", "external_ranking", "memory", "assisted", "routing", "routing_unit", "routing_scale"), default="graph")
+    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "assisted", "routing", "routing_unit", "routing_scale"), default="graph")
     parser.add_argument("--external-python", help="isolated Python interpreter for external framework cells")
     parser.add_argument("--external-input", help="immutable canonical-IR fixture export")
     parser.add_argument("--subjects", nargs="+", help="explicit operations from the selected suite's existing matrix")
@@ -1434,7 +1498,7 @@ if __name__ == "__main__":
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--cpu", type=int, help="pin each measurement process to this logical CPU")
-    parser.add_argument("--quiet-config", help="explicit Linux quiet-host thresholds; blocks before each workload")
+    parser.add_argument("--quiet-config", help="explicit Windows/Linux quiet-host thresholds; blocks before each workload")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--resume", action="store_true")
     arguments = parser.parse_args()
@@ -1447,9 +1511,9 @@ if __name__ == "__main__":
         parser.error("--algorithm is required for graph/ranking/comparison/traversal suites")
     if arguments.suite == "comparison" and (arguments.platform not in {"windows", "native"} or not arguments.native_library):
         parser.error("comparison requires native Windows/Linux and an explicit --native-library")
-    if arguments.suite in {"external", "external_ranking", "memory", "routing", "routing_unit", "routing_scale"} and (arguments.platform not in {"windows", "native"} or not arguments.external_python or not arguments.external_input):
+    if arguments.suite in {"external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing", "routing_unit", "routing_scale"} and (arguments.platform not in {"windows", "native"} or not arguments.external_python or not arguments.external_input):
         parser.error("external requires Windows/Linux, --external-python and --external-input")
-    if arguments.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "memory", "routing_unit"} and not arguments.informed:
+    if arguments.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing_unit"} and not arguments.informed:
         parser.error("--informed is required for graph/parsing suites")
     if arguments.suite == "memory" and arguments.platform != "native":
         parser.error("isolated phase memory currently requires native Linux")
@@ -1461,7 +1525,7 @@ if __name__ == "__main__":
         parser.error("positive --runs and an ARM64 --qemu path are required")
     try:
         selected = Cell.select(arguments.suite, arguments.phases, arguments.subjects, arguments.smoke, arguments.workloads)
-        if arguments.suite in {"external", "external_ranking", "memory"}:
+        if arguments.suite in {"external", "external_ranking", "ranking_phases", "ranking_solvers", "memory"}:
             if any(c.suite == "algorithm" for c in selected) and not arguments.algorithm:
                 parser.error("selected native baselines require --algorithm")
             if any(c.test in {"native::native_cell", "native::memory::memory_cell"} for c in selected) and not arguments.native_library:

@@ -14,6 +14,47 @@ from typing import Any, cast
 
 class HostState:
     @staticmethod
+    def windows_admission(raw: dict[str, Any]) -> dict[str, Any]:
+        """Normalize Windows' formatted CPU counters and interactive accounts.
+
+        These counters describe the preceding WMI sampling interval, unlike the
+        explicit one-second Linux delta. The observation records that distinction.
+        """
+        active = {}
+        for row in raw["cpu"]:
+            name = "cpu" if row["Name"] == "_Total" else "cpu" + row["Name"]
+            value = float(row["PercentProcessorTime"]) / 100
+            if not 0 <= value <= 1 or name in active:
+                raise ValueError("invalid Windows CPU observation")
+            active[name] = value
+        if "cpu" not in active:
+            raise ValueError("missing Windows aggregate CPU observation")
+        available = int(raw["available_kib"]) * 1024
+        if available < 0:
+            raise ValueError("invalid Windows memory observation")
+        return {"active": active, "available_bytes": available, "human_uids": [],
+                "sessions": [str(s) for s in raw["sessions"]],
+                "session_scope": "interactive logon types 2, 10 and 11",
+                "cpu_scope": "Windows WMI preceding formatted sampling interval"}
+
+    @classmethod
+    def windows_observation(cls) -> dict[str, Any]:
+        command = (
+            "$ErrorActionPreference='Stop'; "
+            "$accounts=@(Get-CimInstance Win32_LogonSession -Filter "
+            "'LogonType=2 OR LogonType=10 OR LogonType=11' | "
+            "Get-CimAssociatedInstance -Association Win32_LoggedOnUser | "
+            "Select-Object -ExpandProperty Name -Unique); "
+            "@{cpu=@(Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor | "
+            "Select-Object Name,PercentProcessorTime); sessions=$accounts; "
+            "available_kib=(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory} "
+            "| ConvertTo-Json -Depth 4 -Compress"
+        )
+        raw = subprocess.check_output(["powershell", "-NoProfile", "-Command", command],
+                                      encoding="utf-8", timeout=30)
+        return cls.windows_admission(json.loads(raw))
+
+    @staticmethod
     def parse_cpu_stat(text: str) -> dict[str, list[int]]:
         result = {}
         for line in text.splitlines():
@@ -108,11 +149,20 @@ class QuietHostGuard:
         self.config = config
         if uid is None:
             getuid = getattr(os, "getuid", None)
-            if getuid is None:
+            if getuid is None and os.name != "nt":
                 raise OSError("quiet-host guard requires a Unix user ID")
-            uid = int(getuid())
+            uid = int(getuid()) if getuid is not None else 0
         self.uid = uid
         self.user = getpass.getuser() if user is None else user
+        for service in config.get("service_processes", []):
+            if (set(service) != {"uid", "comm", "cgroup"}
+                    or type(service["uid"]) is not int or service["uid"] < 1000
+                    or not service["comm"] or not service["cgroup"].startswith("0::/")
+                    or service["cgroup"] == "0::/"):
+                raise ValueError("service exemption requires an exact UID, command and cgroup")
+        wait = config.get("max_wait_seconds", 0)
+        if type(wait) not in {int, float} or not 0 <= wait <= 60:
+            raise ValueError("quiet-host wait must be between zero and 60 seconds")
 
     def reasons(self, observation: dict[str, Any]) -> list[str]:
         result = []
@@ -120,7 +170,7 @@ class QuietHostGuard:
             result.append("another user has processes on this host")
         for session in observation["sessions"]:
             fields = session.split()
-            if fields and fields[0] != self.user and session not in self.config.get("allowed_sessions", []):
+            if fields and fields[0].casefold() != self.user.casefold() and session not in self.config.get("allowed_sessions", []):
                 result.append("another login session is present")
         if observation["available_bytes"] < self.config.get("min_available_bytes", 32 * 1024**3):
             result.append("available memory is below the declared headroom")
@@ -132,20 +182,65 @@ class QuietHostGuard:
         return result
 
     def check(self) -> dict[str, Any]:
-        if platform.system() != "Linux":
-            raise OSError("the explicit quiet-host guard currently requires Linux")
+        deadline = time.monotonic() + self.config.get("max_wait_seconds", 0)
+        attempts = 0
+        while True:
+            observation = self.observe()
+            attempts += 1
+            reasons = self.reasons(observation)
+            if not reasons:
+                if attempts > 1:
+                    observation["admission_attempts"] = attempts
+                return observation
+            if time.monotonic() >= deadline:
+                raise HostBusy(observation, reasons)
+            # No workload is admitted during this wait. Thresholds and checks
+            # stay unchanged; a short background burst may finish on its own.
+            time.sleep(1)
+
+    def observe(self) -> dict[str, Any]:
+        if os.name == "nt":
+            return HostState.windows_observation()
+        elif platform.system() == "Linux":
+            return self.linux_observation()
+        else:
+            raise OSError("quiet-host guard requires Windows or Linux")
+
+    def process_accounts(self) -> dict[str, Any]:
+        """Classify declared service identities without exempting their CPU load.
+
+        A UID alone is never exempt: another process under the same account or a
+        replacement container must be reviewed separately. Interactive sessions
+        are independently checked even when their UID has a declared service.
+        """
+        rules = self.config.get("service_processes", [])
+        uids, services = set(), []
+        for line in subprocess.check_output(["ps", "-eo", "uid=,pid=,comm="], encoding="utf-8").splitlines():
+            uid_text, pid_text, comm = line.split(None, 2)
+            uid, pid = int(uid_text), int(pid_text)
+            if uid < 1000 or uid == 65534:
+                continue
+            candidates = [r for r in rules if r["uid"] == uid and r["comm"] == comm]
+            if candidates:
+                try:
+                    cgroup = (Path("/proc") / str(pid) / "cgroup").read_text().strip()
+                except FileNotFoundError:
+                    continue  # The observed process exited before identification.
+                identity = {"uid": uid, "comm": comm, "cgroup": cgroup}
+                if identity in candidates:
+                    services.append(dict(identity, pid=pid))
+                    continue
+            uids.add(uid)
+        return {"human_uids": sorted(uids), "service_processes": services}
+
+    def linux_observation(self) -> dict[str, Any]:
         first = HostState.linux_cpus()
         time.sleep(1)
         last = HostState.linux_cpus()
         selected = ["cpu", *(f"cpu{cpu}" for cpu in self.config["cpus"])]
         active = {cpu: HostState.active_fraction(first[cpu], last[cpu]) for cpu in selected}
-        uids = {int(uid) for uid in subprocess.check_output(["ps", "-eo", "uid="], encoding="ascii").split()}
-        observation = {
+        return {
             "sessions": HostState.sessions(),
-            "human_uids": sorted(uid for uid in uids if uid >= 1000 and uid != 65534),
+            **self.process_accounts(),
             "available_bytes": HostState.memory()["MemAvailable"], "active": active,
         }
-        reasons = self.reasons(observation)
-        if reasons:
-            raise HostBusy(observation, reasons)
-        return observation

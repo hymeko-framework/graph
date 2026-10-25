@@ -15,10 +15,42 @@ import networkx as nx
 import numpy as np
 
 from external import BACKENDS, CanonicalCase, ExternalCell, OperationLimit
-from ranking import RankingBackend
+from ranking import RankingBackend, PhaseObserver
 
 
 class RankingContract(unittest.TestCase):
+    def test_phase_observation_preserves_result_with_a_fake_clock(self):
+        import itertools
+        for name in BACKENDS:
+            case = self.case(5, [[0,1], [0,1], [1,2,3]])
+            observer = PhaseObserver(lambda: next(ticks))
+            ticks = itertools.count(0, 1000)
+            plain = RankingBackend(case, name)
+            profiled = RankingBackend(case, name, observer)
+            for _ in range(2):
+                expected, actual = plain.query(), profiled.query()
+                profiled.verify(actual)
+                self.assertEqual(actual, expected)
+                np.testing.assert_array_equal(actual.scores, expected.scores)
+            self.assertEqual(observer.means_us(2), dict(incidence_us=1.,preparation_us=1.,solve_us=1.,cleanup_us=1.))
+            observer.reset()
+            self.assertEqual(observer.samples, [])
+            with self.assertRaises(ValueError):observer.means_us(2)
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(SystemExit, 'phase measurement disabled'):
+                ExternalCell(case, 'hypernetx', 'profile', 'pagerank').run()
+        with self.assertRaises(ValueError):ExternalCell(case,'hypernetx','profile','distance')
+
+    def test_phase_clock_rejects_incomplete_unordered_and_backward_observations(self):
+        observer = PhaseObserver(lambda: 1)
+        with self.assertRaises(ValueError):observer.mark('incidence')
+        observer.begin()
+        with self.assertRaises(ValueError):observer.begin()
+        with self.assertRaises(ValueError):observer.reset()
+        with self.assertRaises(ValueError):observer.mark('solve')
+        ticks=iter([10,9]);observer=PhaseObserver(lambda:next(ticks));observer.begin()
+        with self.assertRaises(ValueError):observer.mark('incidence')
+
     def test_detached_native_ownership_preserves_prepared_scores_and_releases_oracle(self):
         import gc
         import weakref

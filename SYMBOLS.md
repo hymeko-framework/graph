@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 704 public symbol(s).**
+**8 package(s), 707 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -204,6 +204,7 @@ _No public symbols._
 - `MatroidError` — `hymeko_graph/src/matroid/error.rs`
 - `MultiEdgeSignResolution` — `hymeko_graph/src/signed_tuples.rs`
 - `PageRankError` — `hymeko_graph/src/direct_ir/pagerank.rs`
+- `PageRankSolver` — `hymeko_graph/src/direct_ir/pagerank/krylov.rs`
 - `PrunerDecision` — `hymeko_graph/src/pruner.rs`
 - `RankFlow` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `RankOrdering` — `hymeko_graph/src/direct_ir/pagerank.rs`
@@ -487,6 +488,7 @@ _No public symbols._
 - `retained_bytes` — `hymeko_graph/src/matroid/workspace.rs`
 - `rhs` — `hymeko_graph/src/hyper_operator.rs`
 - `run` — `hymeko_graph/src/direct_ir/pagerank.rs`
+- `run_with_solver` — `hymeko_graph/src/direct_ir/pagerank/krylov.rs`
 - `s` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `s_connected_components` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `same_component` — `hymeko_graph/src/direct_ir/components.rs`
@@ -798,6 +800,7 @@ _No public symbols._
 - `MemoryEvidence` — `scripts/performance_evidence/memory.py`
 - `MemorySummary` — `scripts/performance_evidence/memory.py`
 - `OperationLimit` — `scripts/performance_evidence/external.py`
+- `PhaseObserver` — `scripts/performance_evidence/ranking.py`
 - `PreparedRanking` — `scripts/performance_evidence/ranking.py`
 - `ProcessRunner` — `scripts/performance_evidence/campaign.py`
 - `QueryDeadline` — `scripts/performance_evidence/external.py`

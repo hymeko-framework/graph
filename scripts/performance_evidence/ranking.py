@@ -9,6 +9,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 import hashlib
 import math
+import time
 
 import numpy as np
 from scipy import sparse
@@ -26,12 +27,52 @@ class RankResult:
     bound: float = field(compare=False)
 
 
+class PhaseObserver:
+    """Observe one query's existing boundaries; fake clocks support untimed tests."""
+    names = ("incidence", "preparation", "solve", "cleanup")
+
+    def __init__(self, clock=None):
+        self.clock = clock if clock is not None else time.perf_counter_ns
+        self.samples = []
+        self.current = None
+        self.previous = None
+
+    def begin(self):
+        if self.current is not None:
+            raise ValueError("unfinished phase observation")
+        self.current = []
+        self.previous = self.clock()
+
+    def mark(self, name):
+        if self.current is None or name != self.names[len(self.current)]:
+            raise ValueError("unexpected phase order")
+        now = self.clock()
+        if now < self.previous:
+            raise ValueError("nonmonotonic phase clock")
+        self.current.append(now-self.previous)
+        self.previous = now
+        if len(self.current) == len(self.names):
+            self.samples.append(tuple(self.current))
+            self.current = None
+
+    def reset(self):
+        if self.current is not None:
+            raise ValueError("cannot discard an incomplete query")
+        self.samples.clear()
+
+    def means_us(self, repetitions):
+        if self.current is not None or repetitions <= 0 or len(self.samples) != repetitions:
+            raise ValueError("phase/sample count mismatch")
+        return {name+"_us":sum(row[i] for row in self.samples)/repetitions/1000
+                for i,name in enumerate(self.names)}
+
+
 class RankingBackend(ComposedBackend):
     damping = .85
     tolerance = 1e-10
     max_iterations = 200
 
-    def __init__(self, case, backend):
+    def __init__(self, case, backend, observer=None):
         if any(len(set(edge)) != len(edge) for edge in case.edges):
             raise ValueError("ranking adapter requires set-valued memberships within each hyperedge")
         if float(case.data.get("damping", self.damping)) != self.damping:
@@ -43,6 +84,7 @@ class RankingBackend(ComposedBackend):
         self.detached_multiplicities = None
         self.reference = None
         self.verified_bound = self.reference_l1 = math.inf
+        self.observer = observer
 
     def incidence(self):
         """Export native topology; canonical data supplies only declared multiplicity."""
@@ -95,8 +137,10 @@ class RankingBackend(ComposedBackend):
             self.native.output = None
             self.reference = None
 
-    def prepare(self):
+    def prepare(self, observer=None):
         matrix, weights = self.incidence()
+        if observer is not None:
+            observer.mark("incidence")
         n = self.n
         cardinality = np.asarray(matrix.sum(axis=0)).ravel()
         rates = np.divide(weights, cardinality, out=np.zeros_like(weights), where=cardinality > 0)
@@ -104,14 +148,28 @@ class RankingBackend(ComposedBackend):
         inverse = np.divide(1.0, degree, out=np.zeros_like(degree), where=degree > 0)
         transpose = matrix.T.tocsr()
         dangling = degree == 0
-        return PreparedRanking(matrix, transpose, rates, inverse, dangling,
-                               self.damping, self.tolerance, self.max_iterations)
+        prepared = PreparedRanking(matrix, transpose, rates, inverse, dangling,
+                                   self.damping, self.tolerance, self.max_iterations)
+        return prepared
 
     def query(self, operation="pagerank", materialize=True):
         """Return a full vector, with preparation included in the query boundary."""
         if operation != "pagerank":
             raise ValueError("ranking composition only supports pagerank")
-        return self.prepare().solve()
+        observer = self.observer
+        if observer is not None:
+            observer.begin()
+        prepared = self.prepare(observer)
+        if observer is not None:
+            # Close after prepare() returns, including its temporary disposal.
+            observer.mark("preparation")
+        result = prepared.solve()
+        if observer is not None:
+            observer.mark("solve")
+        del prepared
+        if observer is not None:
+            observer.mark("cleanup")
+        return result
 
     def verify(self, result, operation="pagerank"):
         """Check the full vector against the canonical export, outside timing."""

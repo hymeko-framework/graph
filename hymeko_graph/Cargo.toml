@@ -22,6 +22,8 @@ dashmap = "6"
 # `SignedGraph` / cycle / walk / spine algorithms remain usable with nothing
 # but rayon + dashmap behind them.
 hymeko_core = { workspace = true }
+# Reuse Tensor's matrix-free Krylov solver at the same revision as Core's tensor.
+hymeko_numerics = { workspace = true }
 
 # No dev-dependencies. The tests here need nothing but the library + the IR it
 # already pulls, and the examples need nothing at all.

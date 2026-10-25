@@ -348,8 +348,14 @@ version = "0.1.0"
 dependencies = [
  "dashmap",
  "hymeko_core",
+ "hymeko_numerics",
  "rayon",
 ]
+
+[[package]]
+name = "hymeko_numerics"
+version = "0.1.0"
+source = "git+ssh://git@192.168.1.228:2222/hymeko/tensor.git?rev=1929e4d3902a8b51f45b5366460314783c1ec9e6#1929e4d3902a8b51f45b5366460314783c1ec9e6"
 
 [[package]]
 name = "hymeko_pgraph"

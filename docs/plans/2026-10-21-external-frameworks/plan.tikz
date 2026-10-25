@@ -8,4 +8,6 @@
 \node[box,below=7mm of guard] (verify) {Independent full vector\\check after child exit};
 \draw[arrow] (native)--(memory);\draw[arrow] (guard)--(memory);
 \draw[arrow] (memory)--(verify);
+\node[box,below=7mm of ir] (operator) {Same incidence operator\\Power / Tensor GMRES};
+\draw[arrow] (ir)--(operator);\draw[arrow] (operator)--(verify);
 \end{tikzpicture}\end{center}
