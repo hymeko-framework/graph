@@ -7,14 +7,65 @@ import struct
 import subprocess
 import sys
 import tempfile
+import io
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from campaign import Cell, Evidence
-from memory import MemoryEvidence, MemorySummary, LinuxMemory
+from memory import MemoryEvidence, MemorySummary, MemoryClient, PhaseSampler, WindowsMemoryCapture
 
 
 class MemoryContract(unittest.TestCase):
+    def test_phase_sampler_does_not_reuse_the_lifetime_or_previous_phase_peak(self):
+        sample=PhaseSampler()
+        sample.sample({'working_set_b':90},1.)
+        sample.sample({'working_set_b':70},1.005)
+        first=sample.finish('EVIDENCE_PHASE\tphase=baseline\tworking_set_b=30\tself_peak_b=1000\n')
+        self.assertIn('phase_peak_b=90',first)
+        self.assertIn('self_peak_b=1000',first)
+        self.assertIn('max_sample_gap_us=5000',first)
+        sample.sample({'working_set_b':35},2.)
+        second=sample.finish('EVIDENCE_PHASE\tphase=input\tworking_set_b=20\tself_peak_b=1000\n')
+        self.assertIn('phase_peak_b=35',second)
+        with self.assertRaises(AssertionError):sample.finish('EVIDENCE_PHASE\tphase=solve_0\tworking_set_b=20\n')
+
+    def test_windows_capture_preserves_records_and_acknowledges_every_checkpoint(self):
+        raw=''.join(f'EVIDENCE_PHASE\tphase={phase}\tworking_set_b=1024\tself_peak_b=8192\n'
+                    for phase in MemoryEvidence.phases)
+        child=Mock(stdout=io.BytesIO(raw.encode()),stdin=io.BytesIO(),pid=42)
+        child.poll.return_value=None
+        log=io.StringIO()
+        capture=WindowsMemoryCapture(child,log)
+        capture.close(True)
+        self.assertEqual(child.stdin.getvalue(),b'continue\n'*len(MemoryEvidence.phases))
+        self.assertEqual(log.getvalue().count('phase_peak_b=1024'),len(MemoryEvidence.phases))
+        self.assertEqual(log.getvalue().count('self_peak_b=8192'),len(MemoryEvidence.phases))
+
+    def test_gmres_selection_is_explicit_and_old_default_catalog_is_unchanged(self):
+        self.assertEqual(len(Cell.select('memory')), 48)
+        selected=Cell.select('memory', workloads=['chain65k'],
+                             subjects=['hymeko-gmres-fresh','hymeko-gmres-reused','hypernetx'])
+        self.assertEqual([c.suite for c in selected], ['algorithm','algorithm','external'])
+        self.assertEqual([c.subject for c in selected[:2]], ['hymeko-gmres-fresh','hymeko-gmres-reused'])
+        for c in selected:
+            self.assertEqual(c.environment(1)['HYMEKO_MEMORY_BENCH'], '1')
+
+    def test_gmres_evidence_rejects_missing_or_wrong_workspace_lifecycle(self):
+        for reuse in (False,True):
+            records={'CELL':[{'section':'memory','status':'OK','subject':'hymeko-gmres-'+('reused' if reuse else 'fresh')}],
+                     'PHASE':[{'phase':p,'working_set_b':'1024','self_peak_b':'2048'} for p in MemoryEvidence.phases],
+                     'MEMORY':[{'input_released':'true','frameworks':'1','verification':'controller'}],
+                     'WORKSPACE':[{'iteration':str(i),'solver':'gmres','reused':str(reuse).lower(),
+                                   'capacity_b':'512','after_call_b':'512' if reuse else '0'} for i in range(7)]}
+            MemoryEvidence.verify(records)
+            raw='\n'.join('EVIDENCE_'+k+'\t'+'\t'.join(a+'='+b for a,b in row.items())
+                          for k,rows in records.items() for row in rows)
+            self.assertEqual(Evidence.parse(raw),records)
+            bad=copy.deepcopy(records);bad['WORKSPACE'].pop()
+            with self.assertRaises(ValueError):MemoryEvidence.verify(bad)
+            bad=copy.deepcopy(records);bad['WORKSPACE'][2]['after_call_b']='128'
+            with self.assertRaises(ValueError):MemoryEvidence.verify(bad)
+
     def test_summary_uses_process_peaks_and_rejects_incomplete_or_uncertified_runs(self):
         campaign = {'suite':'memory','complete':True,'runs':5,'cells':[]}
         for run in range(1,6):
@@ -48,7 +99,7 @@ class MemoryContract(unittest.TestCase):
             self.assertEqual(cell.environment(1)["HYMEKO_MEMORY_BENCH"], "1")
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(SystemExit, "disabled"):
-                LinuxMemory.run()
+                MemoryClient.run()
         with self.assertRaises(ValueError):
             Cell.select("memory", workloads=["invalid"])
 
@@ -85,9 +136,9 @@ class MemoryContract(unittest.TestCase):
         with self.assertRaises(ValueError):MemoryEvidence.verify(bad)
 
     def test_phase_reads_peak_and_only_resets_hwm(self):
-        with patch('pathlib.Path.read_text',return_value='VmRSS: 2 kB\nVmHWM: 4 kB\n'), \
+        with patch('memory.os.name','posix'), patch('pathlib.Path.read_text',return_value='VmRSS: 2 kB\nVmHWM: 4 kB\n'), \
              patch('pathlib.Path.write_text') as write, patch('builtins.print') as emit:
-            LinuxMemory.mark('graph_retained')
+            MemoryClient.mark('graph_retained')
         write.assert_called_once_with('5\n')
         self.assertIn('working_set_b=2048',emit.call_args.args[0])
         self.assertIn('self_peak_b=4096',emit.call_args.args[0])

@@ -4,12 +4,64 @@ from __future__ import annotations
 import ctypes
 import getpass
 import json
+import math
 import os
 import platform
 import subprocess
 import time
 from pathlib import Path
 from typing import Any, cast
+
+
+class ProcessMemory:
+    """OS process counters; lifetime peaks remain distinct from phase sampling."""
+    class WindowsCounters(ctypes.Structure):
+        _fields_ = [('cb',ctypes.c_uint32),('faults',ctypes.c_uint32)] + [
+            (name,ctypes.c_size_t) for name in ('peak','working','paged_peak','paged',
+                'nonpaged_peak','nonpaged','page','page_peak','private')]
+
+    @staticmethod
+    def parent_pid(pid):
+        command=f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').ParentProcessId"
+        value=subprocess.check_output(['powershell','-NoProfile','-Command',command],text=True,
+                                      timeout=15,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0)).strip()
+        return int(value) if value else 0
+
+    @classmethod
+    def is_descendant(cls,pid,root):
+        seen=set()
+        while pid>0 and pid not in seen:
+            if pid==root:return True
+            seen.add(pid);pid=cls.parent_pid(pid)
+        return False
+
+    @staticmethod
+    def open_windows_process(pid):
+        function=ctypes.windll.kernel32.OpenProcess
+        function.restype=ctypes.c_void_p
+        # Read counters, set affinity, and terminate only our verified child on failure.
+        handle=function(0x1000|0x0010|0x0200|0x0001,False,int(pid))
+        if not handle:raise OSError('cannot open measured child')
+        return ctypes.c_void_p(handle)
+
+    @classmethod
+    def snapshot(cls, pid: int, handle=None):
+        if os.name == 'nt':
+            counters=cls.WindowsCounters();counters.cb=ctypes.sizeof(counters)
+            process=handle if handle is not None else ctypes.c_void_p(-1)
+            ok=ctypes.windll.psapi.GetProcessMemoryInfo(process,ctypes.byref(counters),counters.cb)
+            if not ok:return None
+            return {'working_set_b':int(counters.working),'self_peak_b':int(counters.peak),
+                    'private_committed_b':int(counters.private)}
+        try:
+            status=dict(line.split(':',1) for line in Path(f'/proc/{pid}/status').read_text().splitlines() if ':' in line)
+            # A just-exited child can still have a /proc entry as a zombie,
+            # with no address-space counters. Keep the last live observation.
+            if not {'VmRSS', 'VmHWM'} <= status.keys():
+                return None
+            return {'working_set_b':int(status['VmRSS'].split()[0])*1024,
+                    'self_peak_b':int(status['VmHWM'].split()[0])*1024,'private_committed_b':'NA'}
+        except (FileNotFoundError,ProcessLookupError):return None
 
 
 class HostState:
@@ -51,7 +103,8 @@ class HostState:
             "| ConvertTo-Json -Depth 4 -Compress"
         )
         raw = subprocess.check_output(["powershell", "-NoProfile", "-Command", command],
-                                      encoding="utf-8", timeout=30)
+                                      encoding="utf-8", timeout=30,
+                                      creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         return cls.windows_admission(json.loads(raw))
 
     @staticmethod
@@ -179,6 +232,20 @@ class QuietHostGuard:
         for cpu in self.config["cpus"]:
             if observation["active"][f"cpu{cpu}"] > self.config.get("max_core_fraction", 0.05):
                 result.append(f"CPU {cpu} or its SMT sibling is busy")
+        outer_config = self.config.get('outer_memory_observation')
+        if outer_config:
+            outer = observation.get('outer_host')
+            if not outer:
+                result.append('outer host memory observation unavailable')
+            else:
+                age = observation['observed_unix_s'] - outer['captured_unix_s']
+                available = outer['available_bytes']
+                if not math.isfinite(age) or not -2 <= age <= outer_config['max_age_seconds']:
+                    result.append('outer host memory observation stale')
+                if not math.isfinite(available) or available < outer_config['min_available_bytes']:
+                    result.append('outer host available memory below headroom')
+        if self.config.get('require_zero_guest_swap') and observation.get('swap_used_bytes', 0) != 0:
+            result.append('guest swap is in use')
         return result
 
     def check(self) -> dict[str, Any]:
@@ -200,11 +267,19 @@ class QuietHostGuard:
 
     def observe(self) -> dict[str, Any]:
         if os.name == "nt":
-            return HostState.windows_observation()
+            observation = HostState.windows_observation()
         elif platform.system() == "Linux":
-            return self.linux_observation()
+            observation = self.linux_observation()
         else:
             raise OSError("quiet-host guard requires Windows or Linux")
+        outer_config = self.config.get('outer_memory_observation')
+        if outer_config:
+            try:
+                observation['outer_host'] = json.loads(Path(outer_config['path']).read_text(encoding='utf8'))
+            except (OSError, ValueError) as error:
+                observation['outer_host_error'] = str(error)
+            observation['observed_unix_s'] = time.time()
+        return observation
 
     def process_accounts(self) -> dict[str, Any]:
         """Classify declared service identities without exempting their CPU load.
@@ -239,8 +314,10 @@ class QuietHostGuard:
         last = HostState.linux_cpus()
         selected = ["cpu", *(f"cpu{cpu}" for cpu in self.config["cpus"])]
         active = {cpu: HostState.active_fraction(first[cpu], last[cpu]) for cpu in selected}
+        memory = HostState.memory()
         return {
             "sessions": HostState.sessions(),
             **self.process_accounts(),
-            "available_bytes": HostState.memory()["MemAvailable"], "active": active,
+            "available_bytes": memory["MemAvailable"], "active": active,
+            "swap_used_bytes": memory.get('SwapTotal', 0) - memory.get('SwapFree', 0),
         }

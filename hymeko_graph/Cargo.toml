@@ -11,6 +11,10 @@ categories = ["algorithms", "data-structures"]
 [lib]
 name = "hymeko_graph"
 
+[features]
+# Test-binary-only observation; ordinary builds/tests do not track live heap bytes.
+evidence-heap = []
+
 [dependencies]
 rayon = "1.10"
 dashmap = "6"

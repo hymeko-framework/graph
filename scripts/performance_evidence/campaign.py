@@ -22,9 +22,9 @@ from pathlib import Path
 from typing import Any
 
 if __package__:
-    from .host import HostBusy, QuietHostGuard
+    from .host import HostBusy, QuietHostGuard, ProcessMemory
 else:
-    from host import HostBusy, QuietHostGuard
+    from host import HostBusy, QuietHostGuard, ProcessMemory
 
 PHASES = (
     (
@@ -135,9 +135,17 @@ class Cell:
         cells = Cell.matrix(suite, phases, workloads)
         if subjects is not None:
             known = set(TRAVERSAL_SUBJECTS) if suite == "traversal" else {cell.subject for cell in cells}
+            if suite == "memory":
+                known.update(("hymeko-gmres-fresh", "hymeko-gmres-reused"))
             if not subjects or len(set(subjects)) != len(subjects) or not set(subjects) <= known:
                 raise ValueError("subjects must be nonempty, unique members of the selected suite")
-            if suite == "traversal":
+            if suite == "memory":
+                chosen_workloads = list(dict.fromkeys(cell.workload for cell in cells))
+                cells = [Cell("external" if subject in EXTERNAL_FRAMEWORKS else "algorithm",
+                              "memory_cell" if subject in EXTERNAL_FRAMEWORKS else "native::memory::memory_cell",
+                              workload, subject)
+                         for workload in chosen_workloads for subject in subjects]
+            elif suite == "traversal":
                 chosen_workloads = list(dict.fromkeys(cell.workload for cell in cells))
                 cells = [Cell("algorithm", "ranking::ranking_cell", workload, subject)
                          for workload in chosen_workloads for subject in subjects]
@@ -687,43 +695,8 @@ class ProcessRunner:
 
     @staticmethod
     def memory(pid: int, process: subprocess.Popen[bytes]) -> int:
-        if os.name == "nt":
-
-            class Counters(ctypes.Structure):
-                _fields_ = [("cb", ctypes.c_ulong), ("faults", ctypes.c_ulong)] + [
-                    (name, ctypes.c_size_t)
-                    for name in (
-                        "peak",
-                        "working",
-                        "paged_peak",
-                        "paged",
-                        "nonpaged_peak",
-                        "nonpaged",
-                        "page",
-                        "page_peak",
-                    )
-                ]
-
-            counters = Counters()
-            counters.cb = ctypes.sizeof(counters)
-            ok = ctypes.windll.psapi.GetProcessMemoryInfo(
-                ProcessRunner.windows_handle(process),
-                ctypes.byref(counters),
-                counters.cb,
-            )
-            return int(counters.peak) if ok else 0
-        try:
-            fields = Path(f"/proc/{pid}/status").read_text().splitlines()
-            return max(
-                (
-                    int(x.split()[1]) * 1024
-                    for x in fields
-                    if x.startswith(("VmHWM:", "VmRSS:"))
-                ),
-                default=0,
-            )
-        except (FileNotFoundError, ProcessLookupError):
-            return 0
+        snapshot=ProcessMemory.snapshot(pid,ProcessRunner.windows_handle(process) if os.name=='nt' else None)
+        return snapshot['self_peak_b'] if snapshot else 0
 
     def invoke(
         self, suite: str, arguments: list[str], environment: dict[str, str], log: Path
@@ -769,6 +742,8 @@ class ProcessRunner:
                 command += ["-e", f"{key}={value}"]
             command += ["--entrypoint", "/qemu", self.args.image, "/bench", *arguments]
         env = os.environ | environment
+        windows_memory=(os.name=='nt' and self.args.suite=='memory' and environment.get('HYMEKO_MEMORY_BENCH')=='1')
+        if windows_memory:env['HYMEKO_MEMORY_HANDSHAKE']='1'
         start = time.monotonic()
         peak = 0
         peak_threads = 0
@@ -777,12 +752,32 @@ class ProcessRunner:
         with log.open("w", encoding="utf8") as stream:
             process = subprocess.Popen(
                 command,
-                stdout=stream,
+                stdout=subprocess.PIPE if windows_memory else stream,
+                stdin=subprocess.PIPE if windows_memory else None,
                 stderr=subprocess.STDOUT,
                 env=env,
                 creationflags=0x08000000 if os.name == "nt" else 0,
             )
             pid = process.pid
+            capture=None
+            measured_pid=pid
+            measured_handle=self.windows_handle(process) if windows_memory else None
+            owned_handle=False
+            finished_clean=False
+            def resolve_memory_pid(actual):
+                nonlocal measured_pid,measured_handle,owned_handle
+                if actual==measured_pid:return False
+                if owned_handle or suite!='external' or not ProcessMemory.is_descendant(actual,pid):
+                    raise ValueError('memory checkpoint did not come from our Python child')
+                measured_handle=ProcessMemory.open_windows_process(actual)
+                owned_handle=True;measured_pid=actual
+                if cpus is not None and not ctypes.windll.kernel32.SetProcessAffinityMask(
+                        measured_handle,ctypes.c_size_t(sum(1<<cpu for cpu in cpus))):
+                    raise OSError('cannot pin actual Python child')
+                return True
+            if windows_memory:
+                from memory import WindowsMemoryCapture
+                capture=WindowsMemoryCapture(process,stream,resolve_memory_pid)
             try:
                 if cpus is not None:
                     if self.args.platform == "windows":
@@ -816,7 +811,12 @@ class ProcessRunner:
                             break
                         time.sleep(0.1)
                 while process.poll() is None:
-                    peak = max(peak, self.memory(pid, process))
+                    if capture:
+                        snapshot=ProcessMemory.snapshot(measured_pid,measured_handle)
+                        if snapshot:
+                            peak=max(peak,snapshot['self_peak_b']);capture.sample(snapshot)
+                        capture.drain()
+                    else:peak = max(peak, self.memory(pid, process))
                     if cpus is not None and self.args.platform == "native":
                         peak_threads = self.verify_thread_affinity(pid, cpus, peak_threads)
                         verified_affinity |= peak_threads > 0
@@ -831,14 +831,23 @@ class ProcessRunner:
                             flush=True,
                         )
                         next_update += 10
-                    time.sleep(0.05)
+                    time.sleep(0.002 if capture else 0.05)
                 peak = max(peak, self.memory(pid, process))
                 if process.returncode:
                     raise RuntimeError(f"child exit {process.returncode}; see {log}")
+                finished_clean=True
             finally:
+                if owned_handle and not finished_clean:
+                    ctypes.windll.kernel32.TerminateProcess(measured_handle,1)
                 if process.poll() is None:
                     process.kill()
                     process.wait()
+                if capture:
+                    process.stdin.close()
+                    try:capture.close(process.returncode==0)
+                    finally:
+                        process.stdout.close()
+                        if owned_handle:ctypes.windll.kernel32.CloseHandle(measured_handle)
                 if container:
                     subprocess.run(
                         ["docker", "rm", "-f", container],
@@ -848,12 +857,15 @@ class ProcessRunner:
         return {
             "wall_seconds": time.monotonic() - start,
             "peak_rss_bytes": peak,
-            "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+            "memory_scope": ("measured process OS lifetime HWM; phase working set sampled at 2ms with checkpoints"
+                             if windows_memory else "whole process, sampled 50ms VmHWM/PeakWorkingSet"),
             "command": command,
             "requested_cpus": cpus,
             "peak_thread_count": peak_threads,
             "thread_affinity_verified": verified_affinity,
             "exit_code": process.returncode,
+            "launcher_pid": pid,
+            "measured_pid": measured_pid,
         }
 
 
@@ -991,7 +1003,9 @@ class Campaign:
             "os": platform.platform(),
             "cpu_count": os.cpu_count(),
             "python": platform.python_version(),
-            "metric_scope": ("phase resident RSS and reset VmHWM; single framework; controller verification"
+            "metric_scope": (("phase working set sampled at 2ms; OS lifetime HWM; single framework; controller verification"
+                              if self.args.platform == "windows" else
+                              "phase resident RSS and reset VmHWM; single framework; controller verification")
                              if self.args.suite == "memory" else "iteration batch means, not request tails"),
             "runtime": {
                 "image": self.args.image if self.args.platform == "arm64" else None,
@@ -1515,8 +1529,8 @@ if __name__ == "__main__":
         parser.error("external requires Windows/Linux, --external-python and --external-input")
     if arguments.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing_unit"} and not arguments.informed:
         parser.error("--informed is required for graph/parsing suites")
-    if arguments.suite == "memory" and arguments.platform != "native":
-        parser.error("isolated phase memory currently requires native Linux")
+    if arguments.suite == "memory" and arguments.platform not in {"native", "windows"}:
+        parser.error("isolated phase memory requires native Linux or Windows")
     if arguments.source_manifest and arguments.source_ref:
         parser.error("choose an exact source ref or an unpublished source manifest")
     if arguments.cpu is not None and not 0 <= arguments.cpu < (os.cpu_count() or 1):

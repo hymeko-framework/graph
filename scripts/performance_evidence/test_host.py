@@ -3,10 +3,55 @@ import json
 import unittest
 from unittest.mock import patch
 
-from host import HostState, QuietHostGuard, HostBusy
+from host import HostState, QuietHostGuard, HostBusy, ProcessMemory
 
 
 class HostContracts(unittest.TestCase):
+    def test_linux_memory_snapshot_handles_live_zombie_and_reaped_children(self):
+        with patch('host.os.name', 'posix'), patch('host.Path') as path:
+            path.return_value.read_text.side_effect = [
+                'Name:\tchild\nVmRSS:\t2048 kB\nVmHWM:\t4096 kB\n',
+                'Name:\tchild\nState:\tZ (zombie)\n',
+                FileNotFoundError(),
+            ]
+            self.assertEqual(ProcessMemory.snapshot(42), {
+                'working_set_b': 2 * 1024**2, 'self_peak_b': 4 * 1024**2,
+                'private_committed_b': 'NA',
+            })
+            self.assertIsNone(ProcessMemory.snapshot(42))
+            self.assertIsNone(ProcessMemory.snapshot(42))
+
+    def test_process_relationship_rejects_unrelated_or_cyclic_pid_claims(self):
+        parents={12:11,11:10,10:1,1:0,4:5,5:4}
+        with patch.object(ProcessMemory,'parent_pid',side_effect=lambda pid:parents[pid]):
+            self.assertTrue(ProcessMemory.is_descendant(12,10))
+            self.assertTrue(ProcessMemory.is_descendant(10,10))
+            self.assertFalse(ProcessMemory.is_descendant(12,99))
+            self.assertFalse(ProcessMemory.is_descendant(4,10))
+
+    def test_outer_memory_budget_is_fresh_recorded_and_does_not_claim_host_cpu_idle(self):
+        config={'cpus':[2],'outer_memory_observation':{'path':'outer.json',
+                 'min_available_bytes':8*1024**3,'max_age_seconds':30},'require_zero_guest_swap':True}
+        guard=QuietHostGuard(config,uid=1000,user='researcher')
+        quiet={'human_uids':[1000],'sessions':[],'available_bytes':64*1024**3,
+               'active':{'cpu':0.,'cpu2':0.},'swap_used_bytes':0,
+               'observed_unix_s':100.,'outer_host':{'captured_unix_s':95.,
+               'available_bytes':16*1024**3,'active':{'cpu':.9}}}
+        self.assertEqual(guard.reasons(quiet),[])
+        for field,value in [('captured_unix_s',60.),('captured_unix_s',float('nan')),
+                            ('available_bytes',4*1024**3),('available_bytes',float('nan'))]:
+            bad=copy.deepcopy(quiet);bad['outer_host'][field]=value
+            self.assertTrue(guard.reasons(bad))
+        bad=dict(quiet,swap_used_bytes=4096)
+        self.assertIn('guest swap is in use',guard.reasons(bad))
+        bad=dict(quiet);bad.pop('outer_host')
+        self.assertIn('outer host memory observation unavailable',guard.reasons(bad))
+        with patch('host.os.name','posix'),patch('host.platform.system',return_value='Linux'), \
+             patch.object(guard,'linux_observation',return_value=dict(quiet)), \
+             patch('host.Path.read_text',return_value=json.dumps(quiet['outer_host'])), \
+             patch('host.time.time',return_value=100.):
+            self.assertEqual(guard.reasons(guard.observe()),[])
+
     def test_windows_gate_uses_per_cpu_load_memory_and_interactive_sessions(self):
         raw = {"cpu": [{"Name":"_Total", "PercentProcessorTime":0},
                        {"Name":"2", "PercentProcessorTime":1}],

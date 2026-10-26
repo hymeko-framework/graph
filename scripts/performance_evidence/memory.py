@@ -12,6 +12,77 @@ import math
 import os
 import struct
 import sys
+import queue
+import threading
+import time
+from host import ProcessMemory
+
+
+class PhaseSampler:
+    """Controller-side samples between child checkpoints; never an exact OS HWM."""
+    def __init__(self):
+        self.peak=0
+        self.samples=0
+        self.last=None
+        self.gap=0.0
+        self.phases=0
+
+    def sample(self, snapshot, now):
+        self.peak=max(self.peak,snapshot['working_set_b'])
+        self.samples+=1
+        if self.last is not None:self.gap=max(self.gap,now-self.last)
+        self.last=now
+
+    def finish(self, line):
+        row=dict(x.split('=',1) for x in line[line.index('EVIDENCE_PHASE'):].strip().split('\t')[1:] if '=' in x)
+        current=int(row['working_set_b'])
+        assert row['phase']==MemoryEvidence.phases[self.phases], 'checkpoint order changed'
+        output=(line.rstrip('\r\n')+f'\tphase_peak_b={max(self.peak,current)}'
+                f'\tpeak_method=sampled_working_set\tsample_interval_us=2000'
+                f'\tsample_count={self.samples+1}\tmax_sample_gap_us={round(self.gap*1e6)}\n')
+        self.peak=current;self.samples=0;self.last=None;self.gap=0.0;self.phases+=1
+        return output
+
+
+class WindowsMemoryCapture:
+    """One stdout reader and sampler per measured child; child waits at checkpoints."""
+    def __init__(self,process,stream,resolve_pid=None):
+        self.process,self.stream=process,stream
+        self.resolve_pid=resolve_pid
+        self.lines=queue.Queue()
+        self.sampler=PhaseSampler()
+        self.reader=threading.Thread(target=self.read,daemon=True)
+        self.reader.start()
+
+    def read(self):
+        for line in iter(self.process.stdout.readline,b''):
+            self.lines.put(line.decode('utf8',errors='replace'))
+
+    def sample(self,snapshot):
+        self.sampler.sample(snapshot,time.perf_counter())
+
+    def drain(self):
+        while True:
+            try:line=self.lines.get_nowait()
+            except queue.Empty:return
+            checkpoint='EVIDENCE_PHASE\t' in line
+            if checkpoint:
+                fields=dict(x.split('=',1) for x in line.strip().split('\t')[1:] if '=' in x)
+                target=int(fields.get('process_id',self.process.pid))
+                if self.resolve_pid and self.resolve_pid(target):
+                    if self.sampler.phases:raise ValueError('measurement process changed mid-run')
+                    self.sampler=PhaseSampler()  # Discard launcher samples before the ready checkpoint.
+                line=self.sampler.finish(line).rstrip('\n')+f'\tsampled_process_id={target}\n'
+            self.stream.write(line)
+            if checkpoint and self.process.poll() is None:
+                self.process.stdin.write(b'continue\n');self.process.stdin.flush()
+
+    def close(self,complete):
+        self.reader.join(timeout=2)
+        if self.reader.is_alive():raise RuntimeError('memory output reader did not finish')
+        self.drain()
+        if complete and self.sampler.phases!=len(MemoryEvidence.phases):
+            raise ValueError('missing Windows memory checkpoints')
 
 
 class MemoryEvidence:
@@ -78,9 +149,36 @@ class MemoryEvidence:
             current, peak = int(row["working_set_b"]), int(row["self_peak_b"])
             if current <= 0 or peak < current:
                 raise ValueError("invalid memory observation")
+            if 'phase_peak_b' in row:
+                if (int(row['phase_peak_b'])<current or row.get('peak_method')!='sampled_working_set'
+                        or int(row.get('sample_count','0'))<1 or int(row.get('sample_interval_us','0'))!=2000):
+                    raise ValueError('invalid sampled phase peak')
+                if 'process_id' in row and row['process_id']!=row.get('sampled_process_id'):
+                    raise ValueError('sampled the launcher instead of the measured process')
+        sampled=[p.get('peak_method','reset_os_hwm') for p in phases]
+        if len(set(sampled))!=1:raise ValueError('mixed memory observation methods')
         if len(metadata) != 1 or any(metadata[0].get(k) != v for k, v in
                 {"input_released": "true", "frameworks": "1", "verification": "controller"}.items()):
             raise ValueError("memory isolation contract missing")
+        if metadata[0].get('platform')=='windows' and sampled[0]!='sampled_working_set':
+            raise ValueError('Windows lifetime peak cannot stand in for a phase peak')
+        subject = cells[0].get("subject", "")
+        for owned in records.get('IR_HEAP',[]):
+            if (int(owned['live_requested_b'])!=int(owned['released_on_drop_b'])
+                    or int(owned['construction_peak_extra_b'])<int(owned['live_requested_b'])
+                    or int(owned['reference_capacity_b'])<int(owned['reference_len_b'])):
+                raise ValueError('invalid IR heap ownership evidence')
+        if subject in {"hymeko-gmres-fresh", "hymeko-gmres-reused"}:
+            workspaces = records.get("WORKSPACE", [])
+            reuse = subject.endswith("reused")
+            if len(workspaces) != 7:
+                raise ValueError("missing GMRES workspace observations")
+            for i, row in enumerate(workspaces):
+                capacity, after = int(row["capacity_b"]), int(row["after_call_b"])
+                if (int(row["iteration"]) != i or row["solver"] != "gmres"
+                        or row["reused"] != str(reuse).lower() or capacity <= 0
+                        or after != (capacity if reuse else 0)):
+                    raise ValueError("incorrect GMRES workspace lifecycle")
 
     @staticmethod
     def verify_scores(directory, workload, path, fingerprint):
@@ -100,13 +198,16 @@ class MemoryEvidence:
                 "scores_sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest()}
 
 
-class LinuxMemory:
+class MemoryClient:
     @staticmethod
     def mark(phase):
-        status = dict(line.split(":", 1) for line in Path("/proc/self/status").read_text().splitlines() if ":" in line)
-        print(f"EVIDENCE_PHASE\tphase={phase}\tworking_set_b={int(status['VmRSS'].split()[0])*1024}"
-              f"\tself_peak_b={int(status['VmHWM'].split()[0])*1024}", flush=True)
-        Path("/proc/self/clear_refs").write_text("5\n")
+        snapshot=ProcessMemory.snapshot(os.getpid())
+        if snapshot is None:raise RuntimeError('process memory counters unavailable')
+        print(f"EVIDENCE_PHASE\tphase={phase}\tprocess_id={os.getpid()}"+''.join(f'\t{k}={v}' for k,v in snapshot.items()),flush=True)
+        if os.name=='nt':
+            if os.environ.get('HYMEKO_MEMORY_HANDSHAKE')!='1' or sys.stdin.readline().strip()!='continue':
+                raise RuntimeError('missing Windows memory checkpoint controller')
+        else:Path("/proc/self/clear_refs").write_text("5\n")
 
     @classmethod
     def run(cls):
@@ -140,7 +241,7 @@ class LinuxMemory:
             cls.mark(f"warmup_{i}" if i < 2 else f"solve_{i-2}")
         np.asarray(result.scores, dtype="<f8").tofile(os.environ["HYMEKO_MEMORY_SCORES"])
         print(f"EVIDENCE_MEMORY\tfingerprint={fingerprint}\tinput_released=true\tframeworks=1"
-              "\tverification=controller\tpreparation=separate", flush=True)
+              f"\tverification=controller\tpreparation=separate\tplatform={'windows' if os.name=='nt' else 'linux'}", flush=True)
         print(f"EVIDENCE_CELL\tsection=memory\tsubject={backend}\tworkload={workload}\tstatus=OK"
               f"\tnodes={n}\tarcs={arcs}\tincidences={incidences}\tchecksum={result.checksum}", flush=True)
 
@@ -158,6 +259,8 @@ class MemorySummary:
         if actual != expected or len(actual) != len(campaign['cells']):
             raise ValueError("missing or duplicate memory process")
         groups = {}
+        methods={c['records']['PHASE'][0].get('peak_method','reset_os_hwm') for c in campaign['cells']}
+        if len(methods)!=1:raise ValueError('campaign mixes exact and sampled phase peaks')
         for cell in campaign['cells']:
             records = cell['records']
             MemoryEvidence.verify(records)
@@ -169,12 +272,20 @@ class MemorySummary:
             phases = {p['phase']:p for p in records['PHASE']}
             values = {name: int(phases[name]['working_set_b']) for name in
                       ('baseline', 'input', 'graph_retained', 'prepared')}
-            values['construction_peak'] = int(phases['graph_build']['self_peak_b'])
-            values['preparation_peak'] = int(phases['prepared']['self_peak_b'])
-            values['solve_peak'] = max(int(phases[f'solve_{i}']['self_peak_b']) for i in range(5))
+            peak=lambda phase:int(phase.get('phase_peak_b',phase['self_peak_b']))
+            values['construction_peak'] = peak(phases['graph_build'])
+            values['preparation_peak'] = peak(phases['prepared'])
+            values['solve_peak'] = max(peak(phases[f'solve_{i}']) for i in range(5))
             values['lifetime_peak'] = max(int(p['self_peak_b']) for p in phases.values())
             values['graph_above_baseline'] = values['graph_retained']-values['baseline']
             values['solve_above_prepared'] = max(0, values['solve_peak']-values['prepared'])
+            if records.get('WORKSPACE'):
+                values['workspace_capacity'] = max(int(row['capacity_b']) for row in records['WORKSPACE'])
+                values['workspace_retained'] = max(int(row['after_call_b']) for row in records['WORKSPACE'])
+            if records.get('IR_HEAP'):
+                for key,value in records['IR_HEAP'][0].items():values['ir_'+key]=int(value)
+            if phases['graph_retained'].get('private_committed_b','NA')!='NA':
+                values['private_graph_retained']=int(phases['graph_retained']['private_committed_b'])
             for metric, value in values.items():
                 groups.setdefault((header['workload'],header['subject'],metric),[]).append(value/1024**2)
         rows=[]
@@ -197,11 +308,17 @@ class MemorySummary:
         with (directory/'memory-summary.csv').open('w',newline='',encoding='utf8') as stream:
             writer=csv.DictWriter(stream,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)
         indexed={(r['workload'],r['backend'],r['metric']):r for r in rows}
-        frameworks=('hymeko','hypergraphz','hypernetx','xgi','hypergraphx','reticula')
-        labels=('HyMeKo','Hypergraphz','HNX + SciPy','XGI + SciPy','HGX + SciPy','Reticula + SciPy')
+        catalog = {'hymeko':'HyMeKo power', 'hymeko-gmres-fresh':'GMRES fresh',
+                   'hymeko-gmres-reused':'GMRES reused', 'hypergraphz':'Hypergraphz',
+                   'hypernetx':'HNX + SciPy', 'xgi':'XGI + SciPy',
+                   'hypergraphx':'HGX + SciPy', 'reticula':'Reticula + SciPy'}
+        frameworks=tuple(b for b in catalog if any(r['backend']==b for r in rows))
+        labels=tuple(catalog[b] for b in frameworks)
         families={'chain65k':'Chain: 131,070 incidences','rank2_1m':'Binary: 1,000,000 incidences',
                   'hub32_1m':'Hub: 1,000,000 incidences','components8_1m':'Eight regions: 1,000,000 incidences'}
-        colors=('#087f8c','#dc8c24','#7755aa','#4267a5','#c26470','#6b8055')
+        palette=('#087f8c','#319fce','#184e77','#dc8c24','#7755aa','#4267a5','#c26470','#6b8055')
+        colors=tuple(palette[list(catalog).index(b)] for b in frameworks)
+        sampled=campaign['cells'][0]['records']['PHASE'][0].get('peak_method')=='sampled_working_set'
         plt.rcParams.update({'font.family':'DejaVu Sans','font.size':10,'axes.spines.top':False,'axes.spines.right':False})
         with PdfPages(directory/'memory-report.pdf') as pdf:
             for view in ('chart', 'table'):
@@ -212,9 +329,9 @@ class MemorySummary:
                             selected=[indexed[(family+suffix,b,'solve_peak')] for b in frameworks]
                             values=[r['median_mib'] for r in selected]
                             errors=[[r['median_mib']-r['q1_mib'] for r in selected],[r['q3_mib']-r['median_mib'] for r in selected]]
-                            bars=ax.bar(range(6),values,color=colors,yerr=errors,capsize=3)
+                            bars=ax.bar(range(len(frameworks)),values,color=colors,yerr=errors,capsize=3)
                             ax.bar_label(bars,fmt='%.1f',padding=4,fontsize=9)
-                            ax.set(xticks=range(6),xticklabels=labels,ylabel='Process peak RSS [MiB]',title=title,ylim=(0,max(values)*1.22))
+                            ax.set(xticks=range(len(frameworks)),xticklabels=labels,ylabel='Sampled phase peak WS [MiB]' if sampled else 'Process peak RSS [MiB]',title=title,ylim=(0,max(values)*1.22))
                             ax.tick_params(axis='x',labelrotation=25)
                             ax.grid(axis='y',alpha=.15);ax.set_axisbelow(True)
                         else:
@@ -234,6 +351,9 @@ class MemorySummary:
                     else:
                         heading='Memory boundaries [MiB] | '+layout
                         note='Base: imports loaded. Graph: input/oracle released. Prepared: algorithm factors retained.\nPeaks reset per phase; Life peak includes input and construction. No allocator trimming.\nRSS is process residency, not intrinsic live heap bytes. Full-vector verification runs after child exit.'
+                    if sampled:
+                        note += '\nWindows phase peaks: 2 ms controller samples + endpoints, may miss short spikes. Life peak: OS cumulative HWM.'
+                        note=note.replace('Peaks reset per phase;','Sampled peaks separated by acknowledged checkpoints;')
                     fig.suptitle(heading,fontsize=16,fontweight='bold')
                     fig.supxlabel(note,fontsize=9)
                     pdf.savefig(fig);plt.close(fig)
@@ -242,7 +362,7 @@ class MemorySummary:
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "memory_cell":
-        LinuxMemory.run()
+        MemoryClient.run()
     elif len(sys.argv) == 3 and sys.argv[1] == '--summarize':
         print(json.dumps(MemorySummary.write(sys.argv[2])))
     else:

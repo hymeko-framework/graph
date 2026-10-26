@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 707 public symbol(s).**
+**8 package(s), 710 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -796,12 +796,14 @@ _No public symbols._
 - `HostState` — `scripts/performance_evidence/host.py`
 - `HyperNetXBackend` — `scripts/performance_evidence/external.py`
 - `HypergraphxBackend` — `scripts/performance_evidence/external.py`
-- `LinuxMemory` — `scripts/performance_evidence/memory.py`
+- `MemoryClient` — `scripts/performance_evidence/memory.py`
 - `MemoryEvidence` — `scripts/performance_evidence/memory.py`
 - `MemorySummary` — `scripts/performance_evidence/memory.py`
 - `OperationLimit` — `scripts/performance_evidence/external.py`
 - `PhaseObserver` — `scripts/performance_evidence/ranking.py`
+- `PhaseSampler` — `scripts/performance_evidence/memory.py`
 - `PreparedRanking` — `scripts/performance_evidence/ranking.py`
+- `ProcessMemory` — `scripts/performance_evidence/host.py`
 - `ProcessRunner` — `scripts/performance_evidence/campaign.py`
 - `QueryDeadline` — `scripts/performance_evidence/external.py`
 - `QuietHostGuard` — `scripts/performance_evidence/host.py`
@@ -811,6 +813,7 @@ _No public symbols._
 - `Route` — `scripts/performance_evidence/routing.py`
 - `RoutingBackend` — `scripts/performance_evidence/routing.py`
 - `RoutingHyperNetX` — `scripts/performance_evidence/routing.py`
+- `WindowsMemoryCapture` — `scripts/performance_evidence/memory.py`
 - `XGIBackend` — `scripts/performance_evidence/external.py`
 
 ### functions
