@@ -1,0 +1,7 @@
+flowchart LR
+    Core[Core canonical IR via existing Fixture] --> Export[Exact memberships and expected partition]
+    Export --> Adapters[Framework-native construction and queries]
+    Guard[Existing ProcessRunner and QuietHostGuard] --> Adapters
+    Adapters --> Validate[Full partition or rank-vector/residual verification]
+    Validate --> Timings[Explicitly authorized bounded measurements]
+    Timings --> Report[Raw samples, provenance and PDF]

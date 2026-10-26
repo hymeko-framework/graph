@@ -1,0 +1,9 @@
+flowchart LR
+  IR[Canonical Core IR] --> Search[Existing Graph Berge search]
+  Search --> Metric[Derived metric distances]
+  Metric --> Tour[Christofides and full incidence walk]
+  IR --> Export[Hashed neutral input]
+  Export --> Foreign[Native framework plus labelled NetworkX composition]
+  Tour --> Verify[Cost, path, coverage and exact tiny oracle]
+  Foreign --> Verify
+  Verify --> Campaign[Existing guarded campaign and PDF]

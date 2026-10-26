@@ -119,7 +119,7 @@ impl EvidenceCell<'_> {
         } = *self;
 
         println!(
-            "EVIDENCE_WORK\trun={run}\tworkload={workload}\tsubject={subject}\texpanded_nodes={}\texpanded_arcs={}\tresolved_incidences={}\tpushes={}\tpops={}\tstale_pops={}\theuristic_evals={}\treopened={}",
+            "EVIDENCE_WORK\trun={run}\tworkload={workload}\tsubject={subject}\texpanded_nodes={}\texpanded_arcs={}\tresolved_incidences={}\tpushes={}\tpops={}\tstale_pops={}\theuristic_evals={}\treopened={}\tbound_pruned={}\tbound_pruned_arcs={}\twitness_steps={}\tseeded_bound={}",
             stats.expanded_nodes,
             stats.expanded_arcs,
             stats.resolved_incidences,
@@ -127,7 +127,11 @@ impl EvidenceCell<'_> {
             stats.pops,
             stats.stale_pops,
             stats.heuristic_evals,
-            stats.reopened
+            stats.reopened,
+            stats.bound_pruned,
+            stats.bound_pruned_arcs,
+            stats.witness_steps,
+            stats.seeded_bound
         );
     }
     pub fn result(&self, result: &ResultSummary) {

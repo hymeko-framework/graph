@@ -18,8 +18,9 @@ use hymeko::common::ids::NodeId;
 use hymeko::ir::incidence::build_incidence_index;
 use hymeko::ir::ir::{AnnoR, ArcRec, Ir, SignedRefR};
 use hymeko_graph::direct_ir::{
-    HyperTraversal, InformedSearchWorkspace, MetricHeuristic, MetricStepCost, PositionProvider,
-    Undirected, UnitCost, ZeroHeuristic,
+    DirectedProducerConsumer, HyperTraversal, InformedSearchWorkspace, MetricHeuristic,
+    MetricStepCost, PositionProvider, PreparedBergeSearch, TraversalWorkspace, Undirected,
+    UnitCost, ZeroHeuristic,
 };
 
 struct Counting;
@@ -84,9 +85,27 @@ fn warm_informed_query_allocates_nothing() {
 
     // start in component 0, goal in component 1 -> unreachable (Ok(None)); no result Vec allocated.
     let (start, goal) = (NodeId::new(0), NodeId::new(2 * m - 1));
+    // Connected in the relaxed topology, unreachable under all-plus directed
+    // routing. This exercises a rejected witness and the assisted engine,
+    // without the unavoidable owned-path allocation of a successful query.
+    let prepared =
+        PreparedBergeSearch::build(&index, NodeId::new(m - 1), &mut TraversalWorkspace::new())
+            .unwrap();
+    let mut prepared_ws = InformedSearchWorkspace::new();
 
     // Warm-up sizes the workspace arrays and grows the heap to its peak.
     for _ in 0..3 {
+        assert!(
+            prepared
+                .search(
+                    start,
+                    &UnitCost,
+                    &DirectedProducerConsumer,
+                    &mut prepared_ws
+                )
+                .unwrap()
+                .is_none()
+        );
         assert!(
             SearchCase::new(&trav, start, goal, &mut ws)
                 .run(&Dijkstra::new(&UnitCost, &Undirected))
@@ -116,6 +135,17 @@ fn warm_informed_query_allocates_nothing() {
     let before = ALLOCS.load(Ordering::Relaxed);
     for _ in 0..64 {
         assert!(
+            prepared
+                .search(
+                    start,
+                    &UnitCost,
+                    &DirectedProducerConsumer,
+                    &mut prepared_ws
+                )
+                .unwrap()
+                .is_none()
+        );
+        assert!(
             SearchCase::new(&trav, start, goal, &mut ws)
                 .run(&Dijkstra::new(&UnitCost, &Undirected))
                 .unwrap()
@@ -129,6 +159,8 @@ fn warm_informed_query_allocates_nothing() {
         );
     }
     let allocs = ALLOCS.load(Ordering::Relaxed) - before;
+    assert_eq!(prepared_ws.stats().witness_steps, 1);
+    assert!(!prepared_ws.stats().seeded_bound);
     assert_eq!(
         allocs, 0,
         "warm informed search must allocate nothing (got {allocs})"

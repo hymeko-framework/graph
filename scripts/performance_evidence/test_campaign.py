@@ -21,6 +21,92 @@ from campaign import (
 
 
 class EvidenceContract(unittest.TestCase):
+    def test_scaling_matrix_keeps_candidates_and_default_matching_limits(self):
+        cells=Cell.select("routing_scale")
+        self.assertEqual(len(cells),54)
+        self.assertEqual(len(Cell.select("routing_scale",workloads=["tour64"])),5)
+        self.assertEqual(len(Cell.select("routing_scale",workloads=["grid512_d511"])),12)
+        self.assertTrue(any(c.subject=="reticula-unitpath-first" for c in cells))
+        with self.assertRaises(ValueError):Cell.select("routing_scale",workloads=["tour16"])
+
+    def test_routing_matrix_has_full_paths_and_one_metric_tour_case(self):
+        cells=Cell.select("routing")
+        self.assertEqual(len(cells),38)
+        self.assertEqual(len(Cell.select("routing",workloads=["tour16"])),5)
+        self.assertEqual(len(Cell.select("routing",workloads=["map128"])),11)
+        for cell in cells:
+            switch="HYMEKO_EXTERNAL_BENCH" if cell.suite=="external" else "HYMEKO_ASSISTED_BENCH"
+            self.assertEqual(cell.environment(1)[switch],"1")
+        with self.assertRaises(ValueError): Cell.select("routing",workloads=["chain65k"])
+        unit=Cell.select("routing_unit")
+        self.assertEqual(len(unit),4)
+        self.assertEqual({c.workload for c in unit},{"grid200_d80"})
+        self.assertTrue(all(c.subject.endswith("-unitpath-first") for c in unit))
+
+    def test_assisted_selection_reuses_informed_client_and_requires_opt_in(self):
+        cells=Cell.select("assisted")
+        self.assertEqual(len(cells),21)
+        self.assertEqual({c.suite for c in cells},{"informed"})
+        self.assertEqual({c.test for c in cells},{"assisted::assisted_cell"})
+        self.assertTrue(all(c.environment(1)["HYMEKO_ASSISTED_BENCH"]=="1" for c in cells))
+        self.assertTrue(all(c.environment(1)["RAYON_NUM_THREADS"]=="1" for c in cells))
+        self.assertEqual(len(Cell.select("assisted",workloads=["map128"],subjects=["assisted","first_assisted"])),2)
+        with self.assertRaises(ValueError):Cell.select("assisted",workloads=["chain65k"])
+
+    def test_assisted_contract_checks_first_result_cost_and_timing_boundary(self):
+        cell={"subject":"first_assisted","nodes":"40","section":"informed_search"}
+        records={"INPUT":[{"pipeline":"berge_bound_assist","verified":"true","flow":"undirected",
+            "construction_timed":"false","index_timed":"true","caller_setup_timed":"true",
+            "goal_preparation_timed":"true","metric_scope":"resident_ir_to_index_caller_setup_search_and_drop",
+            "start":"0","goal":"39","expected_cost_micros":"12000000"}],
+            "RESULT":[{"cost_micros":"12000000"}]}
+        Evidence.verify_assisted(records,cell)
+        for field,value in [("index_timed","false"),("caller_setup_timed","false"),
+                            ("goal_preparation_timed","false"),("metric_scope","query_only"),("goal","40")]:
+            bad=copy.deepcopy(records);bad["INPUT"][0][field]=value
+            with self.assertRaises(ValueError):Evidence.verify_assisted(bad,cell)
+        bad=copy.deepcopy(records);bad["RESULT"][0]["cost_micros"]="13000000"
+        with self.assertRaises(ValueError):Evidence.verify_assisted(bad,cell)
+
+    def test_external_selection_reuses_native_controls_and_explicit_opt_in(self):
+        matrix = Cell.matrix("external", workloads=["steiner255"])
+        self.assertEqual(len(matrix), 29)
+        selected = Cell.select("external", workloads=["steiner255"],
+            subjects=["reticula-distance-prepared", "components_hymeko", "berge_path"])
+        self.assertEqual(len(selected), 3)
+        foreign = next(c for c in selected if c.suite == "external")
+        self.assertEqual(foreign.test, "external_cell")
+        self.assertEqual(foreign.environment(1)["HYMEKO_EXTERNAL_BENCH"], "1")
+        self.assertEqual(foreign.environment(1)["OPENBLAS_NUM_THREADS"], "1")
+        self.assertEqual({c.test for c in selected if c.suite == "algorithm"},
+                         {"native::native_cell", "ranking::ranking_cell"})
+
+    def test_external_contract_rejects_unverified_domain_and_cache_drift(self):
+        source = self.fixture().replace("EVIDENCE_CELL\t", "EVIDENCE_CELL\tsection=external_graph\tsubject=hypernetx-components-cold\tthreads=1\twarmups=2\trepetitions=1\tnodes=5\t")
+        source += "\nEVIDENCE_INPUT\tconstruction_timed=false\tcache_policy=cold\tmetric_scope=first_query\tfixture_sha256=" + "a"*64
+        source += "\nEVIDENCE_EXTERNAL\tbackend=hypernetx\toperation=components\tmode=cold\tfull_result=true\tchecksum=123\tversion=2.4.3\tpython=3.12.3\tinterface=python_api\tcompleted_isolates=2\tdeclared_isolates=2\tnative_nodes=3\timplementation_sha256=" + "b"*64
+        Evidence.parse(source)
+        self.assert_rejected_mutations(source, [
+            ("full_result=true", "full_result=false"),
+            ("native_nodes=3", "native_nodes=5"),
+            ("cache_policy=cold", "cache_policy=prepared"),
+            ("repetitions=1", "repetitions=2"),
+            ("construction_timed=false", "construction_timed=true"),
+            ("operation=components", "operation=reachable"),
+        ])
+
+    def test_external_dependency_identity_detects_changed_fixture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)/"inputs.json"
+            data.write_text("{}")
+            args = SimpleNamespace(suite="external", algorithm=None, external_python=__file__,
+                external_input=str(data), platform="native", cpu=2)
+            runner = ProcessRunner(args)
+            self.assertEqual(len(runner.dependency_identity()["external_input"]), 64)
+            data.write_text('{"changed":true}')
+            with self.assertRaises(ValueError):
+                runner.dependency_identity()
+
     def assert_rejected_mutations(self, source, replacements):
         for old, new in replacements:
             with self.subTest(replacement=(old, new)), self.assertRaises(ValueError):
