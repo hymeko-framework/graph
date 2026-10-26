@@ -5,23 +5,71 @@ use hymeko::ir::incidence::{IncidenceDomain, PreparedIr};
 use hymeko::ir::ir::{IncidenceSign, IrBuilder, PortDirection, ValueR};
 use hymeko::util::measurement::{AllocationSnapshot, CountingAllocator};
 use hymeko_graph::{
-    PageRank, PageRankConfig, PageRankModel, PageRankWorkspace, RankFlow, RankWeights,
+    PageRank, PageRankConfig, PageRankModel, PageRankSolver, PageRankWorkspace, RankFlow,
+    RankWeights,
 };
 
 #[global_allocator]
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
+struct AllocationFixture;
+impl AllocationFixture {
+    fn hub(seed: u64) -> hymeko::ir::ir::Ir {
+        use hymeko::generators::GraphGenerator;
+        support::Fixture {
+            nodes: 128,
+            arcs: 192,
+            arity: 32,
+            relabel_seed: Some(seed),
+            ..support::Fixture::named("hub32_1m")
+        }
+        .generate()
+        .unwrap()
+    }
+}
+
+#[test]
+fn warm_gmres_reuses_basis_rhs_and_output_for_structured_and_directed_models() {
+    let ir = AllocationFixture::hub(17);
+    let mut directed = support::Case::unsigned(4, &[&[0, 1], &[1, 2], &[2, 0]]);
+    for row in &mut directed.arcs {
+        row[0].atom.direction = PortDirection::In;
+        row[1].atom.direction = PortDirection::Out;
+    }
+    let directed_ir = directed.build().unwrap();
+    let mut workspace = PageRankWorkspace::new();
+    for (input, flow) in [
+        (&ir, RankFlow::Undirected),
+        (&directed_ir, RankFlow::InToOut),
+    ] {
+        let rank = PageRank::build(
+            input,
+            PageRankModel {
+                flow,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let solver = PageRankSolver::Gmres { restart: 20 };
+        let config = PageRankConfig::default();
+        rank.run_with_solver(config, &mut workspace, None, solver)
+            .unwrap();
+        let retained = workspace.retained_bytes();
+        let before = AllocationSnapshot::current_thread();
+        let result = rank
+            .run_with_solver(config, &mut workspace, None, solver)
+            .unwrap();
+        let delta = AllocationSnapshot::current_thread().since(before);
+        assert!(result.progress.converged);
+        assert!(result.progress.iterations > 1);
+        assert_eq!((delta.allocations, delta.bytes), (0, 0));
+        assert_eq!(workspace.retained_bytes(), retained);
+    }
+}
+
 #[test]
 fn parallel_solve_reuses_numeric_capacity_and_lazy_reverse_index() {
-    use hymeko::generators::GraphGenerator;
-    let fixture = support::Fixture {
-        nodes: 128,
-        arcs: 192,
-        arity: 32,
-        relabel_seed: Some(17),
-        ..support::Fixture::named("hub32_1m")
-    };
-    let ir = fixture.generate().unwrap();
+    let ir = AllocationFixture::hub(17);
     let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
     let before_index = rank.retained_bytes();
     let mut workspace = PageRankWorkspace::new();
@@ -55,16 +103,8 @@ fn parallel_solve_reuses_numeric_capacity_and_lazy_reverse_index() {
 
 #[test]
 fn first_encounter_range_solve_reuses_all_warm_buffers() {
-    use hymeko::generators::GraphGenerator;
     for seed in [17, 29, 43] {
-        let fixture = support::Fixture {
-            nodes: 128,
-            arcs: 192,
-            arity: 32,
-            relabel_seed: Some(seed),
-            ..support::Fixture::named("hub32_1m")
-        };
-        let ir = fixture.generate().unwrap();
+        let ir = AllocationFixture::hub(seed);
         let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
         assert_eq!(
             rank.plan_stats().unwrap().ordering,

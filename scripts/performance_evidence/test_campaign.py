@@ -21,19 +21,77 @@ from campaign import (
 
 
 class EvidenceContract(unittest.TestCase):
+    def test_solver_summary_names_the_solver_contract_without_parsing_or_qemu_claims(self):
+        cell=Cell.select('ranking_solvers',workloads=['rank2_1m'],subjects=['rank_hymeko'])[0]
+        campaign={'complete':True,'smoke':False,'runs':1,'suite':'ranking_solvers',
+                  'platform':'native','source_commit':'a'*40,'workloads':['rank2_1m'],
+                  'subjects':['rank_hymeko'],'cells':[dict(id=cell.key,run=1,
+                      records=Evidence.parse(self.native_fixture('rank2_1m')),
+                      resources={'exit_code':0,'peak_rss_bytes':1000,'wall_seconds':1.})]}
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'native').mkdir()
+            (root/'native/campaign.json').write_text(json.dumps(campaign))
+            CampaignSummary(root).write(('native',))
+            provenance=json.loads((root/'source-provenance.json').read_text())
+            self.assertIn('matrix-free GMRES',provenance['measurement_contract'])
+            self.assertNotIn('File phases',provenance['measurement_contract'])
+            svg=(root/'search-platforms.svg').read_text()
+            self.assertIn('PageRank solver strategies',svg)
+            self.assertNotIn('QEMU',svg)
+
+    def test_solver_matrix_separates_structural_power_ordered_power_and_krylov(self):
+        self.assert_matrix_sizes('ranking_solvers', {None:40, 'rank2_1m':5})
+        cells=Cell.select('ranking_solvers',workloads=['chain65k','chain65k@17'],subjects=['rank_ordered','rank_gmres'])
+        self.assertEqual(len(cells),4)
+        self.assertTrue(all(c.environment(1)['HYMEKO_NATIVE_BENCH']=='1' for c in cells))
+        self.assertTrue(all(c.environment(1)['RAYON_NUM_THREADS']=='1' for c in cells))
+        with self.assertRaises(ValueError): Cell.select('ranking_solvers',workloads=['steiner255'])
+
+    def assert_matrix_sizes(self, suite, cases):
+        for workload, expected in cases.items():
+            with self.subTest(suite=suite, workload=workload):
+                selected = Cell.select(suite, workloads=None if workload is None else [workload])
+                self.assertEqual(len(selected), expected)
+
+    def test_phase_matrix_pairs_observed_and_unobserved_calls_and_is_opt_in(self):
+        cells=Cell.select('ranking_phases')
+        self.assert_matrix_sizes('ranking_phases', {None:32, 'rank2_1m':4})
+        for cell in cells:
+            observed=cell.subject=='rank_phases' or cell.subject.endswith('-profile')
+            self.assertEqual(cell.environment(1).get('HYMEKO_PHASE_BENCH'), '1' if observed else None)
+        with self.assertRaises(ValueError):Cell.select('ranking_phases',workloads=['steiner255'])
+
+    def test_phase_partition_rejects_missing_samples_and_unrelated_totals(self):
+        cell=dict(subject='rank_phases',repetitions='2',workload='chain65k')
+        records={'CELL':[cell],
+            'SAMPLE':[dict(ordinal=str(i),wall_us='12',repetitions='2') for i in range(9)],
+            'STAGE_SAMPLE':[dict(ordinal=str(i),repetitions='2',incidence_us='2',preparation_us='3',
+                solve_us='5',cleanup_us='1',inner_total_us='11',boundary='same_call_partition') for i in range(9)]}
+        Evidence.verify_stages(records,cell)
+        rows=CampaignSummary.phase_rows('native',dict(id='example',run=1,records=records))
+        self.assertEqual(len(rows),9)
+        self.assertEqual(rows[0]['total_us'],12.)
+        self.assertEqual(rows[0]['inner_total_us'],11.)
+        for key,value in [('inner_total_us','10'),('solve_us','nan'),('repetitions','1'),('boundary','independent_calls')]:
+            bad=copy.deepcopy(records);bad['STAGE_SAMPLE'][0][key]=value
+            with self.subTest(field=key), self.assertRaisesRegex(ValueError,'partition'):
+                Evidence.verify_stages(bad,cell)
+        bad=copy.deepcopy(records);bad['STAGE_SAMPLE'].pop()
+        with self.assertRaises(ValueError):Evidence.verify_stages(bad,cell)
+        bad=copy.deepcopy(records);bad['SAMPLE'][0]['wall_us']='9'
+        with self.assertRaises(ValueError):Evidence.verify_stages(bad,cell)
+        with self.assertRaisesRegex(ValueError,'uninstrumented control'):
+            Evidence.verify_stages(records,dict(subject='rank_hymeko'))
+
     def test_scaling_matrix_keeps_candidates_and_default_matching_limits(self):
         cells=Cell.select("routing_scale")
-        self.assertEqual(len(cells),54)
-        self.assertEqual(len(Cell.select("routing_scale",workloads=["tour64"])),5)
-        self.assertEqual(len(Cell.select("routing_scale",workloads=["grid512_d511"])),12)
+        self.assert_matrix_sizes('routing_scale', {None:54, 'tour64':5, 'grid512_d511':12})
         self.assertTrue(any(c.subject=="reticula-unitpath-first" for c in cells))
         with self.assertRaises(ValueError):Cell.select("routing_scale",workloads=["tour16"])
 
     def test_routing_matrix_has_full_paths_and_one_metric_tour_case(self):
         cells=Cell.select("routing")
-        self.assertEqual(len(cells),38)
-        self.assertEqual(len(Cell.select("routing",workloads=["tour16"])),5)
-        self.assertEqual(len(Cell.select("routing",workloads=["map128"])),11)
+        self.assert_matrix_sizes('routing', {None:38, 'tour16':5, 'map128':11})
         for cell in cells:
             switch="HYMEKO_EXTERNAL_BENCH" if cell.suite=="external" else "HYMEKO_ASSISTED_BENCH"
             self.assertEqual(cell.environment(1)[switch],"1")
@@ -80,6 +138,33 @@ class EvidenceContract(unittest.TestCase):
         self.assertEqual(foreign.environment(1)["OPENBLAS_NUM_THREADS"], "1")
         self.assertEqual({c.test for c in selected if c.suite == "algorithm"},
                          {"native::native_cell", "ranking::ranking_cell"})
+
+    def test_external_ranking_matrix_keeps_native_controls_and_all_numberings(self):
+        cells=Cell.select('external_ranking')
+        self.assertEqual(len(cells),48)
+        self.assertEqual(len({c.workload for c in cells}),8)
+        selected=Cell.select('external_ranking',workloads=['hub32_1m@17'],
+                             subjects=['xgi-pagerank-first','rank_hymeko','rank_hypergraphz'])
+        self.assertEqual(len(selected),3)
+        self.assertEqual(selected[0].environment(1)['HYMEKO_EXTERNAL_BENCH'],'1')
+        with self.assertRaises(ValueError):Cell.select('external_ranking',workloads=['steiner255'])
+
+    def test_external_ranking_requires_full_residual_and_composition_attribution(self):
+        cell=dict(subject='xgi-pagerank-first',checksum='verified',threads='1',warmups='2',nodes='5')
+        records={'INPUT':[dict(construction_timed='false',cache_policy='first',metric_scope='full_rank',fixture_sha256='a'*64)],
+                 'EXTERNAL':[dict(backend='xgi',operation='pagerank',mode='first',full_result='true',checksum='verified',
+                    version='0.10.2',python='3.12.3',interface='python_api',completed_isolates='0',declared_isolates='2',
+                    native_nodes='5',implementation_sha256='b'*64,native_pagerank='composed_scipy_gmres',query_strategy='factorized')],
+                 'EXTERNAL_RANK':[dict(solver='scipy_gmres',solver_version='1.18.1',flow='undirected',weights='unit',
+                    self_return='true',personalization='uniform',converged='true',score_hash='verified',composition='factorized',
+                    damping='.85',tolerance='1e-10',residual_bound='1e-12',reference_l1='1e-12',mass='1',
+                    max_iterations='200',iterations='8',matvecs='10')]}
+        Evidence.verify_external(records,cell)
+        for key,value in [('solver','native'),('self_return','false'),('converged','false'),('score_hash','wrong'),
+                          ('residual_bound','nan'),('residual_bound','1e-8'),('reference_l1','1e-8'),('mass','0.9'),
+                          ('iterations','201'),('composition','native')]:
+            invalid=copy.deepcopy(records);invalid['EXTERNAL_RANK'][0][key]=value
+            with self.subTest(field=key),self.assertRaises(ValueError):Evidence.verify_external(invalid,cell)
 
     def test_external_contract_rejects_unverified_domain_and_cache_drift(self):
         source = self.fixture().replace("EVIDENCE_CELL\t", "EVIDENCE_CELL\tsection=external_graph\tsubject=hypernetx-components-cold\tthreads=1\twarmups=2\trepetitions=1\tnodes=5\t")
@@ -454,18 +539,28 @@ class EvidenceContract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Campaign.verify_sources(root, manifest)
 
+    def summary_campaign(self, platform):
+        """Synthetic protocol records; no archived timings or local reports required."""
+        cells = []
+        for run in (1, 2):
+            for cell in Cell.select("graph", subjects=["discrete_hops"]):
+                records = Evidence.parse(self.fixture())
+                records["CELL"][0].update(
+                    section="heuristic_preparation", workload=cell.workload,
+                    subject=cell.subject, nodes="3", arcs="2", incidences="4", threads="1",
+                )
+                cells.append(dict(id=cell.key, run=run, records=records,
+                                  resources=dict(exit_code=0, peak_rss_bytes=1000, wall_seconds=1.0)))
+        return dict(complete=True, smoke=False, suite="graph", runs=2,
+                    subjects=["discrete_hops"], source_commit="a" * 40,
+                    platform=platform, cells=cells)
+
     def test_summary_publishes_measured_boundaries_and_exact_hashes(self):
-        original = (
-            Path(__file__).resolve().parents[2]
-            / "reports/cross-platform-benchmarks/2026-09-06"
-        )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for platform in ("windows", "native"):
                 (root / platform).mkdir()
-                (root / platform / "campaign.json").write_bytes(
-                    (original / platform / "campaign.json").read_bytes()
-                )
+                (root / platform / "campaign.json").write_text(json.dumps(self.summary_campaign(platform)))
             summary = CampaignSummary(root)
             (root / "stages").mkdir()
             (root / "stages" / "independent-evidence.json").write_text("{}")
@@ -624,16 +719,10 @@ class EvidenceContract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Evidence.parse(invalid)
 
-    def test_archived_campaign_rejects_corrupted_provenance_and_process_identity(self):
-        root = (
-            Path(__file__).resolve().parents[2]
-            / "reports/cross-platform-benchmarks/2026-09-06"
-        )
-        original = json.loads(
-            (root / "windows/campaign.json").read_text(encoding="utf8")
-        )
+    def test_campaign_rejects_corrupted_provenance_and_process_identity(self):
+        original = self.summary_campaign("windows")
         for fault in ("source", "checksum", "repetition", "missing"):
-            summary = CampaignSummary(root)
+            summary = CampaignSummary(Path("unused"))
             summary.accept(original)
             changed = copy.deepcopy(original)
             if fault == "source":

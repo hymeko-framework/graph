@@ -23,13 +23,14 @@ from typing import Any
 import numpy as np
 
 VERSIONS = {"hypernetx": "2.4.3", "xgi": "0.10.2", "hypergraphx": "1.8.0", "reticula": "0.13.0"}
-MODES = ("prepared", "cold", "first")
+MODES = ("prepared", "cold", "first", "profile")
 SCOPES = {
     "prepared": "prepared_native_graph_component_query_normalize_drop_reused_output",
     "cold": "fresh_native_graph_lazy_component_query_normalize_drop_build_excluded",
     "first": "resident_native_hypergraph_to_projection_weight_binding_full_route_drop",
+    "profile": "resident_native_hypergraph_rank_same_call_phase_observation",
 }
-OPERATIONS = ("components", "reachable", "distance", "path", "astarpath", "unitpath", "tour")
+OPERATIONS = ("components", "reachable", "distance", "path", "astarpath", "unitpath", "tour", "pagerank")
 
 
 class OperationLimit(RuntimeError):
@@ -295,34 +296,58 @@ class ReticulaBackend(ComponentBackend):
 BACKENDS = {cls.name: cls for cls in [HyperNetXBackend, XGIBackend, HypergraphxBackend, ReticulaBackend]}
 
 
+class ComposedBackend:
+    """Shared native graph ownership for explicitly attributed compositions."""
+    def __init__(self, case, backend, factory=None):
+        self.case = case
+        self.native = (factory or BACKENDS[backend])(case)
+        self.name = backend
+        self.version = self.native.version
+        self.completed_isolates = self.native.completed_isolates
+
+    def nodes(self): return self.native.nodes()
+    def edge_count(self): return self.native.edge_count()
+    def implementation_hash(self): return self.native.implementation_hash()
+
+
 class ExternalCell:
     def __init__(self, case: CanonicalCase, backend: str, mode: str, operation="components"):
         if mode not in MODES:
             raise ValueError("unknown cache policy")
         if operation not in OPERATIONS:
             raise ValueError("unknown operation")
-        if (operation in {"path","astarpath","unitpath","tour"}) != (mode == "first"):
+        if mode == "profile" and operation != "pagerank":
+            raise ValueError("phase observation is restricted to PageRank")
+        if (operation in {"path","astarpath","unitpath","tour","pagerank"}) != (mode in {"first", "profile"}):
             raise ValueError("full routes require the first-result boundary")
         self.case, self.backend, self.mode = case, backend, mode
         self.operation = operation
         self.checksum = case.checksums.get(operation, "pending_route_verification")
 
     def run(self) -> None:
+        if self.mode == "profile" and os.environ.get("HYMEKO_PHASE_BENCH") != "1":
+            raise SystemExit("phase measurement disabled; explicit HYMEKO_PHASE_BENCH=1 required")
         scope = SCOPES[self.mode].replace("component", self.operation)
+        if self.operation == "pagerank":
+            scope = "resident_native_hypergraph_incidence_export_normalize_scipy_gmres_full_vector_drop"
         if self.operation != "components":
             scope = scope.replace("normalize_drop_reused_output", "result_drop")
         self.emit("INPUT", fixture_sha256=self.case.source_hash, construction_timed="false",
                   metric_scope=scope, cache_policy=self.mode)
         try:
             self.measure()
-        except OperationLimit:
-            self.emit_na("query_batch_exceeded_15_seconds")
+        except OperationLimit as error:
+            self.emit_na(str(error).replace("\t", " ").replace("\n", " "))
 
     def measure(self) -> None:
         case, mode = self.case, self.mode
         started = time.perf_counter()
         routing = self.operation in {"path", "astarpath", "unitpath", "tour"}
-        if routing:
+        ranking = self.operation == "pagerank"
+        if ranking:
+            from ranking import RankingBackend, PhaseObserver
+            adapter = RankingBackend(case,self.backend,PhaseObserver() if mode == "profile" else None)
+        elif routing:
             from routing import RoutingBackend
             adapter = RoutingBackend(case,self.backend)
         else:
@@ -333,6 +358,17 @@ class ExternalCell:
             count = adapter.query(self.operation)
         first_query_s = time.perf_counter()-started
         adapter.verify(count, self.operation)
+        if ranking:
+            self.checksum = count.checksum
+            self.emit("EXTERNAL_RANK", solver="scipy_gmres", solver_version=importlib.metadata.version("scipy"),
+                numpy_version=importlib.metadata.version("numpy"), flow="undirected", weights="unit",
+                self_return="true", personalization="uniform", damping=adapter.damping,
+                tolerance=adapter.tolerance, max_iterations=adapter.max_iterations,
+                iterations=count.iterations, matvecs=count.matvecs, converged="true",
+                residual_bound=f"{adapter.verified_bound:.17g}", reference_l1=f"{adapter.reference_l1:.17g}",
+                mass=f"{float(count.scores.sum()):.17g}", score_hash=count.checksum,
+                native_edges=adapter.edge_count(), canonical_edges=case.data["arcs"],
+                composition=self.strategy())
         if routing:
             self.checksum = adapter.route_hash(count)
             native_unit = self.operation == "unitpath" and self.backend in {"xgi", "reticula"}
@@ -348,7 +384,7 @@ class ExternalCell:
                   completed_isolates=adapter.completed_isolates, native_nodes=len(list(adapter.nodes())),
                   native_edges=adapter.edge_count(), implementation_sha256=source_sha,
                   python=sys.version.split()[0], interface="python_api", checksum=self.checksum,
-                  native_pagerank="not_matched", operation=self.operation,
+                  native_pagerank="composed_scipy_gmres" if ranking else "not_matched", operation=self.operation,
                   query_strategy=self.strategy(),
                   construction_us=f"{construction_s*1e6:.3f}",
                   first_query_us=f"{first_query_s*1e6:.3f}")
@@ -371,6 +407,8 @@ class ExternalCell:
             self.emit_na("predicted_process_budget_exceeds_160_seconds")
             return
         observations = []
+        phase_observations = []
+        observer = getattr(adapter, "observer", None)
         for ordinal in range(-2, 9):
             if self.operation == "unitpath":
                 # Fresh native input outside timing prevents a cached HNX
@@ -378,6 +416,8 @@ class ExternalCell:
                 adapter = RoutingBackend(case,self.backend)
             elif mode == "cold":
                 adapter = BACKENDS[self.backend](case)
+            if observer is not None:
+                observer.reset()
             with QueryDeadline():
                 cpu_start = time.process_time_ns()
                 wall_start = time.perf_counter_ns()
@@ -385,6 +425,8 @@ class ExternalCell:
                     count = adapter.query(self.operation, materialize=False)
                 wall = (time.perf_counter_ns()-wall_start)/1000/repetitions
                 cpu = (time.process_time_ns()-cpu_start)/1000/repetitions
+            if observer is not None and ordinal >= 0:
+                phase_observations.append((ordinal, observer.means_us(repetitions)))
             with QueryDeadline():
                 checked = adapter.query(self.operation)
             adapter.verify(checked, self.operation)
@@ -395,6 +437,10 @@ class ExternalCell:
                 return
             if ordinal >= 0:
                 observations.append((ordinal, wall, cpu))
+        for ordinal, phases in phase_observations:
+            self.emit("STAGE_SAMPLE", ordinal=ordinal, repetitions=repetitions,
+                      **{name:f"{value:.6f}" for name,value in phases.items()},
+                      inner_total_us=f"{sum(phases.values()):.6f}", boundary="same_call_partition")
         for ordinal, wall, cpu in observations:
             self.emit("SAMPLE", run=os.environ.get("EVIDENCE_RUN", "external"), section="external_graph",
                       subject=f"{self.backend}-{self.operation}-{mode}", workload=case.name, threads=1, ordinal=ordinal,
@@ -416,6 +462,8 @@ class ExternalCell:
                   nodes=self.case.n, arcs=self.case.data["arcs"], incidences=self.case.data["incidences"])
 
     def strategy(self):
+        if self.operation == "pagerank":
+            return "native_incidence_factorized_scipy_gmres_with_explicit_edge_multiplicity"
         if self.operation == "unitpath":
             return {"hypernetx":"native_linegraph_networkx_bidirectional_bfs_full_witness",
                     "hypergraphx":"native_clique_networkx_bidirectional_bfs_full_witness",
@@ -465,7 +513,10 @@ if __name__ == "__main__":
     if "external_cell" not in sys.argv:
         import unittest
         import test_external
-        result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromModule(test_external))
+        import test_ranking
+        suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromModule(module)
+                                   for module in (test_external,test_ranking))
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
         raise SystemExit(not result.wasSuccessful())
     if os.environ.get("HYMEKO_EXTERNAL_BENCH") != "1":
         raise SystemExit("external timing disabled; explicit campaign opt-in required")

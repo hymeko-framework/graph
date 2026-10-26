@@ -5,6 +5,7 @@
 pub struct MemorySnapshot {
     pub working_set_bytes: usize,
     pub peak_working_set_bytes: usize,
+    pub private_committed_bytes: Option<usize>,
 }
 
 #[cfg(windows)]
@@ -39,6 +40,7 @@ mod platform {
         quota_non_paged_pool_usage: usize,
         pagefile_usage: usize,
         peak_pagefile_usage: usize,
+        private_usage: usize,
     }
 
     #[link(name = "kernel32")]
@@ -96,6 +98,7 @@ mod platform {
             quota_non_paged_pool_usage: 0,
             pagefile_usage: 0,
             peak_pagefile_usage: 0,
+            private_usage: 0,
         };
         // SAFETY: the pseudo-handle is valid and `counters` has the C layout/size declared in `cb`.
         let ok = unsafe {
@@ -108,6 +111,7 @@ mod platform {
         (ok != 0).then_some(MemorySnapshot {
             working_set_bytes: counters.working_set_size,
             peak_working_set_bytes: counters.peak_working_set_size,
+            private_committed_bytes: Some(counters.private_usage),
         })
     }
 }
@@ -157,6 +161,7 @@ mod platform {
         Some(MemorySnapshot {
             working_set_bytes: working?,
             peak_working_set_bytes: peak?,
+            private_committed_bytes: None,
         })
     }
     #[cfg(test)]

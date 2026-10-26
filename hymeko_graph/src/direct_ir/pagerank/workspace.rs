@@ -2,6 +2,7 @@
 use super::{PageRankError, accumulator::Sum};
 use hymeko::tensor::operator::OrderedAccumulator;
 use hymeko::tensor::operator::RangeWorkspace;
+use hymeko_numerics::GmresWorkspace;
 use std::sync::Arc;
 
 /// Caller-owned power-iteration buffers, reusable across models and node counts.
@@ -9,13 +10,15 @@ use std::sync::Arc;
 pub struct PageRankWorkspace {
     pub(super) scores: Vec<f64>,
     pub(super) scaled: Vec<f64>,
-    personalization: Vec<f64>,
+    pub(super) personalization: Vec<f64>,
     pub(super) incoming: Vec<Sum>,
     pub(super) dangling: f64,
     pub(super) ranges: RangeWorkspace<Sum>,
     /// Checkpoint for speculative ranges, or scalar output under a two-term bound.
     pub(super) auxiliary: Vec<f64>,
     pub(super) arc_values: Vec<f64>,
+    pub(super) krylov: GmresWorkspace,
+    pub(super) rhs: Vec<f64>,
     pub(super) pool: Option<Arc<rayon::ThreadPool>>,
 }
 
@@ -62,6 +65,8 @@ impl PageRankWorkspace {
             + self.ranges.retained_bytes()
             + self.auxiliary.capacity() * size_of::<f64>()
             + self.arc_values.capacity() * size_of::<f64>()
+            + self.krylov.retained_bytes()
+            + self.rhs.capacity() * size_of::<f64>()
     }
 
     pub(super) fn initialize(
@@ -104,11 +109,22 @@ impl PageRankWorkspace {
     /// Stage the initial input and clear incoming state together. Repeated runs,
     /// including recovery from any previous error, cannot inherit stale sums.
     pub(super) fn prepare_input(&mut self, outgoing: &[f64], weighted: bool) {
+        self.prepare_vector(None, outgoing, weighted);
+    }
+
+    /// Stage either the current probability scores or a signed Krylov vector
+    /// through the same degree/dangling normalization.
+    pub(super) fn prepare_vector(
+        &mut self,
+        input: Option<&[f64]>,
+        outgoing: &[f64],
+        weighted: bool,
+    ) {
         let normalization = InputNormalization { weighted };
         let mut dangling = Sum::default();
-        debug_assert_eq!(self.scores.len(), outgoing.len());
-        for (((&score, &degree), scaled), incoming) in self
-            .scores
+        let scores = input.unwrap_or(&self.scores);
+        debug_assert_eq!(scores.len(), outgoing.len());
+        for (((&score, &degree), scaled), incoming) in scores
             .iter()
             .zip(outgoing)
             .zip(&mut self.scaled)
