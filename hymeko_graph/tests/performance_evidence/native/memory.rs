@@ -136,7 +136,7 @@ impl MemoryStrategy {
         workspace: &mut PageRankWorkspace,
         scores: &mut [f64],
     ) -> (usize, usize) {
-        let iterations = Input::solve_using(rank, workspace, scores, 1, self.solver);
+        let (iterations, _) = Input::solve_using(rank, workspace, scores, 1, self.solver);
         let retained = workspace.retained_bytes();
         if !self.reuse {
             *workspace = PageRankWorkspace::new();

@@ -24,11 +24,13 @@
 //! and [PageRank](https://snap.stanford.edu/class/cs224w-readings/Brin98Anatomy.pdf).
 
 mod accumulator;
+mod automatic;
 mod krylov;
 mod parallel;
 mod plan;
 mod workspace;
 use accumulator::Sum;
+pub use automatic::{PageRankAutoConfig, PageRankAutoReason, PageRankAutoSelection};
 pub use krylov::PageRankSolver;
 pub use plan::PageRankPlanStats;
 use plan::{ExecutionPlan, SelectedRows};
@@ -504,49 +506,72 @@ impl<'ir> PageRank<'ir> {
         reverse: Option<&IncidenceIndex<'ir>>,
         ordered: bool,
     ) -> Result<PageRankResult<'w>, PageRankError> {
-        let mut progress = Progress::default();
+        let mut state = PowerState::new(ordered || self.execution.is_none() || reverse.is_some());
         if self.node_count() == 0 || config.damping == 0.0 {
-            progress.converged = true;
+            state.progress.converged = true;
         } else {
             self.prepare_workspace(workspace);
-            let mut certified = ordered || self.execution.is_none() || reverse.is_some();
-            let mut previous_change = f64::INFINITY;
-            for iteration in 1..=config.max_iterations {
-                // A canonical compensated update certifies every successful
-                // return, and also the error estimate at the iteration cap.
-                let ordered = certified || iteration == config.max_iterations;
-                let (change, ordered) = if let Some(reverse) = reverse {
-                    (
-                        self.update_parallel(config.damping, workspace, reverse)?,
-                        true,
-                    )
-                } else if ordered {
-                    (self.update(config.damping, workspace)?, true)
-                } else {
-                    self.update_ranges(config.damping, workspace)?
-                };
-                progress = Progress {
-                    iterations: iteration,
-                    change_l1: change,
-                    error_bound_l1: config.damping * change / (1.0 - config.damping),
-                    converged: false,
-                };
-                let candidate = progress.error_bound_l1 <= config.tolerance;
-                progress.converged = ordered && candidate;
-                if progress.converged {
-                    break;
-                }
-                // Regrouping cannot trap the solve at its rounding-error floor.
-                if candidate || change >= previous_change || ordered {
-                    certified = true;
-                }
-                previous_change = change;
-            }
+            self.advance_power(
+                config,
+                workspace,
+                reverse,
+                &mut state,
+                config.max_iterations,
+            )?;
         }
         Ok(PageRankResult {
             scores: &workspace.scores,
-            progress,
+            progress: state.progress,
+            automatic: None,
         })
+    }
+
+    /// Advance existing numeric state without restarting or rebuilding a model.
+    fn advance_power(
+        &self,
+        config: PageRankConfig,
+        workspace: &mut PageRankWorkspace,
+        reverse: Option<&IncidenceIndex<'ir>>,
+        state: &mut PowerState,
+        stop: usize,
+    ) -> Result<(), PageRankError> {
+        let stop = stop.min(config.max_iterations);
+        if state.progress.iterations >= stop || state.progress.converged {
+            return Ok(());
+        }
+        for iteration in state.progress.iterations + 1..=stop {
+            // A canonical compensated update certifies every successful
+            // return, and also the error estimate at the iteration cap.
+            let ordered = state.certified || iteration == config.max_iterations;
+            let (change, ordered) = if let Some(reverse) = reverse {
+                (
+                    self.update_parallel(config.damping, workspace, reverse)?,
+                    true,
+                )
+            } else if ordered {
+                (self.update(config.damping, workspace)?, true)
+            } else {
+                self.update_ranges(config.damping, workspace)?
+            };
+            state.progress = Progress {
+                iterations: iteration,
+                change_l1: change,
+                error_bound_l1: config.damping * change / (1.0 - config.damping),
+                converged: false,
+            };
+            let candidate = state.progress.error_bound_l1 <= config.tolerance;
+            state.progress.converged = ordered && candidate;
+            if state.progress.converged {
+                break;
+            }
+            // Regrouping cannot trap the solve at its rounding-error floor.
+            if candidate || change >= state.previous_change || ordered {
+                state.certified = true;
+            }
+            state.prior_change = state.previous_change;
+            state.previous_change = change;
+        }
+        Ok(())
     }
 
     fn prepare_workspace(&self, ws: &mut PageRankWorkspace) {
@@ -766,11 +791,32 @@ pub struct PageRankResult<'w> {
     pub scores: &'w [f64],
     /// Stopping evidence, including explicit cap exhaustion.
     pub progress: Progress,
+    /// Actual adaptive decision and work accounting, only for the Auto strategy.
+    pub automatic: Option<PageRankAutoSelection>,
 }
 impl PageRankResult<'_> {
     /// Probability of one canonical node, or None for an out-of-range NodeId.
     pub fn score(&self, node: NodeId) -> Option<f64> {
         self.scores.get(node.raw()).copied()
+    }
+}
+
+/// Continuation state shared by explicit power and the adaptive strategy.
+#[derive(Clone, Copy)]
+struct PowerState {
+    progress: Progress,
+    certified: bool,
+    previous_change: f64,
+    prior_change: f64,
+}
+impl PowerState {
+    fn new(certified: bool) -> Self {
+        Self {
+            progress: Progress::default(),
+            certified,
+            previous_change: f64::INFINITY,
+            prior_change: f64::INFINITY,
+        }
     }
 }
 

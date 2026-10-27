@@ -36,6 +36,51 @@ personalization)` uses reusable `PageRankWorkspace` buffers and returns scores i
 `NodeId` order, iteration count, an L1 error bound and explicit convergence status.
 Reaching the iteration cap returns `converged=false` rather than claiming success.
 
+Automatic solver selection is available through the same prepared operator:
+
+```rust
+let result = rank.run_with_solver(
+    config, &mut workspace, personalization,
+    PageRankSolver::Auto(PageRankAutoConfig::default()),
+)?;
+let decision = result.automatic.expect("Auto selection evidence");
+```
+
+Auto advances power iteration in four-update batches and predicts remaining work from its
+observed contraction and the existing structural plan. It rechecks the decision
+until power converges or selects a Krylov phase, comparing that estimate
+with a bounded matrix-free GMRES phase. The default phase has at most 20 Arnoldi
+steps (Tensor may restart internally) and
+admits at most 64 MiB of requested basis payload. This cap excludes other scratch,
+allocator overhead and retained capacity from previous calls. The Krylov solver
+starts from the prefix's scores; if its canonically checked candidate is not yet
+converged, power iteration continues within the original total iteration budget.
+Nonserial workspaces use the existing parallel power path. All methods preserve
+the same personalization, directed/weighted semantics and canonical output order.
+
+`result.automatic` records the reason, selection-check count, predicted work, basis admission and actual
+power/Krylov update counts. Predictions are deterministic heuristics, not timing
+or convergence certificates. `run` and the default explicit strategy still use
+power iteration; Auto is explicitly selected. The existing
+`--suite ranking_solvers --subjects rank_auto` evidence client includes the probe,
+selection, fresh workspace and full solve in one measured call. It retains the
+decision in the results and rejects missing or inconsistent Auto provenance.
+Historical Power/GMRES minima are not Auto measurements. New measurements remain
+behind the existing explicit opt-in and quiet-host checks.
+
+The completed 27 October Amaterasu control compares Auto, power, GMRES,
+Hypergraphz and HyperNetX+SciPy on four graph families with two vertex numberings:
+40 configurations, five fresh processes each, and 1,800 retained timing samples.
+Auto has a lower median than both external frameworks on all eight inputs;
+their time divided by Auto time ranges from 1.075 to 2.848 for Hypergraphz and
+1.042 to 1.674 for HyperNetX+SciPy. Preparation, workspace allocation, selection
+and the full solve are included; initial graph construction is excluded.
+Explicit GMRES remains 4.4--5.4% faster than Auto on the two-member inputs.
+These families informed the selection policy, so this is not a held-out
+generalization study or a universal framework ranking. The PDF, raw records,
+source identities and reproduction bundle are retained in
+`reports/2026-10-27-pagerank-auto/` and the repository's Samba report archive.
+
 The default includes self-return and incidence multiplicity. `RankFlow` also
 offers explicit minus-to-plus and In-to-Out routing; algebraic sign and port
 direction remain independent. `RankWeights::Component(i)` selects one nonnegative
@@ -141,9 +186,11 @@ canonical probability update certifies the same global L1 bound; Tensor's L2
 stopping flag alone cannot certify convergence. The iteration budget includes
 this final update.
 
-`--suite ranking_solvers` compares the three HyMeKo strategies, Hypergraphz and
-HyperNetX+SciPy: 40 configurations across the eight existing inputs. The default
-strategy remains structural power: the five-process Amaterasu comparison, before
+`--suite ranking_solvers` now compares four HyMeKo strategies (structural power,
+ordered power, GMRES and Auto), Hypergraphz and HyperNetX+SciPy: 48 configurations
+across the eight existing inputs. The earlier five-strategy control below
+predates Auto. The default strategy remains structural power. That five-process
+Amaterasu comparison, before
 structural contraction was connected to GMRES, found GMRES faster on both
 two-member and hub layouts, but slower on chains and regions. That comparison
 does not measure the subsequent structural GMRES integration. Its matched follow-up

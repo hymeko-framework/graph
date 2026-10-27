@@ -13,6 +13,34 @@ use hymeko_graph::{
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 struct AllocationFixture;
+
+#[test]
+fn warm_automatic_selection_reuses_probe_basis_and_continuation_buffers() {
+    let ir = AllocationFixture::hub(17);
+    let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+    let solver = PageRankSolver::Auto(hymeko_graph::PageRankAutoConfig {
+        restart: 4,
+        ..Default::default()
+    });
+    let mut workspace = PageRankWorkspace::new();
+    let first = rank
+        .run_with_solver(PageRankConfig::default(), &mut workspace, None, solver)
+        .unwrap();
+    let selection = first.automatic.unwrap();
+    assert!(selection.gmres_iterations > 0);
+    assert!(first.progress.converged);
+    let retained = workspace.retained_bytes();
+    let before = AllocationSnapshot::current_thread();
+    let result = rank
+        .run_with_solver(PageRankConfig::default(), &mut workspace, None, solver)
+        .unwrap();
+    let delta = AllocationSnapshot::current_thread().since(before);
+    assert_eq!(result.automatic.unwrap(), selection);
+    assert!(result.progress.converged);
+    assert_eq!((delta.allocations, delta.bytes), (0, 0));
+    assert_eq!(workspace.retained_bytes(), retained);
+}
+
 impl AllocationFixture {
     fn hub(seed: u64) -> hymeko::ir::ir::Ir {
         use hymeko::generators::GraphGenerator;

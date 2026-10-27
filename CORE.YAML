@@ -12,6 +12,11 @@
 schema_version: 1
 
 approved_edits:
+  - slug: adaptive-pagerank-solver
+    date: 2026-10-27
+    authority: user requests automatic GMRES selection to provide one measured HyMeKo column
+    scope: typed Auto strategy over existing Graph power and Tensor GMRES owners, bounded continuation and basis admission, decision evidence, focused correctness tests and default-off measurement adapter; no new IR, dependency or benchmark run
+    plan: reports/2026-10-27-pagerank-auto/plan.json
   - slug: path-tour-scaling
     date: 2026-10-22
     authority: user requests larger graph and TSP measurements overnight and explicitly requires releasing kato21 and closing our connections afterward
