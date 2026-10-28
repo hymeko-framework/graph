@@ -40,3 +40,14 @@ Identical commands should return Fresh artifacts. Source, toolchain, features,
 profile or dependency changes may legitimately rebuild them. The shared cache
 does not make incompatible builds identical. Do not cargo clean that shared
 build directory, and obtain executable paths from Cargo JSON artifacts.
+
+CACHE IDENTITY
+The aliases place intermediates under
+  {cargo-cache-home}/hymeko-dev-build/{workspace-path-hash}
+Cargo expands these placeholders using the actual workspace manifest. Clients
+in one workspace share this cache; distinct source roots cannot reuse each
+other's local package outputs. A first build for each workspace is required.
+This prevents false Fresh results observed with an unqualified shared build-dir
+when switching between an edited checkout and a different-source verification
+export. Ordinary static/benchmark profiles are not changed by the aliases.
+The first location is Cargo's cache home, not a hard-coded machine path.
