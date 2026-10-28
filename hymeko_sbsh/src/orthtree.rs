@@ -300,10 +300,15 @@ impl<T: Coordinate> OrthTree<T> {
             .filter(|&c| self.is_leaf(c))
     }
 
-    /// Does cell `c`'s box overlap the query box `[qlo, qhi)`?
-    fn box_intersects(&self, c: usize, qlo: &[T], qhi: &[T]) -> bool {
+    /// Does cell `c`'s box intersect the query box? Half-open, `[lo, hi)` against `[qlo, qhi)`,
+    /// for point ranges; `closed` takes both boxes closed, so touching counts, on a cell's low
+    /// face and its high face alike.
+    fn box_intersects(&self, c: usize, qlo: &[T], qhi: &[T], closed: bool) -> bool {
         let (lo, hi) = (self.cell_lo(c), self.cell_hi(c));
-        (0..self.dim).all(|d| lo[d] < qhi[d] && qlo[d] < hi[d])
+        (0..self.dim).all(|d| {
+            let (below, above) = (lo[d] < qhi[d], qlo[d] < hi[d]);
+            (below || (closed && lo[d] == qhi[d])) && (above || (closed && qlo[d] == hi[d]))
+        })
     }
 
     /// Range query pruned by the tree: point indices whose position lies in `[qlo, qhi)`, found
@@ -314,25 +319,89 @@ impl<T: Coordinate> OrthTree<T> {
     /// these same `points`.
     pub fn objects_in_region(&self, points: &[T], qlo: &[T], qhi: &[T]) -> Vec<u32> {
         let mut out = Vec::new();
-        let mut stack = vec![0usize];
-        while let Some(c) = stack.pop() {
-            if !self.box_intersects(c, qlo, qhi) {
-                continue;
-            }
-            if self.is_leaf(c) {
+        self.visit_leaves(
+            |c| self.box_intersects(c, qlo, qhi, false),
+            |c| {
                 for &m in &self.members[c] {
                     let p = &points[m as usize * self.dim..(m as usize + 1) * self.dim];
                     if (0..self.dim).all(|d| p[d] >= qlo[d] && p[d] < qhi[d]) {
                         out.push(m);
                     }
                 }
+            },
+        );
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
+    /// The pruned descent the region queries share: visit every leaf whose cell and ancestors all
+    /// pass `enters`, skipping a subtree as soon as its cell fails. An empty tree visits nothing.
+    fn visit_leaves(&self, enters: impl Fn(usize) -> bool, mut visit: impl FnMut(usize)) {
+        let mut stack: Vec<usize> = self.root().into_iter().collect();
+        while let Some(c) = stack.pop() {
+            if !enters(c) {
+                continue;
+            }
+            if self.is_leaf(c) {
+                visit(c);
             } else {
                 stack.extend(self.children[c].iter().map(|&ch| ch as usize));
             }
         }
+    }
+
+    /// The leaves whose closed box meets the closed query box `[qlo, qhi]`, ascending: the cells
+    /// a conservative test has to look at. Cells are taken closed here, not half-open as for
+    /// point location, because a broad phase must not depend on which side of a face a touching
+    /// object is assigned to: a box that only touches a leaf's face, low or high, meets it.
+    ///
+    /// # Preconditions
+    /// `qlo.len() == qhi.len() == self.dim`; `qlo[d] <= qhi[d]`.
+    pub fn leaves_meeting(&self, qlo: &[T], qhi: &[T]) -> Vec<usize> {
+        debug_assert!(qlo.len() == self.dim && qhi.len() == self.dim);
+        let mut out = Vec::new();
+        self.visit_leaves(|c| self.box_intersects(c, qlo, qhi, true), |c| out.push(c));
         out.sort_unstable();
-        out.dedup();
         out
+    }
+
+    /// The face adjacency of the leaves: every unordered pair `(a, b)`, `a < b`, whose boxes share
+    /// a `(dim - 1)`-dimensional face patch of positive measure. On one axis one box ends where
+    /// the other begins, and on every other axis their open intervals overlap. Boxes that meet
+    /// only along an edge or at a corner are not adjacent, and a dropped orthant is a gap, not a
+    /// neighbour. Sorted ascending: the cell graph of the partition, the routes between patches.
+    ///
+    /// Shared faces compare exactly: a child copies its parent's corners and siblings share the
+    /// parent's midpoint, so the two sides of a face hold the same coordinate value.
+    pub fn face_adjacency(&self) -> Vec<(u32, u32)> {
+        let dim = self.dim;
+        let mut pairs = Vec::new();
+        let (mut qlo, mut qhi) = (Vec::with_capacity(dim), Vec::with_capacity(dim));
+        for a in self.leaves() {
+            let (alo, ahi) = (self.cell_lo(a), self.cell_hi(a));
+            for d in 0..dim {
+                // Only the high face: the pair's other side is the neighbour's low face, so each
+                // pair is found once, from the box that ends there.
+                qlo.clear();
+                qlo.extend_from_slice(alo);
+                qlo[d] = ahi[d];
+                qhi.clear();
+                qhi.extend_from_slice(ahi);
+                for b in self.leaves_meeting(&qlo, &qhi) {
+                    let (blo, bhi) = (self.cell_lo(b), self.cell_hi(b));
+                    if b != a
+                        && blo[d] == ahi[d]
+                        && (0..dim).all(|e| e == d || alo[e].max(blo[e]) < ahi[e].min(bhi[e]))
+                    {
+                        pairs.push((Ord::min(a, b) as u32, Ord::max(a, b) as u32));
+                    }
+                }
+            }
+        }
+        pairs.sort_unstable();
+        pairs.dedup();
+        pairs
     }
 
     /// Check the laminar invariant: every child nests inside its parent, and same-parent children

@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 679 public symbol(s).**
+**8 package(s), 681 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -743,6 +743,7 @@ _No public symbols._
 - `decls` — `hymeko_sbsh/src/scene.rs`
 - `dim` — `hymeko_sbsh/src/scene.rs`
 - `elimination_cost` — `hymeko_sbsh/src/width.rs`
+- `face_adjacency` — `hymeko_sbsh/src/orthtree.rs`
 - `for_each_in_region` — `hymeko_sbsh/src/bounds.rs`
 - `for_each_on_ray` — `hymeko_sbsh/src/bounds.rs`
 - `for_each_overlap` — `hymeko_sbsh/src/bounds.rs`
@@ -751,6 +752,7 @@ _No public symbols._
 - `is_leaf` — `hymeko_sbsh/src/orthtree.rs`
 - `leaf_of` — `hymeko_sbsh/src/orthtree.rs`
 - `leaves` — `hymeko_sbsh/src/orthtree.rs`
+- `leaves_meeting` — `hymeko_sbsh/src/orthtree.rs`
 - `len` — `hymeko_sbsh/src/ir_positions.rs`
 - `n_cells` — `hymeko_sbsh/src/orthtree.rs`
 - `new` — `hymeko_sbsh/src/bounds.rs`
