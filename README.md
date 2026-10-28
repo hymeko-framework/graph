@@ -421,3 +421,7 @@ up properly is a later job.
 - `hymeko_pgraph_py`, the PyO3 binding, stayed behind. It is a packaging
   concern rather than analysis, and needs a decision about where Python
   bindings live in the split-out world.
+
+## Native development with a shared library
+
+Use `cargo dev-test --test pagerank` or `cargo dev-test --test informed_search_vv --test metric_tour` from this workspace. Twenty-seven existing correctness suites and two tools have a shared-library build; their source files and production implementations are reused directly. See [the development linkage contract](dev/README.txt). Allocation instrumentation and benchmark/evidence targets retain their original static builds.

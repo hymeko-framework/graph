@@ -328,6 +328,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hymeko-graph-dev"
+version = "0.1.0"
+dependencies = [
+ "hymeko-graph-dylib",
+ "hymeko_core",
+ "rayon",
+]
+
+[[package]]
+name = "hymeko-graph-dylib"
+version = "0.1.0"
+dependencies = [
+ "hymeko_graph",
+]
+
+[[package]]
 name = "hymeko_core"
 version = "0.1.0"
 source = "git+ssh://git@192.168.1.228:2222/hymeko/core.git?rev=a70f46bbbd13716a6721d28e9387ed598676605b#a70f46bbbd13716a6721d28e9387ed598676605b"

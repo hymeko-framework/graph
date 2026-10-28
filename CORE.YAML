@@ -12,6 +12,11 @@
 schema_version: 1
 
 approved_edits:
+  - slug: native-dev-dll
+    date: 2026-10-28
+    authority: user requests shared dynamic libraries and explicitly selects Core/Graph tests and tools
+    scope: downstream development DLL re-export and original-source correctness/tool clients, workspace/profile/aliases; benchmark targets and production semantics unchanged
+    plan: dev/README.txt
   - slug: adaptive-pagerank-solver
     date: 2026-10-27
     authority: user requests automatic GMRES selection to provide one measured HyMeKo column
