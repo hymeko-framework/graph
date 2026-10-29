@@ -4,6 +4,13 @@
 //! fine wall deltas are PROVISIONAL. The load-bearing comparison is **expanded states** (host-independent)
 //! plus the correctness cross-check (A* cost == Dijkstra cost) done inline. Not a perf-gate *assertion* —
 //! the §12 gate verdicts are computed and reported here.
+//!
+//! Sections 1b and 2b run the same queries through the classical plain-graph search of this crate
+//! (`traversal_heuristic::astar` and `bidirectional_bfs` on a `Csr`), on the 2-section of the same IR.
+//! Their work measure is frontier pushes (the classical A* reports no expansions; it calls `h` once per
+//! push), and both reset or allocate O(n) state per query, which the reset floor row isolates.
+
+use std::cell::Cell;
 
 use hymeko::common::ids::{DeclId, NodeId};
 use hymeko::ir::incidence::build_incidence_index;
@@ -11,6 +18,9 @@ use hymeko::ir::ir::Ir;
 use hymeko_graph::direct_ir::{
     BergeHeuristic, HyperTraversal, InformedSearchWorkspace, MetricHeuristic, PositionProvider,
     TraversalWorkspace, Undirected, UnitCost, astar_berge_path, dijkstra_berge_path,
+};
+use hymeko_graph::{
+    AstarScratch, Csr, Heuristic, SignedGraph, ZeroHeuristic, astar, bidirectional_bfs,
 };
 
 #[path = "informed_common/mod.rs"]
@@ -40,6 +50,47 @@ impl BergeHeuristic for ManhattanH {
             None => 0.0,
         }
     }
+}
+
+/// `bidirectional_bfs` keeps u8 distances with 255 as the unreached mark, so each half stays below it.
+const BI_HALF: u8 = u8::MAX - 1;
+
+/// The 2-section (clique expansion) of the IR's arcs as a plain graph over decl ids: the classical
+/// representation, which the Berge search reads in place instead. On the 2-uniform grid it is the grid.
+fn two_section_csr(ir: &Ir) -> Csr {
+    let (mut us, mut vs) = (Vec::new(), Vec::new());
+    for arc in &ir.arcs {
+        for (i, a) in arc.refs.iter().enumerate() {
+            for b in &arc.refs[i + 1..] {
+                us.push(a.target().raw() as u32);
+                vs.push(b.target().raw() as u32);
+            }
+        }
+    }
+    let signs = vec![1i8; us.len()];
+    Csr::from_graph(&SignedGraph::from_parts(
+        ir.decl_nodes.len() as u32,
+        &us,
+        &vs,
+        &signs,
+    ))
+}
+
+/// Classical A* on the CSR, returning the hop count and the frontier pushes (`h` calls).
+fn csr_astar_counted<H: Heuristic>(
+    csr: &Csr,
+    scratch: &mut AstarScratch,
+    start: u32,
+    goal: u32,
+    h: &H,
+) -> (usize, usize) {
+    let calls = Cell::new(0usize);
+    let counted = |v: u32| {
+        calls.set(calls.get() + 1);
+        h.h(v)
+    };
+    let path = astar(csr, scratch, start, goal, &counted, u32::MAX).expect("reachable");
+    (path.len() - 1, calls.get())
 }
 
 #[test]
@@ -124,6 +175,103 @@ fn bench_informed_berge_search() {
         );
     }
 
+    // ---- 1b. the same grid and queries as a plain CSR graph: the classical A* and bi-BFS ------------
+    println!(
+        "\n-- the same grid as a plain CSR graph: classical A* (traversal_heuristic::astar), bi-BFS; push = frontier insertions --"
+    );
+    println!(
+        "{:>5} | {:>9} {:>9} | {:>9} {:>9} | {:>9} {:>9} | {:>9} | {:>10} {:>10}",
+        "d",
+        "A*0 us",
+        "A*0 push",
+        "A*L1 us",
+        "A*L1 push",
+        "A*L2 us",
+        "A*L2 push",
+        "biBFS us",
+        "B.Dij push",
+        "B.L1 push"
+    );
+    let csr = two_section_csr(&ir);
+    let (_, build_us, _) = median_us(9, || {
+        let _ = two_section_csr(&ir);
+    });
+    let (_, index_us, _) = median_us(9, || {
+        let _ = build_incidence_index(&ir).unwrap();
+    });
+    let mut scratch = AstarScratch::with_capacity(csr.n_nodes);
+    let vertex = |n: NodeId| ir.nodes[n.raw()].decl.raw() as u32;
+    let s0 = vertex(start);
+    for &d in &[20usize, 40, 80] {
+        let goal = rc(sr, sc + d);
+        let g0 = vertex(goal);
+        let (gx, gy) = ((sc + d) as f64, sr as f64);
+        let l1 = |v: u32| {
+            let p = positions[v as usize];
+            (p[0] - gx).abs() + (p[1] - gy).abs()
+        };
+        let l2 = |v: u32| {
+            let p = positions[v as usize];
+            (p[0] - gx).hypot(p[1] - gy)
+        };
+
+        let dij = dijkstra_berge_path(&trav, start, goal, &UnitCost, &Undirected, &mut ws)
+            .unwrap()
+            .unwrap();
+        let berge_dij_push = ws.stats().pushes;
+        let man = ManhattanH {
+            pos: positions.clone(),
+            goal: [gx, gy],
+        };
+        let _ = astar_berge_path(&trav, start, goal, &UnitCost, &man, &Undirected, &mut ws)
+            .unwrap()
+            .unwrap();
+        let berge_l1_push = ws.stats().pushes;
+
+        let (zero_hops, zero_push) = csr_astar_counted(&csr, &mut scratch, s0, g0, &ZeroHeuristic);
+        let (l1_hops, l1_push) = csr_astar_counted(&csr, &mut scratch, s0, g0, &l1);
+        let (l2_hops, l2_push) = csr_astar_counted(&csr, &mut scratch, s0, g0, &l2);
+        let bi_hops = bidirectional_bfs(&csr, s0, g0, BI_HALF).expect("reachable") as usize;
+        let berge = dij.total_cost as usize;
+        assert!(
+            zero_hops == berge && l1_hops == berge && l2_hops == berge && bi_hops == berge,
+            "CSR search cost != Berge Dijkstra"
+        );
+
+        let (_, zero_us, _) = median_us(9, || {
+            let _ = astar(&csr, &mut scratch, s0, g0, &ZeroHeuristic, u32::MAX);
+        });
+        let (_, l1_us, _) = median_us(9, || {
+            let _ = astar(&csr, &mut scratch, s0, g0, &l1, u32::MAX);
+        });
+        let (_, l2_us, _) = median_us(9, || {
+            let _ = astar(&csr, &mut scratch, s0, g0, &l2, u32::MAX);
+        });
+        let (_, bi_us, _) = median_us(9, || {
+            let _ = bidirectional_bfs(&csr, s0, g0, BI_HALF);
+        });
+        println!(
+            "{:>5} | {:>9.1} {:>9} | {:>9.1} {:>9} | {:>9.1} {:>9} | {:>9.1} | {:>10} {:>10}",
+            d,
+            zero_us,
+            zero_push,
+            l1_us,
+            l1_push,
+            l2_us,
+            l2_push,
+            bi_us,
+            berge_dij_push,
+            berge_l1_push
+        );
+    }
+    let (_, floor_us, _) = median_us(9, || {
+        let _ = astar(&csr, &mut scratch, s0, s0, &ZeroHeuristic, u32::MAX);
+    });
+    println!(
+        "CSR A* reset floor (start == goal: the O(n) scratch reset alone): {floor_us:.1} us; one-off builds: 2-section CSR {build_us:.1} us, Berge incidence index {index_us:.1} us; n = {}",
+        csr.n_nodes
+    );
+
     // ---- 2. window (unit cost): baseline BFS vs Dijkstra latency (uninformative-heuristic overhead) --
     println!("\n-- window (arity 5, unit): Dijkstra-vs-BFS baseline; A*(Zero) overhead check --");
     println!(
@@ -152,6 +300,63 @@ fn bench_informed_berge_search() {
         println!(
             "{:>9} {:>8} | {:>10.1} | {:>10.1} | {:>10.0}",
             m, nnz, bfs_us, dij_us, cost
+        );
+    }
+
+    // ---- 2b. the same windows as their 2-section plain graph: classical A*(Zero) and bi-BFS ----------
+    println!(
+        "\n-- the same windows as a plain CSR graph (2-section: an arity-5 arc becomes 10 edges) --"
+    );
+    println!(
+        "{:>9} {:>9} | {:>10} {:>10} | {:>10} {:>9} | {:>10} | {:>10}",
+        "m", "csr nnz", "csr bld us", "index us", "A*0 us", "A*0 push", "biBFS us", "B.Dij push"
+    );
+    for &m in &[1_000usize, 10_000, 100_000] {
+        let ir = ic::window_ir(m, 5, false, SignMode::AllPlus);
+        let idx = build_incidence_index(&ir).unwrap();
+        let trav = HyperTraversal::new(&idx);
+        let mut ws = InformedSearchWorkspace::new();
+        let (start, goal) = (NodeId::new(0), NodeId::new(m - 1));
+        let berge = dijkstra_berge_path(&trav, start, goal, &UnitCost, &Undirected, &mut ws)
+            .unwrap()
+            .unwrap()
+            .total_cost as usize;
+        let berge_push = ws.stats().pushes;
+
+        let csr = two_section_csr(&ir);
+        let (_, build_us, _) = median_us(9, || {
+            let _ = two_section_csr(&ir);
+        });
+        let (_, index_us, _) = median_us(9, || {
+            let _ = build_incidence_index(&ir).unwrap();
+        });
+        let mut scratch = AstarScratch::with_capacity(csr.n_nodes);
+        let s0 = ir.nodes[start.raw()].decl.raw() as u32;
+        let g0 = ir.nodes[goal.raw()].decl.raw() as u32;
+        let (hops, push) = csr_astar_counted(&csr, &mut scratch, s0, g0, &ZeroHeuristic);
+        assert_eq!(hops, berge, "2-section hop count != Berge Dijkstra");
+        let (_, a0_us, _) = median_us(9, || {
+            let _ = astar(&csr, &mut scratch, s0, g0, &ZeroHeuristic, u32::MAX);
+        });
+        let bi = if hops <= 2 * BI_HALF as usize {
+            assert_eq!(bidirectional_bfs(&csr, s0, g0, BI_HALF), Some(hops as u32));
+            let (_, us, _) = median_us(9, || {
+                let _ = bidirectional_bfs(&csr, s0, g0, BI_HALF);
+            });
+            format!("{us:.1}")
+        } else {
+            "u8 depth".to_string()
+        };
+        println!(
+            "{:>9} {:>9} | {:>10.1} {:>10.1} | {:>10.1} {:>9} | {:>10} | {:>10}",
+            m,
+            csr.col_idx.len(),
+            build_us,
+            index_us,
+            a0_us,
+            push,
+            bi,
+            berge_push
         );
     }
 
