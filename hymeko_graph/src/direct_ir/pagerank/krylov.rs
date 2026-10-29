@@ -1,6 +1,7 @@
 //! Tensor's existing GMRES composed with the canonical PageRank transition.
 use super::{
-    PageRank, PageRankConfig, PageRankError, PageRankResult, PageRankWorkspace, Progress, Sum,
+    PageRank, PageRankAutoConfig, PageRankConfig, PageRankError, PageRankResult, PageRankWorkspace,
+    Progress, Sum,
 };
 use hymeko::tensor::operator::OrderedAccumulator;
 use hymeko_numerics::{GmresConfig, GmresTolerance, Operator};
@@ -9,6 +10,9 @@ use std::cell::RefCell;
 /// Execution strategy over the same prepared incidence walk.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PageRankSolver {
+    /// Bounded power probe followed by a work- and basis-budget-based choice.
+    /// The same iterate, operator and total iteration budget are reused.
+    Auto(PageRankAutoConfig),
     /// Existing structurally planned power iteration, also used by `run`.
     #[default]
     PowerIteration,
@@ -46,6 +50,9 @@ impl<'ir> PageRank<'ir> {
         solver: PageRankSolver,
     ) -> Result<PageRankResult<'w>, PageRankError> {
         let restart = match solver {
+            PageRankSolver::Auto(policy) => {
+                return self.run_automatic(config, workspace, personalization, policy);
+            }
             PageRankSolver::PowerIteration => return self.run(config, workspace, personalization),
             PageRankSolver::OrderedPowerIteration => {
                 return self.run_power(config, workspace, personalization, true);
@@ -62,6 +69,17 @@ impl<'ir> PageRank<'ir> {
             });
         }
         workspace.initialize(self.node_count(), personalization)?;
+        self.run_krylov_initialized(config, workspace, restart)
+    }
+
+    /// Continue from caller-owned scores; validation/initialization belongs to
+    /// the public dispatcher or the already validated automatic strategy.
+    pub(super) fn run_krylov_initialized<'w>(
+        &self,
+        config: PageRankConfig,
+        workspace: &'w mut PageRankWorkspace,
+        restart: usize,
+    ) -> Result<PageRankResult<'w>, PageRankError> {
         if self.node_count() == 0 || config.damping == 0.0 {
             return Ok(PageRankResult {
                 scores: &workspace.scores,
@@ -69,6 +87,7 @@ impl<'ir> PageRank<'ir> {
                     converged: true,
                     ..Default::default()
                 },
+                automatic: None,
             });
         }
         self.prepare_workspace(workspace);
@@ -85,22 +104,23 @@ impl<'ir> PageRank<'ir> {
         // certify with the canonical compensated update below.
         let tolerance =
             0.25 * config.tolerance * (1.0 - config.damping) / (self.node_count() as f64).sqrt();
-        let transition = Transition {
-            rank: self,
-            workspace: RefCell::new(&mut *workspace),
+        let report = {
+            let transition = Transition {
+                rank: self,
+                workspace: RefCell::new(&mut *workspace),
+            };
+            krylov.solve(
+                &transition,
+                config.damping,
+                &rhs,
+                &mut solution,
+                GmresConfig {
+                    tolerance: GmresTolerance::Absolute(tolerance),
+                    restart: restart.min(self.node_count()),
+                    max_iterations: config.max_iterations - 1,
+                },
+            )
         };
-        let report = krylov.solve(
-            &transition,
-            config.damping,
-            &rhs,
-            &mut solution,
-            GmresConfig {
-                tolerance: GmresTolerance::Absolute(tolerance),
-                restart: restart.min(self.node_count()),
-                max_iterations: config.max_iterations - 1,
-            },
-        );
-        drop(transition);
         workspace.scores = solution;
         workspace.krylov = krylov;
         workspace.rhs = rhs;
@@ -128,6 +148,7 @@ impl<'ir> PageRank<'ir> {
                 error_bound_l1,
                 converged: error_bound_l1 <= config.tolerance,
             },
+            automatic: None,
         })
     }
 }

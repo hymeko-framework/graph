@@ -12,8 +12,9 @@ use hymeko::ir::incidence::{IncidenceDomain, PreparedIr, build_incidence_index};
 use hymeko::ir::ir::{IncidenceSign, Ir, IrBuilder, PortDirection, ReferenceDraft, ValueR};
 use hymeko_graph::rand_lcg::Lcg;
 use hymeko_graph::{
-    PageRank, PageRankConfig, PageRankError, PageRankModel, PageRankSolver, PageRankWorkspace,
-    RankFlow, RankWeights, TraversalWorkspace, connected_components,
+    PageRank, PageRankAutoConfig, PageRankAutoReason, PageRankConfig, PageRankError, PageRankModel,
+    PageRankSolver, PageRankWorkspace, RankFlow, RankWeights, TraversalWorkspace,
+    connected_components,
 };
 use support::{Case, Fixture, Membership};
 
@@ -203,6 +204,288 @@ impl DenseOracle {
 }
 
 struct Verification;
+
+#[test]
+fn automatic_reuses_the_prefix_and_bounds_krylov_and_power_completion() {
+    let mut case = Case::unsigned(
+        10,
+        &[&[0, 0, 1], &[1, 2, 3], &[3, 4], &[4, 5, 6], &[6, 7, 8]],
+    );
+    let original = case.arcs.clone();
+    for _ in 0..64 {
+        case.arcs.extend(original.iter().cloned());
+    }
+    let ir = case.clone().build().unwrap();
+    let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+    let config = PageRankConfig {
+        tolerance: 1e-12,
+        ..Default::default()
+    };
+    let p = [1., 0., 0., 0., 0., 0., 0., 0., 0., 0.];
+    let expected = DenseOracle::solve(&case, PageRankModel::default(), config.damping, &p);
+    let mut workspace = PageRankWorkspace::new();
+    for restart in [1, 10, 20] {
+        let policy = PageRankAutoConfig {
+            restart,
+            ..Default::default()
+        };
+        let result = rank
+            .run_with_solver(
+                config,
+                &mut workspace,
+                Some(&p),
+                PageRankSolver::Auto(policy),
+            )
+            .unwrap();
+        let selection = result.automatic.unwrap();
+        assert_eq!(selection.reason, PageRankAutoReason::KrylovEstimate);
+        assert_eq!(selection.probe_iterations, policy.probe_iterations);
+        assert!(selection.gmres_iterations > 0);
+        assert!(selection.gmres_iterations <= selection.restart + 1);
+        assert_eq!(
+            result.progress.iterations,
+            selection.power_iterations + selection.gmres_iterations
+        );
+        assert!(result.progress.converged);
+        assert!(result.progress.iterations <= config.max_iterations);
+        if restart == 1 {
+            assert!(selection.power_iterations > selection.probe_iterations);
+        }
+        Verification::scores(
+            result.scores,
+            &expected,
+            result.progress.error_bound_l1 + 1e-13,
+        );
+        let bits: Vec<_> = result.scores.iter().map(|x| x.to_bits()).collect();
+        let repeated = rank
+            .run_with_solver(
+                config,
+                &mut workspace,
+                Some(&p),
+                PageRankSolver::Auto(policy),
+            )
+            .unwrap();
+        assert_eq!(selection, repeated.automatic.unwrap());
+        assert_eq!(
+            bits,
+            repeated
+                .scores
+                .iter()
+                .map(|x| x.to_bits())
+                .collect::<Vec<_>>()
+        );
+    }
+    for limit in [1, 2, 4, 5, 6, 8, 17] {
+        let controls = PageRankConfig {
+            max_iterations: limit,
+            ..config
+        };
+        let result = rank
+            .run_with_solver(
+                controls,
+                &mut workspace,
+                Some(&p),
+                PageRankSolver::Auto(Default::default()),
+            )
+            .unwrap();
+        let selection = result.automatic.unwrap();
+        assert!(result.progress.iterations <= limit);
+        assert_eq!(
+            result.progress.iterations,
+            selection.power_iterations + selection.gmres_iterations
+        );
+        assert_eq!(
+            result.progress.converged,
+            result.progress.error_bound_l1 <= controls.tolerance
+        );
+        Verification::scores(
+            result.scores,
+            &expected,
+            result.progress.error_bound_l1 + 1e-13,
+        );
+    }
+    let power = rank.run(config, &mut workspace, Some(&p)).unwrap();
+    let (power_scores, progress) = (power.scores.to_vec(), power.progress);
+    let result = rank
+        .run_with_solver(
+            config,
+            &mut workspace,
+            Some(&p),
+            PageRankSolver::Auto(PageRankAutoConfig {
+                max_basis_bytes: 0,
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+    assert_eq!(
+        result.automatic.unwrap().reason,
+        PageRankAutoReason::BasisBudget
+    );
+    assert_eq!(result.scores, power_scores);
+    assert_eq!(
+        result.progress, progress,
+        "the power prefix must not restart"
+    );
+}
+
+#[test]
+fn automatic_handles_degenerate_invalid_and_parallel_inputs() {
+    let mut workspace = PageRankWorkspace::new();
+    let config = PageRankConfig::default();
+    let auto = PageRankSolver::Auto(Default::default());
+    for nodes in [0, 3] {
+        let ir = Case::unsigned(nodes, &[]).build().unwrap();
+        let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+        let result = rank
+            .run_with_solver(config, &mut workspace, None, auto)
+            .unwrap();
+        assert!(result.progress.converged);
+        assert_eq!(result.automatic.unwrap().gmres_iterations, 0);
+        let zero = rank
+            .run_with_solver(
+                PageRankConfig {
+                    damping: 0.,
+                    ..config
+                },
+                &mut workspace,
+                None,
+                auto,
+            )
+            .unwrap();
+        assert_eq!(zero.progress.iterations, 0);
+        assert_eq!(zero.automatic.unwrap().reason, PageRankAutoReason::Trivial);
+    }
+    let ir = Case::unsigned(4, &[&[0, 1], &[1, 2]]).build().unwrap();
+    let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+    for policy in [
+        PageRankAutoConfig {
+            probe_iterations: 0,
+            ..Default::default()
+        },
+        PageRankAutoConfig {
+            restart: 0,
+            ..Default::default()
+        },
+    ] {
+        assert!(matches!(
+            rank.run_with_solver(config, &mut workspace, None, PageRankSolver::Auto(policy)),
+            Err(PageRankError::InvalidConfig)
+        ));
+    }
+    assert!(matches!(
+        rank.run_with_solver(config, &mut workspace, Some(&[0.; 4]), auto),
+        Err(PageRankError::InvalidPersonalization)
+    ));
+    assert!(matches!(
+        rank.run_with_solver(
+            PageRankConfig {
+                damping: f64::NAN,
+                ..config
+            },
+            &mut workspace,
+            None,
+            auto
+        ),
+        Err(PageRankError::InvalidConfig)
+    ));
+    workspace.set_workers(2).unwrap();
+    let power = rank
+        .run(config, &mut workspace, None)
+        .unwrap()
+        .scores
+        .to_vec();
+    let result = rank
+        .run_with_solver(config, &mut workspace, None, auto)
+        .unwrap();
+    assert_eq!(result.scores, power);
+    assert_eq!(
+        result.automatic.unwrap().reason,
+        PageRankAutoReason::ParallelPower
+    );
+}
+
+#[test]
+fn automatic_rechecks_long_power_execution_without_restarting_it() {
+    let fixture = Fixture {
+        nodes: 16_384,
+        arcs: 16_383,
+        arity: 2,
+        ..Fixture::named("chain65k")
+    };
+    let ir = fixture.generate().unwrap();
+    let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+    let mut workspace = PageRankWorkspace::new();
+    let config = PageRankConfig::default();
+    let power = rank.run(config, &mut workspace, None).unwrap();
+    let (scores, progress) = (power.scores.to_vec(), power.progress);
+    let result = rank
+        .run_with_solver(
+            config,
+            &mut workspace,
+            None,
+            PageRankSolver::Auto(Default::default()),
+        )
+        .unwrap();
+    let selection = result.automatic.unwrap();
+    assert!(selection.selection_checks > 1);
+    assert_eq!(
+        selection.selection_checks,
+        selection.probe_iterations.div_ceil(4)
+    );
+    assert_eq!(selection.reason, PageRankAutoReason::PowerConverged);
+    assert_eq!(selection.gmres_iterations, 0);
+    assert_eq!(result.progress, progress);
+    assert_eq!(result.scores, scores);
+}
+
+#[test]
+fn automatic_preserves_relabeling_and_caps_on_structural_range_plans() {
+    for name in ["hub32_1m", "components8_1m"] {
+        let fixture = Fixture {
+            nodes: 128,
+            arcs: 256,
+            arity: 32,
+            membership: if name == "hub32_1m" {
+                Membership::Hub
+            } else {
+                Membership::Communities {
+                    groups: 2,
+                    active: 96,
+                }
+            },
+            ..Fixture::named(name)
+        };
+        let ir = fixture.generate().unwrap();
+        let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+        assert!(rank.plan_stats().is_some());
+        let mut workspace = PageRankWorkspace::new();
+        let solver = PageRankSolver::Auto(Default::default());
+        let expected = rank
+            .run_with_solver(PageRankConfig::default(), &mut workspace, None, solver)
+            .unwrap()
+            .scores
+            .to_vec();
+        for seed in [17, 29, 43] {
+            let mapped = Fixture {
+                relabel_seed: Some(seed),
+                ..fixture
+            }
+            .generate()
+            .unwrap();
+            let rank = PageRank::build(&mapped, PageRankModel::default()).unwrap();
+            let permutation = support::VertexPermutation::new(128, Some(seed));
+            let result = rank
+                .run_with_solver(PageRankConfig::default(), &mut workspace, None, solver)
+                .unwrap();
+            assert!(result.progress.converged);
+            let recovered: Vec<_> = (0..128)
+                .map(|i| result.scores[permutation.target(i)])
+                .collect();
+            Verification::scores(&recovered, &expected, 2e-10);
+        }
+    }
+}
+
 #[test]
 fn krylov_matches_dense_oracle_for_routes_weights_duplicates_and_dangling_nodes() {
     let mut workspace = PageRankWorkspace::new();
@@ -258,6 +541,25 @@ fn krylov_matches_dense_oracle_for_routes_weights_duplicates_and_dangling_nodes(
                     result.scores,
                     &expected,
                     result.progress.error_bound_l1 + 3e-14,
+                );
+                let automatic = rank
+                    .run_with_solver(
+                        config,
+                        &mut workspace,
+                        Some(&p),
+                        PageRankSolver::Auto(PageRankAutoConfig::default()),
+                    )
+                    .unwrap();
+                assert!(automatic.progress.converged, "{seed}, {model:?}");
+                Verification::scores(
+                    automatic.scores,
+                    &expected,
+                    automatic.progress.error_bound_l1 + 3e-14,
+                );
+                let selection = automatic.automatic.unwrap();
+                assert_eq!(
+                    selection.power_iterations + selection.gmres_iterations,
+                    automatic.progress.iterations
                 );
             }
         }

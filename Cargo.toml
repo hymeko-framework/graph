@@ -18,7 +18,12 @@
 # neither library resolves criterion. See that manifest.
 [workspace]
 resolver = "3"
-members = ["hymeko_graph", "hymeko_pgraph", "hymeko_sbsh"]
+members = ["hymeko_graph", "hymeko_pgraph", "hymeko_sbsh", "dev", "dev/dylib"]
+default-members = ["hymeko_graph", "hymeko_pgraph", "hymeko_sbsh"]
+
+[profile.dev-dll]
+inherits = "dev"
+debug = "line-tables-only"
 
 [workspace.dependencies]
 # The split-out HyMeKo repos. `hymeko_framework_rust` is retired; these are

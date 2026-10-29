@@ -40,12 +40,56 @@ class EvidenceContract(unittest.TestCase):
             self.assertNotIn('QEMU',svg)
 
     def test_solver_matrix_separates_structural_power_ordered_power_and_krylov(self):
-        self.assert_matrix_sizes('ranking_solvers', {None:40, 'rank2_1m':5})
+        self.assert_matrix_sizes('ranking_solvers', {None:48, 'rank2_1m':6})
         cells=Cell.select('ranking_solvers',workloads=['chain65k','chain65k@17'],subjects=['rank_ordered','rank_gmres'])
         self.assertEqual(len(cells),4)
         self.assertTrue(all(c.environment(1)['HYMEKO_NATIVE_BENCH']=='1' for c in cells))
         self.assertTrue(all(c.environment(1)['RAYON_NUM_THREADS']=='1' for c in cells))
         with self.assertRaises(ValueError): Cell.select('ranking_solvers',workloads=['steiner255'])
+
+    def test_auto_selection_requires_timed_policy_and_consistent_execution_evidence(self):
+        cell = Cell.select('ranking_solvers', workloads=['rank2_1m'], subjects=['rank_auto'])[0]
+        self.assertEqual(cell.environment(1)['HYMEKO_NATIVE_BENCH'], '1')
+        records = Evidence.parse(self.native_fixture('rank2_1m'))
+        records['CELL'][0]['subject'] = 'rank_auto'
+        records['AUTO'] = [dict(policy='periodic_power_probe', selection_timed='true',
+            reason='PowerConverged', probe_interval='4', restart_limit='20', max_basis_bytes='67108864',
+            iteration_limit='200', probe_updates='2', selection_checks='1', power_updates='2', gmres_updates='0',
+            restart='0', basis_bytes='none', predicted_power_updates='0', power_work='0', gmres_work='0')]
+        Evidence.verify_native(records, records['CELL'][0])
+        for key, value in [('selection_timed', 'false'), ('power_updates', '1'),
+                           ('reason', 'KrylovEstimate'), ('restart_limit', '21')]:
+            broken = copy.deepcopy(records); broken['AUTO'][0][key] = value
+            with self.assertRaises(ValueError): Evidence.verify_native(broken, broken['CELL'][0])
+        missing = copy.deepcopy(records); del missing['AUTO']
+        with self.assertRaises(ValueError): Evidence.verify_native(missing, missing['CELL'][0])
+        records['NATIVE'][0]['hymeko_iterations'] = '15'
+        records['AUTO'][0].update(reason='KrylovEstimate', probe_updates='4', power_updates='12',
+            gmres_updates='3', restart='3', basis_bytes='72', predicted_power_updates='30',
+            power_work='10000', gmres_work='5000')
+        Evidence.verify_native(records, records['CELL'][0])
+        records['AUTO'][0]['basis_bytes'] = '80'
+        with self.assertRaises(ValueError): Evidence.verify_native(records, records['CELL'][0])
+        records['AUTO'][0]['basis_bytes'] = '67108865'
+        with self.assertRaises(ValueError): Evidence.verify_native(records, records['CELL'][0])
+
+    def test_auto_summary_retains_selection_and_rejects_mixed_process_decisions(self):
+        cell = Cell.select('ranking_solvers', workloads=['rank2_1m'], subjects=['rank_auto'])[0]
+        source = self.native_fixture('rank2_1m', 'rank_auto')
+        source += ('\nEVIDENCE_AUTO\tpolicy=periodic_power_probe\tselection_timed=true'
+                   '\treason=PowerConverged\tprobe_interval=4\trestart_limit=20\tmax_basis_bytes=67108864'
+                   '\titeration_limit=200\tprobe_updates=2\tselection_checks=1\tpower_updates=2\tgmres_updates=0'
+                   '\trestart=0\tbasis_bytes=none\tpredicted_power_updates=0\tpower_work=0\tgmres_work=0')
+        campaign = dict(complete=True, smoke=False, runs=2, suite='ranking_solvers',
+            platform='native', source_commit='a'*40, workloads=['rank2_1m'], subjects=['rank_auto'],
+            cells=[dict(id=cell.key, run=run, records=Evidence.parse(source),
+                        resources=dict(exit_code=0, peak_rss_bytes=1000, wall_seconds=1.)) for run in (1, 2)])
+        summary = CampaignSummary(Path('unused')); summary.accept(campaign)
+        self.assertEqual(summary.rows[0]['algorithm'], 'rank_auto')
+        self.assertEqual(summary.rows[0]['auto_reason'], 'PowerConverged')
+        self.assertEqual(summary.rows[0]['auto_power_updates'], '2')
+        campaign['cells'][1]['records']['AUTO'][0]['reason'] = 'PowerEstimate'
+        with self.assertRaises(ValueError): CampaignSummary(Path('unused')).accept(campaign)
 
     def assert_matrix_sizes(self, suite, cases):
         for workload, expected in cases.items():

@@ -13,13 +13,29 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 710 public symbol(s).**
+**10 package(s), 713 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
 - **Root:** `benchmarks`
 - **Manifest:** `benchmarks/Cargo.toml`
 - **Charter:** <no charter>
+
+_No public symbols._
+
+## hymeko-graph-dev (rust)
+
+- **Root:** `dev`
+- **Manifest:** `dev/Cargo.toml`
+- **Charter:** Native Graph development linkage -- 2026-10-28
+
+_No public symbols._
+
+## hymeko-graph-dylib (rust)
+
+- **Root:** `dev/dylib`
+- **Manifest:** `dev/dylib/Cargo.toml`
+- **Charter:** Native development linkage; algorithms and canonical types keep their owners.
 
 _No public symbols._
 
@@ -140,6 +156,8 @@ _No public symbols._
 - `Octree` — `hymeko_graph/src/octree.rs`
 - `OrientedMaterialisationDigest` — `hymeko_graph/src/direct_ir/informed.rs`
 - `PageRank` — `hymeko_graph/src/direct_ir/pagerank.rs`
+- `PageRankAutoConfig` — `hymeko_graph/src/direct_ir/pagerank/automatic.rs`
+- `PageRankAutoSelection` — `hymeko_graph/src/direct_ir/pagerank/automatic.rs`
 - `PageRankConfig` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `PageRankModel` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `PageRankOptions` — `hymeko_graph/src/direct_ir/pagerank.rs`
@@ -203,6 +221,7 @@ _No public symbols._
 - `InformedSearchError` — `hymeko_graph/src/direct_ir/informed.rs`
 - `MatroidError` — `hymeko_graph/src/matroid/error.rs`
 - `MultiEdgeSignResolution` — `hymeko_graph/src/signed_tuples.rs`
+- `PageRankAutoReason` — `hymeko_graph/src/direct_ir/pagerank/automatic.rs`
 - `PageRankError` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `PageRankSolver` — `hymeko_graph/src/direct_ir/pagerank/krylov.rs`
 - `PrunerDecision` — `hymeko_graph/src/pruner.rs`

@@ -197,7 +197,7 @@ class Cell:
             selected = workloads or RANKING_WORKLOADS
             return ([Cell("external", "external_cell", w, "hypernetx-pagerank-first") for w in selected]
                     + [Cell("algorithm", "native::native_cell", w, subject)
-                       for w in selected for subject in ("rank_hymeko", "rank_ordered", "rank_gmres", "rank_hypergraphz")])
+                       for w in selected for subject in ("rank_hymeko", "rank_ordered", "rank_gmres", "rank_auto", "rank_hypergraphz")])
         if suite == "ranking_phases":
             selected = workloads or RANKING_WORKLOADS
             return ([Cell("external", "external_cell", w, "hypernetx-pagerank-" + mode)
@@ -413,6 +413,36 @@ class Evidence:
                     raise ValueError("native PageRank parity/residual violation")
             if result.get("personalization") != "uniform" or result.get("tolerance") != "1e-10":
                 raise ValueError("native PageRank semantic drift")
+            if cell["subject"] == "rank_auto":
+                Evidence.verify_auto(records, result)
+
+    @staticmethod
+    def verify_auto(records, result):
+        auto = Evidence.one(records, "AUTO")
+        if (auto.get("policy") != "periodic_power_probe" or auto.get("selection_timed") != "true"
+                or (auto.get("probe_interval"), auto.get("restart_limit"), auto.get("max_basis_bytes"),
+                    auto.get("iteration_limit")) != ("4", "20", "67108864", "200")):
+            raise ValueError("automatic PageRank policy/boundary drift")
+        probe, power, gmres, restart = (int(auto[k]) for k in
+                                       ("probe_updates", "power_updates", "gmres_updates", "restart"))
+        checks = int(auto['selection_checks'])
+        if (not 0 <= probe <= power or not 0 <= gmres <= restart + 1
+                or not 0 <= restart <= 20 or power + gmres != int(result["hymeko_iterations"])
+                or not 0 <= power + gmres <= 200 or checks != (probe + 3) // 4):
+            raise ValueError("automatic PageRank iteration accounting mismatch")
+        reason = auto.get("reason")
+        if reason not in {"Trivial", "ParallelPower", "PowerConverged", "IterationBudget",
+                          "BasisBudget", "PowerEstimate", "KrylovEstimate"}:
+            raise ValueError("unknown automatic PageRank decision")
+        if ((reason == "KrylovEstimate") != (gmres > 0)
+                or (restart > 0) != (gmres > 0)):
+            raise ValueError("automatic PageRank decision/execution mismatch")
+        if gmres and (auto.get("basis_bytes") == "none"
+                      or not 0 < int(auto["basis_bytes"]) <= int(auto["max_basis_bytes"])
+                      or int(auto["basis_bytes"]) != int(Evidence.one(records, "CELL")["nodes"]) * restart * 8):
+            raise ValueError("automatic PageRank basis admission mismatch")
+        if any(int(auto[k]) < 0 for k in ("predicted_power_updates", "power_work", "gmres_work")):
+            raise ValueError("negative automatic work estimate")
 
     @staticmethod
     def verify_algebra(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
@@ -1230,6 +1260,11 @@ class CampaignSummary:
             if sorted(o["run"] for o in observations) != list(range(1, runs + 1)):
                 raise ValueError(f"missing/duplicate independent process run: {key}")
             cell = observations[0]["records"]["CELL"][0]
+            if cell.get("subject") == "rank_auto" and any(
+                observation["records"].get("AUTO") != observations[0]["records"].get("AUTO")
+                for observation in observations[1:]
+            ):
+                raise ValueError(f"automatic decision changed across identical-input processes: {key}")
             if cell["status"] != "OK":
                 continue
             samples = sorted(
@@ -1290,6 +1325,9 @@ class CampaignSummary:
                     "nodes": cell["nodes"], "arcs": cell["arcs"], "incidences": cell["incidences"],
                     **{key: shape.get(key, "") for key in ("arity_min", "arity_median", "arity_max", "degree_min", "degree_median", "degree_max", "isolated_nodes")},
                     "components": native.get("components", ""),
+                    **{"auto_" + field: observations[0]["records"].get("AUTO", [{}])[0].get(field, "")
+                       for field in ("reason", "probe_updates", "selection_checks", "power_updates", "gmres_updates",
+                                     "restart", "basis_bytes", "predicted_power_updates", "power_work", "gmres_work")},
                     **{column: observations[0]["records"].get(record, [{}])[0].get(field, "")
                        for column, record, field in (
                            ("algebra_value", "ALGEBRA", "value"),
@@ -1429,7 +1467,7 @@ class CampaignSummary:
         provenance = {
             "source_commit": next(iter(self.source_commits)),
             "measurement_contract": (
-                "Resident graph to prepared operator, fresh solve workspace and complete rank result. HyMeKo compares structural power, ordered power and matrix-free GMRES; HyperNetX uses SciPy. Graph construction is excluded. Native process RSS includes both parity graphs; this is not isolated solver memory."
+                "Resident graph to prepared operator, fresh solve workspace and complete rank result. HyMeKo compares structural power, ordered power, matrix-free GMRES and bounded Auto selection; Auto includes its probe and decision in the timed call. HyperNetX uses SciPy. Graph construction is excluded. Native process RSS includes both parity graphs; this is not isolated solver memory."
                 if campaigns[0].get("suite") == "ranking_solvers" else
                 "Same-call phase attribution with separate uninstrumented whole-call controls. Phase sums are checked per sample, never reconstructed by summing independent medians. Solve includes workspace, convergence and output handling; source loading and graph construction excluded."
                 if campaigns[0].get("suite") == "ranking_phases" else "Matched native API calls include normalized output copying and temporary-result destruction. Rank preparation/workspace allocation is included except in the separately labeled rank_prepared cell. Component reverse indexes and graph construction are excluded. Whole-process RSS includes both resident graphs and parity verification."

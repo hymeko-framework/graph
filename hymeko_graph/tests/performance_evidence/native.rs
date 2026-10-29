@@ -13,8 +13,8 @@ use hymeko::{
     util::measurement::Distribution,
 };
 use hymeko_graph::{
-    PageRank, PageRankConfig, PageRankModel, PageRankSolver, PageRankWorkspace, TraversalWorkspace,
-    connected_components,
+    PageRank, PageRankAutoSelection, PageRankConfig, PageRankModel, PageRankSolver,
+    PageRankWorkspace, TraversalWorkspace, connected_components,
 };
 use std::{
     env,
@@ -37,6 +37,7 @@ enum Backend {
     Phases,
     Ordered,
     Gmres,
+    Auto,
     Prepared,
     Hypergraphz,
 }
@@ -60,6 +61,7 @@ impl Selection {
                 "phases" if operation == "rank" => Backend::Phases,
                 "ordered" if operation == "rank" => Backend::Ordered,
                 "gmres" if operation == "rank" => Backend::Gmres,
+                "auto" if operation == "rank" => Backend::Auto,
                 "prepared" => Backend::Prepared,
                 "hypergraphz" => Backend::Hypergraphz,
                 _ => panic!("unknown backend"),
@@ -77,6 +79,7 @@ impl Selection {
     }
     fn solver(&self) -> PageRankSolver {
         match self.backend {
+            Backend::Auto => PageRankSolver::Auto(Default::default()),
             Backend::Gmres => PageRankSolver::Gmres { restart: 20 },
             Backend::Ordered => PageRankSolver::OrderedPowerIteration,
             _ => PageRankSolver::PowerIteration,
@@ -298,7 +301,7 @@ impl Input {
         scores: &mut [f64],
         workers: usize,
     ) -> usize {
-        Self::solve_using(rank, workspace, scores, workers, PageRankSolver::default())
+        Self::solve_using(rank, workspace, scores, workers, PageRankSolver::default()).0
     }
     fn solve_using(
         rank: &PageRank<'_>,
@@ -306,7 +309,7 @@ impl Input {
         scores: &mut [f64],
         workers: usize,
         solver: PageRankSolver,
-    ) -> usize {
+    ) -> (usize, Option<PageRankAutoSelection>) {
         workspace.set_workers(workers).expect("rank worker budget");
         assert_eq!(workspace.worker_count(), workers);
         let result = rank
@@ -315,7 +318,7 @@ impl Input {
         assert!(result.progress.converged);
         assert!(result.progress.error_bound_l1 <= 1e-10);
         scores.copy_from_slice(result.scores);
-        result.progress.iterations
+        (result.progress.iterations, result.automatic)
     }
     fn components(index: &IncidenceIndex<'_>, labels: &mut [u32]) -> u32 {
         let partition =
@@ -369,13 +372,36 @@ impl Input {
                 }
                 let mut scores = vec![0.0; self.ir.nodes.len()];
                 let mut other = scores.clone();
-                let own_iterations = Self::solve_using(
+                let (own_iterations, automatic) = Self::solve_using(
                     &rank,
                     &mut PageRankWorkspace::new(),
                     &mut scores,
                     selection.workers,
                     selection.solver(),
                 );
+                if let Some(auto) = automatic {
+                    let PageRankSolver::Auto(policy) = selection.solver() else {
+                        unreachable!()
+                    };
+                    println!(
+                        "EVIDENCE_AUTO\tpolicy=periodic_power_probe\tselection_timed=true\treason={:?}\tprobe_interval={}\trestart_limit={}\tmax_basis_bytes={}\titeration_limit={}\tprobe_updates={}\tselection_checks={}\tpower_updates={}\tgmres_updates={}\trestart={}\tbasis_bytes={}\tpredicted_power_updates={}\tpower_work={}\tgmres_work={}",
+                        auto.reason,
+                        policy.probe_iterations,
+                        policy.restart,
+                        policy.max_basis_bytes,
+                        PageRankConfig::default().max_iterations,
+                        auto.probe_iterations,
+                        auto.selection_checks,
+                        auto.power_iterations,
+                        auto.gmres_iterations,
+                        auto.restart,
+                        auto.basis_bytes
+                            .map_or_else(|| "none".to_string(), |n| n.to_string()),
+                        auto.estimated_power_iterations,
+                        auto.estimated_power_work,
+                        auto.estimated_gmres_work,
+                    );
+                }
                 println!(
                     "EVIDENCE_LAYOUT\thymeko_prepared_bytes={}\tprojection_ranges={}",
                     rank.retained_bytes(),
@@ -445,7 +471,7 @@ impl Input {
                             &mut scores,
                             selection.workers,
                         ),
-                        Backend::Hymeko | Backend::Gmres | Backend::Ordered => {
+                        Backend::Hymeko | Backend::Gmres | Backend::Ordered | Backend::Auto => {
                             let rank = PageRank::build(&self.ir, PageRankModel::default()).unwrap();
                             Self::solve_using(
                                 &rank,
@@ -454,6 +480,7 @@ impl Input {
                                 selection.workers,
                                 selection.solver(),
                             )
+                            .0
                         }
                         Backend::Phases => {
                             if verify {
@@ -501,7 +528,11 @@ impl Input {
                     let count = match selection.backend {
                         Backend::Hypergraphz => native.components(&mut labels),
                         Backend::Hymeko => Self::components(&index, &mut labels),
-                        Backend::Prepared | Backend::Phases | Backend::Gmres | Backend::Ordered => {
+                        Backend::Prepared
+                        | Backend::Phases
+                        | Backend::Gmres
+                        | Backend::Ordered
+                        | Backend::Auto => {
                             panic!("components require the matched fresh-workspace API")
                         }
                     };
@@ -687,16 +718,20 @@ fn rank_solver_selection_and_independent_residuals_require_no_native_library_or_
             .unwrap(),
     );
     let rank = PageRank::build(&input.ir, PageRankModel::default()).unwrap();
-    for name in ["rank_hymeko", "rank_ordered", "rank_gmres"] {
+    for name in ["rank_hymeko", "rank_ordered", "rank_gmres", "rank_auto"] {
         let selection = Selection::parse(name);
         let mut scores = vec![0.0; 7];
-        Input::solve_using(
+        let (iterations, auto) = Input::solve_using(
             &rank,
             &mut PageRankWorkspace::new(),
             &mut scores,
             1,
             selection.solver(),
         );
+        assert_eq!(auto.is_some(), name == "rank_auto");
+        if let Some(auto) = auto {
+            assert_eq!(auto.power_iterations + auto.gmres_iterations, iterations);
+        }
         assert!(input.residual_bound(&scores) <= 1e-10);
     }
 }
@@ -717,8 +752,10 @@ fn rank_solver_full_catalog_correctness() {
             for solver in [
                 PageRankSolver::OrderedPowerIteration,
                 PageRankSolver::Gmres { restart: 20 },
+                PageRankSolver::Auto(Default::default()),
             ] {
-                let steps = Input::solve_using(&rank, &mut ws, &mut candidate, 1, solver);
+                let (steps, automatic) =
+                    Input::solve_using(&rank, &mut ws, &mut candidate, 1, solver);
                 let bound = input.residual_bound(&candidate);
                 let difference: f64 = reference
                     .iter()
@@ -730,7 +767,7 @@ fn rank_solver_full_catalog_correctness() {
                     "{name} {solver:?}: {bound}, {difference}"
                 );
                 println!(
-                    "SOLVER_CORRECTNESS workload={name} solver={solver:?} steps={steps} residual_bound={bound:e} reference_l1={difference:e}"
+                    "SOLVER_CORRECTNESS workload={name} solver={solver:?} steps={steps} residual_bound={bound:e} reference_l1={difference:e} automatic={automatic:?}"
                 );
             }
         }

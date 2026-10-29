@@ -1,0 +1,14 @@
+[package]
+name = "hymeko-graph-dylib"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Development linkage only: re-exports the canonical Graph library"
+
+[lib]
+crate-type = ["dylib"]
+test = false
+doctest = false
+
+[dependencies]
+graph_impl = { package = "hymeko_graph", path = "../../hymeko_graph" }
