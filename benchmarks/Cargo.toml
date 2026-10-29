@@ -27,6 +27,12 @@ parser = { git = "ssh://git@192.168.1.228:2222/hymeko/parser.git", rev = "f11628
 [dev-dependencies]
 criterion = "0.8.2"
 rand = "0.9"
+# search_bench builds its IR workloads with Core, at the graph workspace's revision, so the tree holds
+# one Core identity.
+hymeko_core = { git = "ssh://git@192.168.1.228:2222/hymeko/core.git", rev = "9f533ca8f9cd39806d8db9a0a68cda7932c81ae2" }
+# The conventional adjacency-list graph search that search_bench sets against the Berge search. It is
+# already in this tree through lalrpop.
+petgraph = "0.8"
 
 [[bench]]
 name = "graph_bench"
@@ -45,4 +51,10 @@ harness = false
 # from here, so the source needed no change when it moved.
 [[bench]]
 name = "pgraph_bench"
+harness = false
+
+# The Berge search against petgraph on the informed bench's workloads, which it reads with
+# `#[path]` from `hymeko_graph/tests/informed_common/`.
+[[bench]]
+name = "search_bench"
 harness = false
