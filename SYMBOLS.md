@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**10 package(s), 713 public symbol(s).**
+**10 package(s), 730 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -101,6 +101,15 @@ _No public symbols._
 - `BergeStep` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BergeTour` — `hymeko_graph/src/direct_ir/tour.rs`
 - `BfsScratch` — `hymeko_graph/src/traversal.rs`
+- `BinaryBasis` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryCoordinate` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryFrontierBarrier` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryFrontierSearch` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryFrontierStep` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryLatentProposals` — `hymeko_graph/src/matroid/latent.rs`
+- `BinaryMatroidWorkspace` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryReconstructionOptions` — `hymeko_graph/src/matroid/reconstruction.rs`
+- `BinaryReconstructionSearch` — `hymeko_graph/src/matroid/reconstruction.rs`
 - `BipartiteOnlyPruner` — `hymeko_graph/src/balance.rs`
 - `BuildOpts` — `hymeko_graph/src/incidence.rs`
 - `CartwrightHararyPruner` — `hymeko_graph/src/balance.rs`
@@ -267,6 +276,12 @@ _No public symbols._
 - `bfs_distances` — `hymeko_graph/src/traversal.rs`
 - `bfs_distances_into` — `hymeko_graph/src/unsigned_cycles/bfs.rs`
 - `bidirectional_bfs` — `hymeko_graph/src/traversal.rs`
+- `binary_column` — `hymeko_graph/src/matroid/binary.rs`
+- `binary_frontier_barrier` — `hymeko_graph/src/matroid/binary.rs`
+- `binary_frontier_search` — `hymeko_graph/src/matroid/binary.rs`
+- `binary_latent_proposals` — `hymeko_graph/src/matroid/latent.rs`
+- `binary_reconstruction_search` — `hymeko_graph/src/matroid/reconstruction.rs`
+- `binary_weighted_basis` — `hymeko_graph/src/matroid/binary.rs`
 - `bs_clear` — `hymeko_graph/src/traversal.rs`
 - `bs_clear` — `hymeko_graph/src/unsigned_cycles/csr.rs`
 - `bs_get` — `hymeko_graph/src/traversal.rs`
@@ -525,6 +540,7 @@ _No public symbols._
 - `signs` — `hymeko_graph/src/hyper_operator.rs`
 - `snapshot` — `hymeko_graph/src/pruner.rs`
 - `solve` — `hymeko_graph/src/direct_ir/tour.rs`
+- `solve` — `hymeko_graph/src/matroid/reconstruction/quotient.rs`
 - `sort_by_score_desc` — `hymeko_graph/src/topk_cycles.rs`
 - `sources` — `hymeko_graph/src/sphf.rs`
 - `spanning_basis` — `hymeko_graph/src/matroid/cell.rs`
@@ -543,6 +559,7 @@ _No public symbols._
 - `with_capacity` — `hymeko_graph/src/topk_cycles.rs`
 - `with_capacity` — `hymeko_graph/src/traversal.rs`
 - `with_capacity` — `hymeko_graph/src/traversal_heuristic.rs`
+- `with_limits` — `hymeko_graph/src/matroid/binary.rs`
 - `with_ordering` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `with_rank` — `hymeko_graph/src/cell_topology.rs`
 - `with_signs` — `hymeko_graph/src/cell_topology.rs`
