@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**10 package(s), 713 public symbol(s).**
+**10 package(s), 737 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -101,6 +101,15 @@ _No public symbols._
 - `BergeStep` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BergeTour` — `hymeko_graph/src/direct_ir/tour.rs`
 - `BfsScratch` — `hymeko_graph/src/traversal.rs`
+- `BinaryBasis` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryCoordinate` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryFrontierBarrier` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryFrontierSearch` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryFrontierStep` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryLatentProposals` — `hymeko_graph/src/matroid/latent.rs`
+- `BinaryMatroidWorkspace` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryReconstructionOptions` — `hymeko_graph/src/matroid/reconstruction.rs`
+- `BinaryReconstructionSearch` — `hymeko_graph/src/matroid/reconstruction.rs`
 - `BipartiteOnlyPruner` — `hymeko_graph/src/balance.rs`
 - `BuildOpts` — `hymeko_graph/src/incidence.rs`
 - `CartwrightHararyPruner` — `hymeko_graph/src/balance.rs`
@@ -267,6 +276,12 @@ _No public symbols._
 - `bfs_distances` — `hymeko_graph/src/traversal.rs`
 - `bfs_distances_into` — `hymeko_graph/src/unsigned_cycles/bfs.rs`
 - `bidirectional_bfs` — `hymeko_graph/src/traversal.rs`
+- `binary_column` — `hymeko_graph/src/matroid/binary.rs`
+- `binary_frontier_barrier` — `hymeko_graph/src/matroid/binary.rs`
+- `binary_frontier_search` — `hymeko_graph/src/matroid/binary.rs`
+- `binary_latent_proposals` — `hymeko_graph/src/matroid/latent.rs`
+- `binary_reconstruction_search` — `hymeko_graph/src/matroid/reconstruction.rs`
+- `binary_weighted_basis` — `hymeko_graph/src/matroid/binary.rs`
 - `bs_clear` — `hymeko_graph/src/traversal.rs`
 - `bs_clear` — `hymeko_graph/src/unsigned_cycles/csr.rs`
 - `bs_get` — `hymeko_graph/src/traversal.rs`
@@ -525,6 +540,7 @@ _No public symbols._
 - `signs` — `hymeko_graph/src/hyper_operator.rs`
 - `snapshot` — `hymeko_graph/src/pruner.rs`
 - `solve` — `hymeko_graph/src/direct_ir/tour.rs`
+- `solve` — `hymeko_graph/src/matroid/reconstruction/quotient.rs`
 - `sort_by_score_desc` — `hymeko_graph/src/topk_cycles.rs`
 - `sources` — `hymeko_graph/src/sphf.rs`
 - `spanning_basis` — `hymeko_graph/src/matroid/cell.rs`
@@ -543,6 +559,7 @@ _No public symbols._
 - `with_capacity` — `hymeko_graph/src/topk_cycles.rs`
 - `with_capacity` — `hymeko_graph/src/traversal.rs`
 - `with_capacity` — `hymeko_graph/src/traversal_heuristic.rs`
+- `with_limits` — `hymeko_graph/src/matroid/binary.rs`
 - `with_ordering` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `with_rank` — `hymeko_graph/src/cell_topology.rs`
 - `with_signs` — `hymeko_graph/src/cell_topology.rs`
@@ -561,6 +578,7 @@ _No public symbols._
 - `AndOrNorm` — `hymeko_pgraph/src/andor.rs`
 - `Regime` — `hymeko_pgraph/src/regime.rs`
 - `Reliability` — `hymeko_pgraph/src/andor.rs`
+- `StructureObjective` — `hymeko_pgraph/src/abb.rs`
 
 ### structs
 
@@ -584,6 +602,7 @@ _No public symbols._
 - `MaximalStructure` — `hymeko_pgraph/src/msg.rs`
 - `MaximalStructureOptions` — `hymeko_pgraph/src/msg.rs`
 - `NoExcess` — `hymeko_pgraph/src/regime.rs`
+- `ObjectiveSolution` — `hymeko_pgraph/src/abb.rs`
 - `PGraphSchema` — `hymeko_pgraph/src/schema.rs`
 - `PGraphSchemaBuilder` — `hymeko_pgraph/src/schema.rs`
 - `PGraphView` — `hymeko_pgraph/src/view.rs`
@@ -592,9 +611,11 @@ _No public symbols._
 - `Product` — `hymeko_pgraph/src/andor.rs`
 - `PropagationConfig` — `hymeko_pgraph/src/andor.rs`
 - `SolutionStructure` — `hymeko_pgraph/src/ssg.rs`
+- `SsgConstraints` — `hymeko_pgraph/src/ssg_dm.rs`
 - `SsgDmOptions` — `hymeko_pgraph/src/ssg_dm.rs`
 - `SsgDmResult` — `hymeko_pgraph/src/ssg_dm.rs`
 - `SsgOptions` — `hymeko_pgraph/src/ssg.rs`
+- `SsgRequest` — `hymeko_pgraph/src/cli.rs`
 - `UnitReliability` — `hymeko_pgraph/src/andor.rs`
 
 ### enums
@@ -640,12 +661,14 @@ _No public symbols._
 - `close_producible_under_rule` — `hymeko_pgraph/src/reachability.rs`
 - `compile_sources` — `hymeko_pgraph/src/meta_resolve.rs`
 - `compile_to_lowered` — `hymeko_pgraph/src/meta_resolve.rs`
+- `constrained_source` — `hymeko_pgraph/src/cli.rs`
 - `consumers` — `hymeko_pgraph/src/lowering.rs`
 - `consumers_set` — `hymeko_pgraph/src/view.rs`
 - `counts_candidate_cost` — `hymeko_pgraph/src/reachability.rs`
 - `edges` — `hymeko_pgraph/src/schema.rs`
 - `enumerate` — `hymeko_pgraph/src/ssg.rs`
 - `enumerate` — `hymeko_pgraph/src/ssg_dm.rs`
+- `enumerate_constrained` — `hymeko_pgraph/src/ssg_dm.rs`
 - `enumerate_with_options` — `hymeko_pgraph/src/ssg.rs`
 - `enumerate_with_options` — `hymeko_pgraph/src/ssg_dm.rs`
 - `for_each_consumer` — `hymeko_pgraph/src/view.rs`
@@ -714,6 +737,7 @@ _No public symbols._
 - `solve` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k_with_regime` — `hymeko_pgraph/src/abb.rs`
+- `solve_with_objective` — `hymeko_pgraph/src/abb.rs`
 - `solve_with_options` — `hymeko_pgraph/src/abb.rs`
 - `solve_with_regime` — `hymeko_pgraph/src/abb.rs`
 - `successors` — `hymeko_pgraph/src/schema.rs`

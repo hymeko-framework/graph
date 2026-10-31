@@ -44,6 +44,75 @@ pub enum CliError {
     /// Rendering via the external Graphviz `dot` tool failed.
     #[error("render: {0}")]
     Render(String),
+    /// Invalid or source-mismatched partial search constraints.
+    #[error("constraints: {0}")]
+    Constraints(String),
+}
+
+/// Source-bound partial-search request. Bounds retain their caller-certified
+/// meaning; the CLI never converts a measured cost into a lower bound.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SsgRequest {
+    /// Opaque caller evidence echoed in the receipt, never interpreted by Pgraph.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<serde_json::Value>,
+    /// Canonical semantic digest from the authoring consumer.
+    pub model_digest: String,
+    /// Maximum number of collected leaves, 1..=65536.
+    pub max_structures: usize,
+    /// Partial restrictions and search-node budget.
+    pub constraints: crate::ssg_dm::SsgConstraints,
+}
+
+/// Compile the original source, then constrain SSG before generating structures.
+/// No gate drafts or complete-circuit candidate list enters this adapter.
+pub fn constrained_source(
+    path: &Path,
+    request: &SsgRequest,
+) -> Result<serde_json::Value, CliError> {
+    use hymeko::{
+        module_store::{execution::CompiledModel, source_provider::StdFsProvider},
+        util::real_parser::RealParser,
+    };
+    if !(1..=65536).contains(&request.max_structures)
+        || !(1..=1_000_000).contains(&request.constraints.max_explored)
+    {
+        return Err(CliError::Constraints(
+            "Finite output and search-node budgets required".into(),
+        ));
+    }
+    let model = CompiledModel::compile(StdFsProvider::new(), RealParser, path)
+        .map_err(|e| CliError::Parse(format!("{e:?}")))?;
+    let digest: String = model
+        .semantic_digest()
+        .0
+        .0
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    if digest != request.model_digest {
+        return Err(CliError::Constraints(
+            "Core source digest differs from request".into(),
+        ));
+    }
+    let p = crate::lower_resolved(&model.program().ir, model.interner())?;
+    let msg = crate::maximal_structure(&p);
+    let result = crate::ssg_dm::enumerate_constrained(
+        &p,
+        &msg,
+        crate::ssg_dm::SsgDmOptions {
+            max_structures: request.max_structures,
+        },
+        &request.constraints,
+    )
+    .map_err(|e| CliError::Constraints(e.into()))?;
+    Ok(
+        serde_json::json!({"model_digest":digest,"request":request,"msg_units":msg.units.len(),
+        "structures":result.structures.iter().map(|s|s.units.iter().map(|u|u.raw()).collect::<Vec<_>>()).collect::<Vec<_>>(),
+        "capped":result.capped,"explored":result.explored,"pruned_by_constraints":result.pruned_by_constraints,
+        "decisions_considered":result.decisions_considered}),
+    )
 }
 
 /// Load a P-graph from any supported input.

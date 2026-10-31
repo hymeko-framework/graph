@@ -12,6 +12,16 @@
 schema_version: 1
 
 approved_edits:
+  - slug: quantum-bounded-abb-objective
+    date: 2026-10-31
+    authority: user explicitly approves a bounded ABB with a caller-supplied (schedule-aware) objective for the Quantum global P-graph optimum
+    scope: additive hymeko_pgraph API (StructureObjective, solve_with_objective, ObjectiveSolution) and a shared reachability helper; existing solve/top-k semantics, public types and dependencies unchanged; the Quantum consumer supplies the schedule objective. Also restores the canonical unconstrained ssg_dm semantics required by quantum-partial-ssg-matroid-frontier: leaf forward feasibility becomes the opt-in SsgConstraints.forward_feasible
+    plan: ../hymeko-quantum/HANDOFF.txt 2026-10-31 bounded-ABB entry; consumers adopt it by pin after publication
+  - slug: quantum-partial-ssg-matroid-frontier
+    date: 2026-10-30
+    authority: user explicitly requests early P-graph relaxation and internal matroid basis/lifetime search, and authorizes offline local edits
+    scope: extend existing SSG constraints and binary matroid frontier, thin CLI transport and Quantum consumer verification; preserve unconstrained semantics and dependency revisions
+    plan: ../transformation/docs/plans/2026-10-30-reverse-state-search/plan.pdf
   - slug: native-dev-dll
     date: 2026-10-28
     authority: user requests shared dynamic libraries and explicitly selects Core/Graph tests and tools

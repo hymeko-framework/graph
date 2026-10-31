@@ -49,7 +49,8 @@
 //! $|\Delta(x)| \le 31$ (a single material produced by ≥32 distinct
 //! units is pathological for the subset enumeration; `debug_assert`ed).
 
-use std::collections::BTreeSet;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 use hymeko::common::ids::DeclId;
 
@@ -75,6 +76,120 @@ pub struct SsgDmResult {
     /// enumeration stopped early (so `structures` is a prefix, not the
     /// full set).
     pub capped: bool,
+    /// Partial search states visited, including rejected states.
+    pub explored: usize,
+    /// States rejected by supplied constraints or leaf forward feasibility.
+    pub pruned_by_constraints: usize,
+    /// Producer decisions considered before consistency checks.
+    pub decisions_considered: usize,
+}
+
+/// Optional caller-certified restrictions on the same decision-mapping search.
+/// IDs are canonical declaration IDs, never positions in a projected graph.
+/// `lower_costs` are nonnegative *lower bounds*, not empirical estimates. Omitted
+/// units cost zero. The strict ceiling only retains structures below it; callers
+/// must keep their incumbent separately. No quantum-specific rule lives here.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SsgConstraints {
+    /// Units excluded by caller-certified infeasibility conditions.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub forbidden_units: BTreeSet<usize>,
+    /// Materials that permit at most one selected producer.
+    pub exclusive_materials: BTreeSet<usize>,
+    /// At most one unit from each group may be selected.
+    pub exclusive_groups: Vec<BTreeSet<usize>>,
+    /// Certified additive per-unit lower costs.
+    pub lower_costs: BTreeMap<usize, u64>,
+    /// Strict total lower-cost ceiling; None disables cost pruning.
+    pub strict_cost_ceiling: Option<u64>,
+    /// Partial-state cap; zero means unlimited, as in the original API.
+    pub max_explored: usize,
+    /// Keep only leaves that are forward-feasible from the raw materials (see
+    /// [`crate::ssg::is_feasible`]). Off by default: the decision mapping
+    /// enumerates Friedler's structural solution-structures, which admit
+    /// raw-free producer cycles. Executable-process consumers switch it on.
+    #[serde(default)]
+    pub forward_feasible: bool,
+}
+
+impl SsgConstraints {
+    fn validate(&self, p: &LoweredPGraph) -> Result<(), &'static str> {
+        if self
+            .forbidden_units
+            .iter()
+            .any(|id| !p.units.contains(&DeclId::new(*id)))
+            || self.exclusive_materials.len() > p.materials.len()
+            || self.exclusive_groups.len() > 4096
+            || self
+                .exclusive_materials
+                .iter()
+                .any(|id| !p.materials.contains(&DeclId::new(*id)))
+            || self
+                .exclusive_groups
+                .iter()
+                .any(|g| g.len() < 2 || g.iter().any(|id| !p.units.contains(&DeclId::new(*id))))
+            || self
+                .lower_costs
+                .keys()
+                .any(|id| !p.units.contains(&DeclId::new(*id)))
+        {
+            return Err("Unknown or invalid SSG constraint identities");
+        }
+        Ok(())
+    }
+
+    fn admits(
+        &self,
+        p: &LoweredPGraph,
+        units: &BTreeSet<DeclId>,
+        included: &BTreeSet<DeclId>,
+        excluded: &BTreeSet<DeclId>,
+        work: &BTreeSet<DeclId>,
+    ) -> bool {
+        if self.exclusive_groups.iter().any(|group| {
+            group
+                .iter()
+                .filter(|id| included.contains(&DeclId::new(**id)))
+                .take(2)
+                .count()
+                > 1
+        }) || self.exclusive_materials.iter().any(|id| {
+            p.producers(DeclId::new(*id))
+                .intersection(included)
+                .take(2)
+                .count()
+                > 1
+        }) {
+            return false;
+        }
+        let Some(ceiling) = self.strict_cost_ceiling else {
+            return true;
+        };
+        let cost = |u: &DeclId| u128::from(*self.lower_costs.get(&u.raw()).unwrap_or(&0));
+        let committed: u128 = included.iter().map(cost).sum();
+        // Optimistic covering relaxation: each outstanding material needs one
+        // available producer. Take MAX of individual minima, not their SUM:
+        // one producer can cover several materials. Ignoring other restrictions
+        // and upstream demands only weakens this admissible lower bound.
+        let mut remaining = 0;
+        for material in work {
+            let producers = p.producers(*material);
+            if !producers.is_disjoint(included) {
+                continue;
+            }
+            let Some(minimum) = producers
+                .iter()
+                .filter(|u| units.contains(u) && !excluded.contains(u))
+                .map(cost)
+                .min()
+            else {
+                return false;
+            };
+            remaining = remaining.max(minimum);
+        }
+        committed + remaining < u128::from(ceiling)
+    }
 }
 
 /// Generate every solution-structure of `p` under the maximal
@@ -94,12 +209,31 @@ pub fn enumerate_with_options(
     msg: &MaximalStructure,
     opts: SsgDmOptions,
 ) -> SsgDmResult {
+    enumerate_constrained(p, msg, opts, &SsgConstraints::default())
+        .expect("Empty SSG constraints are valid")
+}
+
+/// Generate structures while applying restrictions before descendants exist.
+/// The default constraints preserve the original API's order and structure set.
+/// For a singleton-producer material, enumerate singletons directly: no rejected
+/// exponential subset family is materialized. Limits report incomplete output.
+pub fn enumerate_constrained(
+    p: &LoweredPGraph,
+    msg: &MaximalStructure,
+    opts: SsgDmOptions,
+    constraints: &SsgConstraints,
+) -> Result<SsgDmResult, &'static str> {
+    constraints.validate(p)?;
     let mut e = Enumerator {
         p,
         units: &msg.units,
         out: Vec::new(),
         max_structures: opts.max_structures,
         capped: false,
+        constraints,
+        explored: 0,
+        pruned: 0,
+        decisions: 0,
     };
     // Initial work-list: the required products that are not themselves
     // raw (a raw product needs no production decision).
@@ -109,11 +243,19 @@ pub fn enumerate_with_options(
         .filter(|m| !p.raws.contains(m))
         .copied()
         .collect();
-    e.recurse(&BTreeSet::new(), &BTreeSet::new(), &BTreeSet::new(), &p0);
-    SsgDmResult {
+    let excluded = constraints
+        .forbidden_units
+        .iter()
+        .map(|id| DeclId::new(*id))
+        .collect();
+    e.recurse(&BTreeSet::new(), &excluded, &BTreeSet::new(), &p0);
+    Ok(SsgDmResult {
         structures: e.out,
         capped: e.capped,
-    }
+        explored: e.explored,
+        pruned_by_constraints: e.pruned,
+        decisions_considered: e.decisions,
+    })
 }
 
 struct Enumerator<'a> {
@@ -122,6 +264,10 @@ struct Enumerator<'a> {
     out: Vec<SolutionStructure>,
     max_structures: usize,
     capped: bool,
+    constraints: &'a SsgConstraints,
+    explored: usize,
+    pruned: usize,
+    decisions: usize,
 }
 
 impl Enumerator<'_> {
@@ -145,11 +291,38 @@ impl Enumerator<'_> {
         if self.capped {
             return;
         }
+        if self.constraints.max_explored != 0 && self.explored >= self.constraints.max_explored {
+            self.capped = true;
+            return;
+        }
+        self.explored += 1;
+        if !self
+            .constraints
+            .admits(self.p, self.units, included, excluded, work)
+        {
+            self.pruned += 1;
+            return;
+        }
 
         // Pick the next undecided material (smallest DeclId → a fixed,
         // reproducible decision order; the exactly-once guarantee does
         // not depend on which we pick, only that each is decided once).
         let Some(&x) = work.iter().next() else {
+            // Production decisions can close a self-supporting cycle without
+            // connecting it to a raw. Such a leaf is a structural solution-structure;
+            // only an explicit forward-feasibility request rejects it here.
+            if self.constraints.forward_feasible
+                && !crate::ssg::is_feasible(
+                self.p,
+                included,
+                crate::ssg::SsgOptions {
+                    require_at_least_one_unit: false,
+                    ..Default::default()
+                },
+            ) {
+                self.pruned += 1;
+                return;
+            }
             // Work-list empty ⇒ `included` is a complete solution-structure.
             if self.max_structures != 0 && self.out.len() >= self.max_structures {
                 self.capped = true;
@@ -171,15 +344,24 @@ impl Enumerator<'_> {
             return;
         }
         let k = delta.len();
-        debug_assert!(
-            k <= 31,
+        let singleton = self.constraints.exclusive_materials.contains(&x.raw());
+        assert!(
+            singleton || k <= 31,
             "material produced by {k} units exceeds the 31-producer subset bound"
         );
 
         // Candidate decisions: every non-empty subset of Δ(x).
-        for mask in 1u32..(1u32 << k) {
+        let decision_count = if singleton { k } else { (1usize << k) - 1 };
+        for decision in 0..decision_count {
+            self.decisions += 1;
             let chosen: BTreeSet<DeclId> = (0..k)
-                .filter(|i| (mask >> i) & 1 == 1)
+                .filter(|i| {
+                    if singleton {
+                        *i == decision
+                    } else {
+                        ((decision + 1) >> i) & 1 == 1
+                    }
+                })
                 .map(|i| delta[i])
                 .collect();
             let dropped: BTreeSet<DeclId> = delta
@@ -338,5 +520,134 @@ mod tests {
         let r = enumerate_with_options(&p, &msg, SsgDmOptions { max_structures: 3 });
         assert_eq!(r.structures.len(), 3);
         assert!(r.capped, "hitting the cap must set `capped`");
+    }
+
+    #[test]
+    fn partial_constraints_preserve_every_small_admissible_structure() {
+        let p = lower_src(
+            r#"T{} context {
+            P <material, product>; Q <material, product>; R <material, raw>;
+            @a <unit> 3 { (-R,+P,+Q); }
+            @b <unit> 2 { (-R,+P); }
+            @c <unit> 2 { (-R,+Q); }
+            @d <unit> 4 { (-R,+Q); }
+        }"#,
+        );
+        let msg = crate::msg::maximal_structure(&p);
+        let all = enumerate(&p, &msg);
+        let costs: BTreeMap<usize, u64> =
+            p.costs.iter().map(|(u, c)| (u.raw(), *c as u64)).collect();
+        for exclusive in [false, true] {
+            for ceiling in 0..=15 {
+                let constraints = SsgConstraints {
+                    exclusive_materials: if exclusive {
+                        p.materials.iter().map(|x| x.raw()).collect()
+                    } else {
+                        BTreeSet::new()
+                    },
+                    lower_costs: costs.clone(),
+                    strict_cost_ceiling: Some(ceiling),
+                    ..Default::default()
+                };
+                let filtered =
+                    enumerate_constrained(&p, &msg, SsgDmOptions::default(), &constraints).unwrap();
+                let expected: Vec<_> = all
+                    .iter()
+                    .filter(|s| {
+                        let cost: u64 = s.units.iter().map(|u| costs[&u.raw()]).sum();
+                        cost < ceiling
+                            && (!exclusive
+                                || p.materials
+                                    .iter()
+                                    .all(|m| p.producers(*m).intersection(&s.units).count() <= 1))
+                    })
+                    .cloned()
+                    .collect();
+                assert_eq!(filtered.structures, expected);
+                assert!(!filtered.capped);
+            }
+        }
+        let mut constraints = SsgConstraints {
+            exclusive_materials: p.materials.iter().map(|x| x.raw()).collect(),
+            ..Default::default()
+        };
+        let reduced =
+            enumerate_constrained(&p, &msg, SsgDmOptions::default(), &constraints).unwrap();
+        let full = enumerate_with_options(&p, &msg, SsgDmOptions::default());
+        assert!(reduced.decisions_considered < full.decisions_considered);
+        constraints.max_explored = 1;
+        let limited =
+            enumerate_constrained(&p, &msg, SsgDmOptions::default(), &constraints).unwrap();
+        assert!(limited.capped);
+        assert_eq!(limited.explored, 1);
+        constraints.exclusive_materials.insert(usize::MAX);
+        assert!(enumerate_constrained(&p, &msg, SsgDmOptions::default(), &constraints).is_err());
+    }
+
+    #[test]
+    fn exclusive_unit_groups_are_enforced_before_leaves() {
+        let p = lower_src(
+            r#"T{} context {
+            P <material, product>; Q <material, product>; R <material, raw>;
+            @a <unit> 1 { (-R,+P); } @b <unit> 1 { (-R,+Q); }
+        }"#,
+        );
+        let msg = crate::msg::maximal_structure(&p);
+        assert_eq!(enumerate(&p, &msg).len(), 1);
+        let constraints = SsgConstraints {
+            exclusive_groups: vec![p.units.iter().map(|x| x.raw()).collect()],
+            ..Default::default()
+        };
+        let result =
+            enumerate_constrained(&p, &msg, SsgDmOptions::default(), &constraints).unwrap();
+        assert!(result.structures.is_empty());
+        assert!(result.pruned_by_constraints > 0);
+        let mut forbidden = SsgConstraints::default();
+        forbidden
+            .forbidden_units
+            .insert(p.units.iter().next().unwrap().raw());
+        let result = enumerate_constrained(&p, &msg, SsgDmOptions::default(), &forbidden).unwrap();
+        assert!(result.structures.is_empty());
+        assert!(!result.capped);
+        forbidden.forbidden_units.insert(usize::MAX);
+        assert!(enumerate_constrained(&p, &msg, SsgDmOptions::default(), &forbidden).is_err());
+    }
+
+    #[test]
+    fn a_raw_free_producer_cycle_is_structural_but_not_forward_feasible() {
+        let p = lower_src(
+            r#"T{} context {
+            P <material, product>; Q <material>; R <material, raw>;
+            @a <unit> 1 { (-R,+P); }
+            @b <unit> 1 { (-P,+Q); }
+            @c <unit> 1 { (-Q,+P); }
+        }"#,
+        );
+        let msg = crate::msg::maximal_structure(&p);
+        let structural = enumerate_with_options(&p, &msg, SsgDmOptions::default());
+        assert_eq!(structural.structures.len(), 3);
+        let constraints = SsgConstraints {
+            forward_feasible: true,
+            ..Default::default()
+        };
+        let result =
+            enumerate_constrained(&p, &msg, SsgDmOptions::default(), &constraints).unwrap();
+        assert_eq!(result.structures.len(), 2);
+        assert!(result.structures.iter().all(|s| crate::ssg::is_feasible(
+            &p,
+            &s.units,
+            crate::ssg::SsgOptions::default()
+        )));
+        assert!(result.pruned_by_constraints > 0);
+    }
+
+    #[test]
+    fn a_raw_product_preserves_the_empty_identity_structure() {
+        let mut p = lower_src("T{} context { R <material, raw>; }");
+        p.products.extend(p.raws.iter().copied());
+        let msg = crate::msg::maximal_structure(&p);
+        let result = enumerate(&p, &msg);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].units.is_empty());
     }
 }
