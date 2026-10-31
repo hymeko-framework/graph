@@ -254,6 +254,142 @@ pub fn solve_top_k_with_regime(
         .collect()
 }
 
+/// Caller-supplied objective for [`solve_with_objective`], for objectives that
+/// are not a sum of per-unit costs (for example a schedule-dependent peak).
+///
+/// Contract: for every feasible structure `S` with
+/// `included ⊆ S ⊆ included ∪ open` whose `evaluate(S)` is `Some(v)`,
+/// `lower_bound(included, open) <= v`. With an admissible bound the returned
+/// structure is optimal whenever the search is `complete`.
+pub trait StructureObjective {
+    /// Lower bound over every completion of a partial include/exclude selection.
+    fn lower_bound(&self, included: &BTreeSet<DeclId>, open: &BTreeSet<DeclId>) -> f64;
+    /// Exact value of a feasible structure; `None` rejects it.
+    fn evaluate(&self, units: &BTreeSet<DeclId>) -> Option<f64>;
+}
+
+/// Output of [`solve_with_objective`].
+#[derive(Debug, Clone)]
+pub struct ObjectiveSolution {
+    /// Operating units of the best structure found.
+    pub units: BTreeSet<DeclId>,
+    /// Its objective value.
+    pub value: f64,
+    /// Number of nodes explored (diagnostic).
+    pub explored: u64,
+    /// Nodes pruned because the objective's lower bound reached the incumbent.
+    pub pruned_by_bound: u64,
+    /// Nodes pruned by the reachability bound.
+    pub pruned_by_reachability: u64,
+    /// False when `max_explored` stopped the search; the incumbent is then
+    /// not proven optimal.
+    pub complete: bool,
+}
+
+/// Branch-and-bound over the maximal structure with a caller-supplied
+/// objective. Reachability pruning and leaf feasibility are those of
+/// [`solve_with_regime`]; the inclusion bound is `objective.lower_bound`.
+/// `opts.max_explored` bounds the walk; `opts.cost_weights` is unused.
+pub fn solve_with_objective(
+    p: &LoweredPGraph,
+    msg: &MaximalStructure,
+    opts: &AbbOptions,
+    regime: &dyn crate::regime::Regime,
+    objective: &dyn StructureObjective,
+) -> Option<ObjectiveSolution> {
+    let mut search = ObjectiveSearch {
+        order: msg.units.iter().copied().collect(),
+        included: BTreeSet::new(),
+        excluded: BTreeSet::new(),
+        best: None,
+        explored: 0,
+        pruned_by_bound: 0,
+        pruned_by_reachability: 0,
+        stopped: false,
+        max_explored: opts.max_explored,
+        regime,
+        objective,
+    };
+    search.branch(p, 0);
+    let ObjectiveSearch { best, explored, pruned_by_bound, pruned_by_reachability, stopped, .. } = search;
+    best.map(|(units, value)| ObjectiveSolution {
+        units,
+        value,
+        explored,
+        pruned_by_bound,
+        pruned_by_reachability,
+        complete: !stopped,
+    })
+}
+
+struct ObjectiveSearch<'r> {
+    order: Vec<DeclId>,
+    included: BTreeSet<DeclId>,
+    excluded: BTreeSet<DeclId>,
+    best: Option<(BTreeSet<DeclId>, f64)>,
+    explored: u64,
+    pruned_by_bound: u64,
+    pruned_by_reachability: u64,
+    stopped: bool,
+    max_explored: u64,
+    regime: &'r dyn crate::regime::Regime,
+    objective: &'r dyn StructureObjective,
+}
+
+impl ObjectiveSearch<'_> {
+    fn branch(&mut self, p: &LoweredPGraph, depth: usize) {
+        if self.max_explored != 0 && self.explored >= self.max_explored {
+            self.stopped = true;
+            return;
+        }
+        self.explored += 1;
+        let open = undecided(&self.order[depth..], &self.excluded);
+        if let Some((_, best)) = &self.best {
+            if self.objective.lower_bound(&self.included, &open) >= *best {
+                self.pruned_by_bound += 1;
+                return;
+            }
+        }
+        if !products_reachable(p, &self.included, &open) {
+            self.pruned_by_reachability += 1;
+            return;
+        }
+        if depth == self.order.len() {
+            if is_feasible_with_regime(p, &self.included, self.regime) {
+                if let Some(value) = self.objective.evaluate(&self.included) {
+                    let better = match &self.best {
+                        None => true,
+                        Some((_, best)) => value < *best,
+                    };
+                    if better {
+                        self.best = Some((self.included.clone(), value));
+                    }
+                }
+            }
+            return;
+        }
+        let u = self.order[depth];
+        self.included.insert(u);
+        self.branch(p, depth + 1);
+        self.included.remove(&u);
+        self.excluded.insert(u);
+        self.branch(p, depth + 1);
+        self.excluded.remove(&u);
+    }
+}
+
+/// Units still open at a branch point: the undecided suffix minus exclusions.
+fn undecided(rest: &[DeclId], excluded: &BTreeSet<DeclId>) -> BTreeSet<DeclId> {
+    rest.iter().filter(|u| !excluded.contains(u)).copied().collect()
+}
+
+/// Whether `included ∪ open` can still produce every required product.
+fn products_reachable(p: &LoweredPGraph, included: &BTreeSet<DeclId>, open: &BTreeSet<DeclId>) -> bool {
+    let optimistic: BTreeSet<DeclId> = included.union(open).copied().collect();
+    let producible = close_producible(p, &optimistic, &p.raws);
+    p.products.iter().all(|m| producible.contains(m))
+}
+
 struct SearchState<'r> {
     order: Vec<DeclId>,
     included: BTreeSet<DeclId>,
@@ -286,14 +422,7 @@ fn branch(p: &LoweredPGraph, msg: &MaximalStructure, s: &mut SearchState<'_>, de
     // The optimistic remaining-units set is `included ∪ undecided`.
     // If even with everything still on the table we can't produce
     // every required product, this branch is infeasible.
-    let mut optimistic: BTreeSet<DeclId> = s.included.clone();
-    for u in &s.order[depth..] {
-        if !s.excluded.contains(u) {
-            optimistic.insert(*u);
-        }
-    }
-    let producible = close_producible(p, &optimistic, &p.raws);
-    if !p.products.iter().all(|m| producible.contains(m)) {
+    if !products_reachable(p, &s.included, &undecided(&s.order[depth..], &s.excluded)) {
         s.pruned_by_reachability += 1;
         return;
     }

@@ -36,6 +36,7 @@ COMMANDS:
     read       report the materials and operating units declared in the file
     transform  show the bipartite P-graph (M/O partition + signed incidence)
     solve      run MSG, SSG, and ABB and report the cost-optimal structure
+    constrain  source-bound partial SSG: constrain MODEL REQUEST.json
     generate   emit a graph artifact (Graphviz DOT, or a P-graph Studio .pgip)
 
 SOLVE OPTIONS:
@@ -71,6 +72,27 @@ fn main() -> ExitCode {
         "read" => run_render(&file, rest, render_entities),
         "transform" => run_render(&file, rest, render_pgraph),
         "solve" => run_solve(&file, rest),
+        "constrain" => {
+            if rest.len() != 1 {
+                return arg_error("constrain requires one REQUEST.json");
+            }
+            let result = std::fs::read_to_string(&rest[0])
+                .map_err(|e| e.to_string())
+                .and_then(|s| {
+                    serde_json::from_str::<hymeko_pgraph::cli::SsgRequest>(&s)
+                        .map_err(|e| e.to_string())
+                })
+                .and_then(|r| {
+                    hymeko_pgraph::cli::constrained_source(&file, &r).map_err(|e| e.to_string())
+                });
+            match result {
+                Ok(value) => {
+                    println!("{value}");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => arg_error(&e),
+            }
+        }
         "generate" => run_generate(&file, rest),
         other => {
             eprintln!("error: unknown command `{other}` (read|transform|solve|generate)\n");

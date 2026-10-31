@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**10 package(s), 730 public symbol(s).**
+**10 package(s), 737 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -578,6 +578,7 @@ _No public symbols._
 - `AndOrNorm` — `hymeko_pgraph/src/andor.rs`
 - `Regime` — `hymeko_pgraph/src/regime.rs`
 - `Reliability` — `hymeko_pgraph/src/andor.rs`
+- `StructureObjective` — `hymeko_pgraph/src/abb.rs`
 
 ### structs
 
@@ -601,6 +602,7 @@ _No public symbols._
 - `MaximalStructure` — `hymeko_pgraph/src/msg.rs`
 - `MaximalStructureOptions` — `hymeko_pgraph/src/msg.rs`
 - `NoExcess` — `hymeko_pgraph/src/regime.rs`
+- `ObjectiveSolution` — `hymeko_pgraph/src/abb.rs`
 - `PGraphSchema` — `hymeko_pgraph/src/schema.rs`
 - `PGraphSchemaBuilder` — `hymeko_pgraph/src/schema.rs`
 - `PGraphView` — `hymeko_pgraph/src/view.rs`
@@ -609,9 +611,11 @@ _No public symbols._
 - `Product` — `hymeko_pgraph/src/andor.rs`
 - `PropagationConfig` — `hymeko_pgraph/src/andor.rs`
 - `SolutionStructure` — `hymeko_pgraph/src/ssg.rs`
+- `SsgConstraints` — `hymeko_pgraph/src/ssg_dm.rs`
 - `SsgDmOptions` — `hymeko_pgraph/src/ssg_dm.rs`
 - `SsgDmResult` — `hymeko_pgraph/src/ssg_dm.rs`
 - `SsgOptions` — `hymeko_pgraph/src/ssg.rs`
+- `SsgRequest` — `hymeko_pgraph/src/cli.rs`
 - `UnitReliability` — `hymeko_pgraph/src/andor.rs`
 
 ### enums
@@ -657,12 +661,14 @@ _No public symbols._
 - `close_producible_under_rule` — `hymeko_pgraph/src/reachability.rs`
 - `compile_sources` — `hymeko_pgraph/src/meta_resolve.rs`
 - `compile_to_lowered` — `hymeko_pgraph/src/meta_resolve.rs`
+- `constrained_source` — `hymeko_pgraph/src/cli.rs`
 - `consumers` — `hymeko_pgraph/src/lowering.rs`
 - `consumers_set` — `hymeko_pgraph/src/view.rs`
 - `counts_candidate_cost` — `hymeko_pgraph/src/reachability.rs`
 - `edges` — `hymeko_pgraph/src/schema.rs`
 - `enumerate` — `hymeko_pgraph/src/ssg.rs`
 - `enumerate` — `hymeko_pgraph/src/ssg_dm.rs`
+- `enumerate_constrained` — `hymeko_pgraph/src/ssg_dm.rs`
 - `enumerate_with_options` — `hymeko_pgraph/src/ssg.rs`
 - `enumerate_with_options` — `hymeko_pgraph/src/ssg_dm.rs`
 - `for_each_consumer` — `hymeko_pgraph/src/view.rs`
@@ -731,6 +737,7 @@ _No public symbols._
 - `solve` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k_with_regime` — `hymeko_pgraph/src/abb.rs`
+- `solve_with_objective` — `hymeko_pgraph/src/abb.rs`
 - `solve_with_options` — `hymeko_pgraph/src/abb.rs`
 - `solve_with_regime` — `hymeko_pgraph/src/abb.rs`
 - `successors` — `hymeko_pgraph/src/schema.rs`

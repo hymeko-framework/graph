@@ -47,6 +47,43 @@ fn load_missing_file_errors() {
 }
 
 #[test]
+fn constrained_source_binds_core_digest_and_refuses_unbounded_or_foreign_requests() {
+    use hymeko::{
+        module_store::{execution::CompiledModel, source_provider::StdFsProvider},
+        util::real_parser::RealParser,
+    };
+    use hymeko_pgraph::cli::{SsgRequest, constrained_source};
+    use hymeko_pgraph::ssg_dm::SsgConstraints;
+    let path = pgraph_data("data/prgraph_ex_3_1.hymeko");
+    let model = CompiledModel::compile(StdFsProvider::new(), RealParser, &path).unwrap();
+    let digest: String = model
+        .semantic_digest()
+        .0
+        .0
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let mut request = SsgRequest {
+        provenance: None,
+        model_digest: digest,
+        max_structures: 100,
+        constraints: SsgConstraints {
+            max_explored: 1000,
+            ..Default::default()
+        },
+    };
+    let result = constrained_source(&path, &request).unwrap();
+    assert!(!result["structures"].as_array().unwrap().is_empty());
+    assert_eq!(result["model_digest"], request.model_digest);
+    assert_eq!(result["capped"], false);
+    request.constraints.max_explored = 0;
+    assert!(constrained_source(&path, &request).is_err());
+    request.constraints.max_explored = 1000;
+    request.model_digest = "f".repeat(64);
+    assert!(constrained_source(&path, &request).is_err());
+}
+
+#[test]
 fn render_entities_lists_roles_and_io() {
     let g = load_pgraph(&pgraph_data("data/prgraph_ex_3_1.hymeko")).unwrap();
     let out = render_entities(&g, "ex");
