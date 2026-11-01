@@ -1,7 +1,8 @@
 //! Tensor's existing GMRES composed with the canonical PageRank transition.
+use super::quotient::{QuotientPlan, QuotientTransition};
 use super::{
     PageRank, PageRankAutoConfig, PageRankConfig, PageRankError, PageRankResult, PageRankWorkspace,
-    Progress, Sum,
+    Progress,
 };
 use hymeko::tensor::operator::OrderedAccumulator;
 use hymeko_numerics::{GmresConfig, GmresTolerance, Operator};
@@ -69,7 +70,7 @@ impl<'ir> PageRank<'ir> {
             });
         }
         workspace.initialize(self.node_count(), personalization)?;
-        self.run_krylov_initialized(config, workspace, restart)
+        self.run_krylov_initialized(config, workspace, restart, None)
     }
 
     /// Continue from caller-owned scores; validation/initialization belongs to
@@ -79,6 +80,7 @@ impl<'ir> PageRank<'ir> {
         config: PageRankConfig,
         workspace: &'w mut PageRankWorkspace,
         restart: usize,
+        quotient: Option<&QuotientPlan>,
     ) -> Result<PageRankResult<'w>, PageRankError> {
         if self.node_count() == 0 || config.damping == 0.0 {
             return Ok(PageRankResult {
@@ -104,7 +106,41 @@ impl<'ir> PageRank<'ir> {
         // certify with the canonical compensated update below.
         let tolerance =
             0.25 * config.tolerance * (1.0 - config.damping) / (self.node_count() as f64).sqrt();
-        let report = {
+        let report = if let Some(plan) = quotient {
+            let mut reduced = std::mem::take(&mut workspace.quotient);
+            reduced.prepare(self.node_count(), plan.nodes());
+            plan.restrict(&solution, &mut reduced.solution);
+            plan.restrict(&rhs, &mut reduced.rhs);
+            let progress = {
+                let original = Transition {
+                    rank: self,
+                    workspace: RefCell::new(&mut *workspace),
+                };
+                let transition = QuotientTransition {
+                    plan,
+                    original: &original,
+                    buffers: RefCell::new((&mut reduced.lifted, &mut reduced.image)),
+                };
+                // ||L||_1=1 and ||r||_1 <= sqrt(groups)||r||_2. The full
+                // canonical check below remains the numerical acceptance gate.
+                let tolerance =
+                    0.25 * config.tolerance * (1.0 - config.damping) / (plan.nodes() as f64).sqrt();
+                krylov.solve(
+                    &transition,
+                    config.damping,
+                    &reduced.rhs,
+                    &mut reduced.solution,
+                    GmresConfig {
+                        tolerance: GmresTolerance::Absolute(tolerance),
+                        restart: restart.min(plan.nodes()),
+                        max_iterations: config.max_iterations - 1,
+                    },
+                )
+            };
+            plan.lift(&reduced.solution, &mut solution, &mut reduced.rhs);
+            workspace.quotient = reduced;
+            progress
+        } else {
             let transition = Transition {
                 rank: self,
                 workspace: RefCell::new(&mut *workspace),
@@ -124,20 +160,7 @@ impl<'ir> PageRank<'ir> {
         workspace.scores = solution;
         workspace.krylov = krylov;
         workspace.rhs = rhs;
-        if workspace.scores.iter().any(|x| !x.is_finite()) {
-            return Err(PageRankError::NumericalMass);
-        }
-        for x in &mut workspace.scores {
-            *x = x.max(0.0);
-        }
-        let mass = Sum::of(workspace.scores.iter().copied());
-        if !mass.is_finite() || mass <= 0.0 {
-            return Err(PageRankError::NumericalMass);
-        }
-        for score in &mut workspace.scores {
-            *score /= mass;
-        }
-        workspace.prepare_input(&self.outgoing, self.rates.weighted());
+        workspace.prepare_candidate(&self.outgoing, self.rates.weighted())?;
         let change_l1 = self.update(config.damping, workspace)?;
         let error_bound_l1 = config.damping * change_l1 / (1.0 - config.damping);
         Ok(PageRankResult {
@@ -188,6 +211,87 @@ mod tests {
     use crate::rand_lcg::Lcg;
     use hymeko::common::ids::SymId;
     use hymeko::ir::ir::{AnnoR, ArcPlacement, IncidenceSign, Ir, IrConstruction, ReferenceDraft};
+
+    #[test]
+    fn pendant_quotient_intertwines_signed_operator_and_lift_on_permuted_ir() {
+        use crate::ir_test_support::Case;
+        use hymeko::ir::ir::IrBuilder;
+        let rows = [
+            vec![0, 1, 2, 3],
+            vec![0, 4, 5, 6, 7],
+            vec![0, 8, 9],
+            vec![0, 10, 10, 11],
+            vec![0, 12],
+        ];
+        for permuted in [false, true] {
+            let map = |v| if permuted { (7 * v + 13) % 40 } else { v };
+            let mapped: Vec<Vec<usize>> = rows
+                .iter()
+                .map(|r| r.iter().map(|&v| map(v)).collect())
+                .collect();
+            let borrowed: Vec<_> = mapped.iter().map(Vec::as_slice).collect();
+            let ir = Case::unsigned(40, &borrowed).build().unwrap();
+            let rank = PageRank::build(&ir, super::super::PageRankModel::default()).unwrap();
+            let plan = QuotientPlan::build(&rank).unwrap();
+            assert_eq!(
+                plan.nodes(),
+                8,
+                "duplicate occurrences are not pendant twins"
+            );
+            let mut workspace = PageRankWorkspace::new();
+            workspace.initialize(40, None).unwrap();
+            assert!(plan.compatible(&workspace.personalization));
+            let mut incompatible = workspace.personalization.clone();
+            incompatible[map(1)] *= 2.0;
+            assert!(!plan.compatible(&incompatible));
+            let transition = Transition {
+                rank: &rank,
+                workspace: RefCell::new(&mut workspace),
+            };
+            let mut lifted = vec![0.0; 40];
+            let mut image = vec![0.0; 40];
+            let reduced = QuotientTransition {
+                plan: &plan,
+                original: &transition,
+                buffers: RefCell::new((&mut lifted, &mut image)),
+            };
+            let mut rng = Lcg::new(0x51ED);
+            for exponent in [-40, 0, 40] {
+                for _ in 0..8 {
+                    let input: Vec<_> = (0..plan.nodes())
+                        .map(|_| (rng.next_in_range(2001) as f64 - 1000.0) * 2.0f64.powi(exponent))
+                        .collect();
+                    let mut output = vec![0.0; plan.nodes()];
+                    reduced.apply(&input, &mut output);
+                    let mut full_input = vec![0.0; 40];
+                    let mut scaled = vec![0.0; plan.nodes()];
+                    plan.lift(&input, &mut full_input, &mut scaled);
+                    let mut full_output = vec![0.0; 40];
+                    transition.apply(&full_input, &mut full_output);
+                    let mut reconstructed = vec![0.0; 40];
+                    plan.lift(&output, &mut reconstructed, &mut scaled);
+                    let error: f64 = full_output
+                        .iter()
+                        .zip(&reconstructed)
+                        .map(|(a, b)| (a - b).abs())
+                        .sum();
+                    let norm: f64 = input.iter().map(|v| v.abs()).sum();
+                    assert!(error <= 2e-13 * norm, "TL=LQ: {error}");
+                    plan.restrict(&full_input, &mut output);
+                    assert!(
+                        output
+                            .iter()
+                            .zip(&input)
+                            .all(|(a, b)| (a - b).abs() <= 4e-16 * b.abs())
+                    );
+                }
+            }
+            reduced.apply(&vec![0.0; plan.nodes()], &mut vec![0.0; plan.nodes()]);
+            let mut zero = vec![1.0; plan.nodes()];
+            reduced.apply(&vec![0.0; plan.nodes()], &mut zero);
+            assert!(zero.iter().all(|&v| v == 0.0));
+        }
+    }
 
     #[test]
     fn structural_transition_is_linear_on_signed_vectors_and_clears_reused_state() {

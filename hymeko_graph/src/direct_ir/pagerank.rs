@@ -28,12 +28,15 @@ mod automatic;
 mod krylov;
 mod parallel;
 mod plan;
+mod quotient;
 mod workspace;
 use accumulator::Sum;
 pub use automatic::{PageRankAutoConfig, PageRankAutoReason, PageRankAutoSelection};
 pub use krylov::PageRankSolver;
 pub use plan::PageRankPlanStats;
 use plan::{ExecutionPlan, SelectedRows};
+pub use quotient::PageRankQuotient;
+use quotient::QuotientPlan;
 pub use workspace::PageRankWorkspace;
 
 use hymeko::common::ids::{DeclId, HyperArcId, NodeId};
@@ -288,6 +291,7 @@ pub struct PageRank<'ir> {
     execution: Option<ExecutionPlan<'ir>>,
     incoming_terms: Option<usize>,
     reverse: OnceLock<Result<IncidenceIndex<'ir>, IncidenceError>>,
+    quotient: OnceLock<Option<QuotientPlan>>,
 }
 
 impl<'ir> PageRank<'ir> {
@@ -326,6 +330,7 @@ impl<'ir> PageRank<'ir> {
             execution: None,
             incoming_terms: None,
             reverse: OnceLock::new(),
+            quotient: OnceLock::new(),
         };
         // Unit undirected masses are cardinalities. Up to 2^53 incidences,
         // every partial integer count is exactly representable in f64. Reuse
@@ -452,6 +457,11 @@ impl<'ir> PageRank<'ir> {
                 .get()
                 .and_then(|result| result.as_ref().ok())
                 .map_or(0, IncidenceIndex::retained_bytes)
+            + self
+                .quotient
+                .get()
+                .and_then(Option::as_ref)
+                .map_or(0, QuotientPlan::retained_bytes)
     }
     /// Present when structural analysis selected a lower-work range plan.
     pub fn plan_stats(&self) -> Option<PageRankPlanStats> {

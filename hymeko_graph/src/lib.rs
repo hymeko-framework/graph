@@ -129,8 +129,8 @@ pub use direct_ir::{
     BergeCycle, BergeIncidence, BergePath, BergeStep, BudgetKind, ComponentLabeling, DirectIrError,
     DualReach, EnumBudget, EnumOutcome, HyperTraversal, NodeSet, PageRank, PageRankAutoConfig,
     PageRankAutoReason, PageRankAutoSelection, PageRankConfig, PageRankError, PageRankModel,
-    PageRankOptions, PageRankResult, PageRankSolver, PageRankWorkspace, RankFlow, RankOrdering,
-    RankWeights, SComponentLabeling, TraversalWorkspace, batch_reachable_counts,
+    PageRankOptions, PageRankQuotient, PageRankResult, PageRankSolver, PageRankWorkspace, RankFlow,
+    RankOrdering, RankWeights, SComponentLabeling, TraversalWorkspace, batch_reachable_counts,
     connected_components, dual_reachability, enumerate_berge_cycles, enumerate_berge_paths,
     par_batch_reachable_counts, s_connected_components,
 };
