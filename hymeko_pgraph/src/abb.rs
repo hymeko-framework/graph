@@ -32,14 +32,29 @@
 //!   A1/A4 check: if even the optimistic-remaining unit set cannot
 //!   produce every required product, no descendant will satisfy
 //!   the leaf check either.
+//!
+//! # Operator structure
+//!
+//! [`Abb`] is the operator: the leaf regime and the node budget.
+//! [`Abb::solve`] is the classic additive-cost ABB. [`BoundedAbb`]
+//! composes the operator with a [`StructureObjective`] and owns the
+//! single traversal, so the classic ABB is the bounded one under the
+//! additive cost. The reachability bound is decided either by the
+//! lowered schema's producibility closure or, hypergraph-natively, by
+//! firing the operating units as hyperedges over the canonical
+//! incidence ([`BoundedAbb::solve_on`], the Boolean-exact
+//! [`crate::andor`] fixpoint, equal to the closure).
 
 use std::collections::BTreeSet;
 
 use hymeko::common::ids::DeclId;
 
+use crate::andor::{AndOrWorkspace, BooleanExact, NormError, PropagationConfig, Reliability, propagate};
 use crate::lowering::LoweredPGraph;
 use crate::msg::{MaximalStructure, close_producible};
+use crate::regime::Regime;
 use crate::ssg::is_feasible_with_regime;
+use crate::view::PGraphView;
 
 /// Output of [`solve`]: optimal selection plus its cost.
 #[derive(Debug, Clone)]
@@ -55,6 +70,22 @@ pub struct AbbSolution {
     /// Number of nodes pruned by the reachability bound
     /// (`producible(R, optimistic) ⊉ products`).
     pub pruned_by_reachability: u64,
+    /// False when `max_explored` stopped the search; the incumbent is then
+    /// not proven optimal.
+    pub complete: bool,
+}
+
+impl From<ObjectiveSolution> for AbbSolution {
+    fn from(s: ObjectiveSolution) -> Self {
+        Self {
+            units: s.units,
+            cost: s.value,
+            explored: s.explored,
+            pruned_by_inclusion: s.pruned_by_bound,
+            pruned_by_reachability: s.pruned_by_reachability,
+            complete: s.complete,
+        }
+    }
 }
 
 impl AbbSolution {
@@ -102,11 +133,10 @@ impl Default for AbbOptions {
     }
 }
 
-/// Per-unit cost under the active option (scalar or weighted-sum).
-/// Used internally by both the inclusion bound and the branching
-/// step's incremental cost update.
-fn effective_cost(p: &LoweredPGraph, opts: &AbbOptions, u: DeclId) -> f64 {
-    match &opts.cost_weights {
+/// Per-unit cost under the active weights (scalar or weighted-sum).
+/// Used by the additive objective and the top-k ranking.
+fn effective_cost(p: &LoweredPGraph, cost_weights: Option<&[f64]>, u: DeclId) -> f64 {
+    match cost_weights {
         None => p.costs.get(&u).copied().unwrap_or(1.0),
         Some(w) => match p.cost_vectors.get(&u) {
             Some(v) => {
@@ -153,27 +183,7 @@ pub fn solve_with_regime(
     opts: AbbOptions,
     regime: &dyn crate::regime::Regime,
 ) -> Option<AbbSolution> {
-    let order: Vec<DeclId> = msg.units.iter().copied().collect();
-    let mut state = SearchState {
-        order,
-        included: BTreeSet::new(),
-        excluded: BTreeSet::new(),
-        cost: 0.0,
-        best: None,
-        explored: 0,
-        pruned_by_inclusion: 0,
-        pruned_by_reachability: 0,
-        opts,
-        regime,
-    };
-    branch(p, msg, &mut state, 0);
-    state.best.map(|(units, cost)| AbbSolution {
-        units,
-        cost,
-        explored: state.explored,
-        pruned_by_inclusion: state.pruned_by_inclusion,
-        pruned_by_reachability: state.pruned_by_reachability,
-    })
+    Abb::new(regime, opts.max_explored).solve(p, msg, opts.cost_weights.as_deref())
 }
 
 /// Return the top-$k$ cost-minimal feasible structures, ranked
@@ -229,7 +239,7 @@ pub fn solve_top_k_with_regime(
         .into_iter()
         .filter(|s| regime.structure_admissible(p, &s.units))
         .map(|s| {
-            let cost: f64 = s.units.iter().map(|u| effective_cost(p, &opts, *u)).sum();
+            let cost: f64 = s.units.iter().map(|u| effective_cost(p, opts.cost_weights.as_deref(), *u)).sum();
             (cost, s.units)
         })
         .collect();
@@ -250,6 +260,8 @@ pub fn solve_top_k_with_regime(
             explored: 0,
             pruned_by_inclusion: 0,
             pruned_by_reachability: 0,
+            // The enumeration is exhaustive.
+            complete: true,
         })
         .collect()
 }
@@ -297,33 +309,194 @@ pub fn solve_with_objective(
     regime: &dyn crate::regime::Regime,
     objective: &dyn StructureObjective,
 ) -> Option<ObjectiveSolution> {
-    let mut search = ObjectiveSearch {
-        order: msg.units.iter().copied().collect(),
-        included: BTreeSet::new(),
-        excluded: BTreeSet::new(),
-        best: None,
-        explored: 0,
-        pruned_by_bound: 0,
-        pruned_by_reachability: 0,
-        stopped: false,
-        max_explored: opts.max_explored,
-        regime,
-        objective,
-    };
-    search.branch(p, 0);
-    let ObjectiveSearch { best, explored, pruned_by_bound, pruned_by_reachability, stopped, .. } = search;
-    best.map(|(units, value)| ObjectiveSolution {
-        units,
-        value,
-        explored,
-        pruned_by_bound,
-        pruned_by_reachability,
-        complete: !stopped,
-    })
+    BoundedAbb::new(Abb::new(regime, opts.max_explored), objective).solve(p, msg)
 }
 
-struct ObjectiveSearch<'r> {
+/// The ABB operator: Friedler include/exclude branch-and-bound over a
+/// maximal structure, with the reachability bound, the regime's leaf
+/// feasibility and a node budget.
+#[derive(Clone, Copy)]
+pub struct Abb<'r> {
+    regime: &'r dyn Regime,
+    max_explored: u64,
+}
+
+impl<'r> Abb<'r> {
+    /// An operator admitting leaves by `regime`; `max_explored` caps the
+    /// explored nodes (0 = unlimited).
+    pub fn new(regime: &'r dyn Regime, max_explored: u64) -> Self {
+        Self { regime, max_explored }
+    }
+
+    /// The classic ABB: minimum [`AdditiveCost`].
+    pub fn solve(
+        &self,
+        p: &LoweredPGraph,
+        msg: &MaximalStructure,
+        cost_weights: Option<&[f64]>,
+    ) -> Option<AbbSolution> {
+        let cost = AdditiveCost::new(p, cost_weights);
+        BoundedAbb::new(*self, &cost).solve(p, msg).map(AbbSolution::from)
+    }
+}
+
+/// [`Abb`] bounded by a caller-supplied [`StructureObjective`]: its lower
+/// bound prunes, its value ranks the feasible leaves.
+#[derive(Clone, Copy)]
+pub struct BoundedAbb<'a> {
+    abb: Abb<'a>,
+    objective: &'a dyn StructureObjective,
+}
+
+impl<'a> BoundedAbb<'a> {
+    /// The operator `abb` bounded by `objective`.
+    pub fn new(abb: Abb<'a>, objective: &'a dyn StructureObjective) -> Self {
+        Self { abb, objective }
+    }
+
+    /// Search with the reachability bound decided by the lowered schema's
+    /// producibility closure.
+    pub fn solve(&self, p: &LoweredPGraph, msg: &MaximalStructure) -> Option<ObjectiveSolution> {
+        self.search(p, msg, &mut SchemaClosure(p))
+    }
+
+    /// Hypergraph-native search: the reachability bound fires the selected
+    /// operating units as hyperedges over the canonical incidence. `view`
+    /// classifies `p`, e.g. [`PGraphView::from_lowered`].
+    ///
+    /// # Errors
+    /// The [`NormError`] of the first failed propagation; the view's
+    /// classification is then inconsistent with its `Ir`.
+    pub fn solve_on(
+        &self,
+        view: &PGraphView<'_, '_, '_>,
+        p: &LoweredPGraph,
+        msg: &MaximalStructure,
+    ) -> Result<Option<ObjectiveSolution>, NormError> {
+        let mut firing = UnitFiring::new(*view);
+        let found = self.search(p, msg, &mut firing);
+        firing.error.map_or(Ok(found), Err)
+    }
+
+    fn search(
+        &self,
+        p: &LoweredPGraph,
+        msg: &MaximalStructure,
+        reach: &mut dyn Producibility,
+    ) -> Option<ObjectiveSolution> {
+        let mut search = Search {
+            p,
+            order: msg.units.iter().copied().collect(),
+            bounded: *self,
+            reach,
+            included: BTreeSet::new(),
+            excluded: BTreeSet::new(),
+            best: None,
+            explored: 0,
+            pruned_by_bound: 0,
+            pruned_by_reachability: 0,
+            stopped: false,
+        };
+        search.branch(0);
+        let Search { best, explored, pruned_by_bound, pruned_by_reachability, stopped, .. } = search;
+        best.map(|(units, value)| ObjectiveSolution {
+            units,
+            value,
+            explored,
+            pruned_by_bound,
+            pruned_by_reachability,
+            complete: !stopped,
+        })
+    }
+}
+
+/// The classic additive cost: the scalar unit costs, or `cost_weights`
+/// dotted with the unit cost vectors. The included units' cost bounds every
+/// completion (unit costs are non-negative).
+#[derive(Clone, Copy)]
+pub struct AdditiveCost<'p> {
+    p: &'p LoweredPGraph,
+    cost_weights: Option<&'p [f64]>,
+}
+
+impl<'p> AdditiveCost<'p> {
+    /// The additive cost of `p` under optional `cost_weights`.
+    pub fn new(p: &'p LoweredPGraph, cost_weights: Option<&'p [f64]>) -> Self {
+        Self { p, cost_weights }
+    }
+}
+
+impl StructureObjective for AdditiveCost<'_> {
+    fn lower_bound(&self, included: &BTreeSet<DeclId>, _open: &BTreeSet<DeclId>) -> f64 {
+        included.iter().map(|&u| effective_cost(self.p, self.cost_weights, u)).sum()
+    }
+    /// The bound with nothing left open is exact.
+    fn evaluate(&self, units: &BTreeSet<DeclId>) -> Option<f64> {
+        Some(self.lower_bound(units, &BTreeSet::new()))
+    }
+}
+
+/// Whether a unit set can still produce every required product.
+trait Producibility {
+    fn reaches_products(&mut self, units: &BTreeSet<DeclId>) -> bool;
+}
+
+/// The lowered schema's producibility closure.
+struct SchemaClosure<'p>(&'p LoweredPGraph);
+
+impl Producibility for SchemaClosure<'_> {
+    fn reaches_products(&mut self, units: &BTreeSet<DeclId>) -> bool {
+        let producible = close_producible(self.0, units, &self.0.raws);
+        self.0.products.iter().all(|m| producible.contains(m))
+    }
+}
+
+/// The units fire as hyperedges over the incidence: the Boolean AND/OR
+/// fixpoint with every unit outside the set at reliability 0.
+struct UnitFiring<'a, 'ir, 'idx> {
+    view: PGraphView<'a, 'ir, 'idx>,
+    ws: AndOrWorkspace,
+    cfg: PropagationConfig,
+    error: Option<NormError>,
+}
+
+impl<'a, 'ir, 'idx> UnitFiring<'a, 'ir, 'idx> {
+    fn new(view: PGraphView<'a, 'ir, 'idx>) -> Self {
+        let cfg = PropagationConfig::boolean_exact(view.units().len(), view.materials().len());
+        Self { view, ws: AndOrWorkspace::new(), cfg, error: None }
+    }
+}
+
+/// Reliability 1 exactly for the units of a selection.
+struct Selected<'s>(&'s BTreeSet<DeclId>);
+
+impl Reliability for Selected<'_> {
+    fn of(&self, u: DeclId) -> f64 {
+        if self.0.contains(&u) { 1.0 } else { 0.0 }
+    }
+}
+
+impl Producibility for UnitFiring<'_, '_, '_> {
+    fn reaches_products(&mut self, units: &BTreeSet<DeclId>) -> bool {
+        if self.error.is_some() {
+            return false;
+        }
+        match propagate(&self.view, &BooleanExact, &Selected(units), &mut self.ws, self.cfg) {
+            Ok(avail) => self.view.products().iter().all(|m| avail.producible().contains(m)),
+            Err(error) => {
+                self.error = Some(error);
+                false
+            }
+        }
+    }
+}
+
+/// The state of one [`BoundedAbb`] traversal.
+struct Search<'s> {
+    p: &'s LoweredPGraph,
     order: Vec<DeclId>,
+    bounded: BoundedAbb<'s>,
+    reach: &'s mut dyn Producibility,
     included: BTreeSet<DeclId>,
     excluded: BTreeSet<DeclId>,
     best: Option<(BTreeSet<DeclId>, f64)>,
@@ -331,126 +504,55 @@ struct ObjectiveSearch<'r> {
     pruned_by_bound: u64,
     pruned_by_reachability: u64,
     stopped: bool,
-    max_explored: u64,
-    regime: &'r dyn crate::regime::Regime,
-    objective: &'r dyn StructureObjective,
 }
 
-impl ObjectiveSearch<'_> {
-    fn branch(&mut self, p: &LoweredPGraph, depth: usize) {
-        if self.max_explored != 0 && self.explored >= self.max_explored {
+impl Search<'_> {
+    fn branch(&mut self, depth: usize) {
+        let budget = self.bounded.abb.max_explored;
+        if budget != 0 && self.explored >= budget {
             self.stopped = true;
             return;
         }
         self.explored += 1;
         let open = undecided(&self.order[depth..], &self.excluded);
         // An infinite bound admits no evaluable completion, incumbent or not.
-        let bound = self.objective.lower_bound(&self.included, &open);
+        let bound = self.bounded.objective.lower_bound(&self.included, &open);
         if bound == f64::INFINITY || self.best.as_ref().is_some_and(|(_, best)| bound >= *best) {
             self.pruned_by_bound += 1;
             return;
         }
-        if !products_reachable(p, &self.included, &open) {
+        let optimistic: BTreeSet<DeclId> = self.included.union(&open).copied().collect();
+        if !self.reach.reaches_products(&optimistic) {
             self.pruned_by_reachability += 1;
             return;
         }
         if depth == self.order.len() {
-            if is_feasible_with_regime(p, &self.included, self.regime) {
-                if let Some(value) = self.objective.evaluate(&self.included) {
-                    let better = match &self.best {
-                        None => true,
-                        Some((_, best)) => value < *best,
-                    };
-                    if better {
-                        self.best = Some((self.included.clone(), value));
-                    }
-                }
-            }
+            self.leaf();
             return;
         }
         let u = self.order[depth];
         self.included.insert(u);
-        self.branch(p, depth + 1);
+        self.branch(depth + 1);
         self.included.remove(&u);
         self.excluded.insert(u);
-        self.branch(p, depth + 1);
+        self.branch(depth + 1);
         self.excluded.remove(&u);
+    }
+
+    fn leaf(&mut self) {
+        if !is_feasible_with_regime(self.p, &self.included, self.bounded.abb.regime) {
+            return;
+        }
+        let Some(value) = self.bounded.objective.evaluate(&self.included) else {
+            return;
+        };
+        if self.best.as_ref().is_none_or(|(_, best)| value < *best) {
+            self.best = Some((self.included.clone(), value));
+        }
     }
 }
 
 /// Units still open at a branch point: the undecided suffix minus exclusions.
 fn undecided(rest: &[DeclId], excluded: &BTreeSet<DeclId>) -> BTreeSet<DeclId> {
     rest.iter().filter(|u| !excluded.contains(u)).copied().collect()
-}
-
-/// Whether `included ∪ open` can still produce every required product.
-fn products_reachable(p: &LoweredPGraph, included: &BTreeSet<DeclId>, open: &BTreeSet<DeclId>) -> bool {
-    let optimistic: BTreeSet<DeclId> = included.union(open).copied().collect();
-    let producible = close_producible(p, &optimistic, &p.raws);
-    p.products.iter().all(|m| producible.contains(m))
-}
-
-struct SearchState<'r> {
-    order: Vec<DeclId>,
-    included: BTreeSet<DeclId>,
-    excluded: BTreeSet<DeclId>,
-    cost: f64,
-    best: Option<(BTreeSet<DeclId>, f64)>,
-    explored: u64,
-    pruned_by_inclusion: u64,
-    pruned_by_reachability: u64,
-    opts: AbbOptions,
-    regime: &'r dyn crate::regime::Regime,
-}
-
-fn branch(p: &LoweredPGraph, msg: &MaximalStructure, s: &mut SearchState<'_>, depth: usize) {
-    if s.opts.max_explored != 0 && s.explored >= s.opts.max_explored {
-        return;
-    }
-    s.explored += 1;
-
-    // ── Bound 1: inclusion bound.
-    if let Some((_, best_cost)) = &s.best {
-        if s.cost >= *best_cost {
-            s.pruned_by_inclusion += 1;
-            return;
-        }
-    }
-
-    // ── Bound 2: reachability bound.
-    //
-    // The optimistic remaining-units set is `included ∪ undecided`.
-    // If even with everything still on the table we can't produce
-    // every required product, this branch is infeasible.
-    if !products_reachable(p, &s.included, &undecided(&s.order[depth..], &s.excluded)) {
-        s.pruned_by_reachability += 1;
-        return;
-    }
-
-    // ── Leaf: decide.
-    if depth == s.order.len() {
-        if is_feasible_with_regime(p, &s.included, s.regime) {
-            let candidate = (s.included.clone(), s.cost);
-            match &s.best {
-                None => s.best = Some(candidate),
-                Some((_, bc)) if s.cost < *bc => s.best = Some(candidate),
-                _ => {}
-            }
-        }
-        return;
-    }
-
-    // ── Branch: include.
-    let u = s.order[depth];
-    let cu = effective_cost(p, &s.opts, u);
-    s.included.insert(u);
-    s.cost += cu;
-    branch(p, msg, s, depth + 1);
-    s.included.remove(&u);
-    s.cost -= cu;
-
-    // ── Branch: exclude.
-    s.excluded.insert(u);
-    branch(p, msg, s, depth + 1);
-    s.excluded.remove(&u);
 }

@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**11 package(s), 742 public symbol(s).**
+**11 package(s), 747 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -591,15 +591,18 @@ _No public symbols._
 
 ### structs
 
+- `Abb` — `hymeko_pgraph/src/abb.rs`
 - `AbbJson` — `hymeko_pgraph/src/dump.rs`
 - `AbbOptions` — `hymeko_pgraph/src/abb.rs`
 - `AbbSolution` — `hymeko_pgraph/src/abb.rs`
+- `AdditiveCost` — `hymeko_pgraph/src/abb.rs`
 - `AndOrWorkspace` — `hymeko_pgraph/src/andor.rs`
 - `Availability` — `hymeko_pgraph/src/andor.rs`
 - `AxiomBundle` — `hymeko_pgraph/src/axioms.rs`
 - `AxiomCertificateJson` — `hymeko_pgraph/src/dump.rs`
 - `AxiomTrace` — `hymeko_pgraph/src/axioms.rs`
 - `BooleanExact` — `hymeko_pgraph/src/andor.rs`
+- `BoundedAbb` — `hymeko_pgraph/src/abb.rs`
 - `Canonical` — `hymeko_pgraph/src/regime.rs`
 - `Composite` — `hymeko_pgraph/src/regime.rs`
 - `CostDominance` — `hymeko_pgraph/src/regime.rs`
@@ -715,6 +718,7 @@ _No public symbols._
 - `n_materials` — `hymeko_pgraph/src/schema.rs`
 - `n_operating_units` — `hymeko_pgraph/src/schema.rs`
 - `name` — `hymeko_pgraph/src/reachability.rs`
+- `new` — `hymeko_pgraph/src/abb.rs`
 - `new` — `hymeko_pgraph/src/andor.rs`
 - `new` — `hymeko_pgraph/src/axiom_extensions.rs`
 - `new` — `hymeko_pgraph/src/axioms.rs`
@@ -744,6 +748,7 @@ _No public symbols._
 - `render_pgraph` — `hymeko_pgraph/src/cli.rs`
 - `render_solution` — `hymeko_pgraph/src/cli.rs`
 - `solve` — `hymeko_pgraph/src/abb.rs`
+- `solve_on` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k_with_regime` — `hymeko_pgraph/src/abb.rs`
 - `solve_with_objective` — `hymeko_pgraph/src/abb.rs`

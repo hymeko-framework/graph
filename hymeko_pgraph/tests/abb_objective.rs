@@ -1,6 +1,7 @@
 //! Objective-driven ABB (`solve_with_objective`): additive objectives agree with
 //! `solve`; a non-additive peak objective and objective-side rejection agree with
-//! brute force over the decision-mapping solution structures.
+//! brute force over the decision-mapping solution structures. The classic ABB
+//! reports an unproven incumbent.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -9,7 +10,8 @@ use hymeko_pgraph::lowering::LoweredPGraph;
 use hymeko_pgraph::msg::maximal_structure_with_regime;
 use hymeko_pgraph::regime::{Canonical, Regime};
 use hymeko_pgraph::{
-    AbbOptions, StructureObjective, abb_solve, lower, solve_with_objective, ssg_dm_enumerate,
+    Abb, AbbOptions, AdditiveCost, StructureObjective, abb_solve, lower, solve_with_objective,
+    ssg_dm_enumerate,
 };
 use parser::parse_description;
 
@@ -38,18 +40,6 @@ fn ids(p: &LoweredPGraph) -> BTreeMap<String, DeclId> {
 
 fn cost(p: &LoweredPGraph, units: &BTreeSet<DeclId>) -> f64 {
     units.iter().map(|u| p.costs.get(u).copied().unwrap_or(1.0)).sum()
-}
-
-/// Sum of unit costs; the included sum bounds every completion (costs are >= 0).
-struct Additive<'a>(&'a LoweredPGraph);
-
-impl StructureObjective for Additive<'_> {
-    fn lower_bound(&self, included: &BTreeSet<DeclId>, _open: &BTreeSet<DeclId>) -> f64 {
-        cost(self.0, included)
-    }
-    fn evaluate(&self, units: &BTreeSet<DeclId>) -> Option<f64> {
-        Some(cost(self.0, units))
-    }
 }
 
 /// (max unit width)^2 * total cost, the shape of a Q^2*T objective; monotone in the
@@ -91,7 +81,7 @@ fn additive_objective_matches_classic_abb() {
     let p = graph();
     let msg = maximal_structure_with_regime(&p, &Canonical);
     let classic = abb_solve(&p, &msg).unwrap();
-    let general = solve_with_objective(&p, &msg, &AbbOptions::default(), &Canonical, &Additive(&p)).unwrap();
+    let general = solve_with_objective(&p, &msg, &AbbOptions::default(), &Canonical, &AdditiveCost::new(&p, None)).unwrap();
     assert!(general.complete);
     assert_eq!(general.value, classic.cost);
     assert_eq!(cost(&p, &general.units), classic.cost);
@@ -125,7 +115,7 @@ fn exploration_limit_reports_an_unproven_incumbent() {
     let p = graph();
     let msg = maximal_structure_with_regime(&p, &Canonical);
     let opts = AbbOptions { max_explored: 7, ..AbbOptions::default() };
-    let found = solve_with_objective(&p, &msg, &opts, &Canonical, &Additive(&p));
+    let found = solve_with_objective(&p, &msg, &opts, &Canonical, &AdditiveCost::new(&p, None));
     assert!(found.is_none_or(|s| !s.complete));
 }
 
@@ -154,4 +144,15 @@ fn an_infinite_bound_prunes_before_any_incumbent_exists() {
     let found = solve_with_objective(&p, &msg, &opts, &Canonical, &Banned { p: &p, banned }).unwrap();
     assert!(!found.units.contains(&banned));
     assert!(found.pruned_by_bound > 0);
+}
+
+#[test]
+fn classic_abb_reports_whether_its_search_completed() {
+    let p = graph();
+    let msg = maximal_structure_with_regime(&p, &Canonical);
+    let full = Abb::new(&Canonical, 0).solve(&p, &msg, None).unwrap();
+    assert!(full.complete);
+    assert_eq!(full.cost, brute_force(&p, &AdditiveCost::new(&p, None)).0);
+    let cut = Abb::new(&Canonical, 7).solve(&p, &msg, None);
+    assert!(cut.is_none_or(|s| !s.complete));
 }
