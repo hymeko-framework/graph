@@ -16,6 +16,46 @@ from memory import MemoryEvidence, MemorySummary, MemoryClient, PhaseSampler, Wi
 
 
 class MemoryContract(unittest.TestCase):
+    def test_quotient_memory_checks_each_reduced_basis_and_order(self):
+        selected=Cell.select('memory',workloads=['components8_1m'],subjects=['hymeko-auto-quotient-fresh','hymeko-auto-quotient-reused'])
+        self.assertEqual(len(selected),2)
+        for reuse in [False,True]:
+            records={'CELL':[dict(section='memory',status='OK',subject='hymeko-auto-quotient-'+('reused' if reuse else 'fresh'),nodes='5')],
+                     'PHASE':[dict(phase=p,working_set_b='1024',self_peak_b='2048') for p in MemoryEvidence.phases],
+                     'MEMORY':[dict(input_released='true',frameworks='1',verification='controller')],
+                     'WORKSPACE':[dict(iteration=str(i),solver='auto',reused=str(reuse).lower(),capacity_b='512',
+                                       after_call_b='512' if reuse else '0',steps='7') for i in range(7)],
+                     'AUTO':[dict(iteration=str(i),policy='periodic_power_probe',selection_timed='false',
+                                  reason='KrylovEstimate',probe_interval='4',restart_limit='20',max_basis_bytes='67108864',
+                                  iteration_limit='200',probe_updates='4',selection_checks='1',power_updates='4',gmres_updates='3',
+                                  restart='2',basis_bytes='32',predicted_power_updates='30',power_work='10000',gmres_work='5000') for i in range(7)],
+                     'QUOTIENT':[dict(iteration=str(i),policy='Pendant',selected_nodes='2',canonical_validation='true',pairwise_matrix='false') for i in range(7)]}
+            MemoryEvidence.verify(records)
+            for key,value in [('iteration','3'),('selected_nodes','0'),('policy','Disabled')]:
+                bad=copy.deepcopy(records);bad['QUOTIENT'][0][key]=value
+                with self.assertRaises(ValueError):MemoryEvidence.verify(bad)
+            bad=copy.deepcopy(records);bad['QUOTIENT'].pop()
+            with self.assertRaises(ValueError):MemoryEvidence.verify(bad)
+
+    def test_auto_memory_requires_complete_untimed_selection_and_workspace_evidence(self):
+        for reuse in (False, True):
+            records={'CELL':[dict(section='memory',status='OK',subject='hymeko-auto-'+('reused' if reuse else 'fresh'),nodes='5')],
+                     'PHASE':[dict(phase=p,working_set_b='1024',self_peak_b='2048') for p in MemoryEvidence.phases],
+                     'MEMORY':[dict(input_released='true',frameworks='1',verification='controller')],
+                     'WORKSPACE':[dict(iteration=str(i),solver='auto',reused=str(reuse).lower(),capacity_b='512',
+                                       after_call_b='512' if reuse else '0',steps='7') for i in range(7)],
+                     'AUTO':[dict(iteration=str(i),policy='periodic_power_probe',selection_timed='false',
+                                  reason='KrylovEstimate',probe_interval='4',restart_limit='20',max_basis_bytes='67108864',
+                                  iteration_limit='200',probe_updates='4',selection_checks='1',power_updates='4',gmres_updates='3',
+                                  restart='2',basis_bytes='80',predicted_power_updates='30',power_work='10000',gmres_work='5000')
+                             for i in range(7)]}
+            MemoryEvidence.verify(records)
+            for key,value in [('selection_timed','true'),('iteration','3'),('basis_bytes','88'),('gmres_updates','2')]:
+                bad=copy.deepcopy(records);bad['AUTO'][0][key]=value
+                with self.assertRaises(ValueError):MemoryEvidence.verify(bad)
+            bad=copy.deepcopy(records);bad['AUTO'].pop()
+            with self.assertRaises(ValueError):MemoryEvidence.verify(bad)
+
     def test_phase_sampler_does_not_reuse_the_lifetime_or_previous_phase_peak(self):
         sample=PhaseSampler()
         sample.sample({'working_set_b':90},1.)
@@ -77,6 +117,17 @@ class MemoryContract(unittest.TestCase):
                 campaign['cells'].append({'run':run,'id':cell.key,'records':records,
                     'resources':{'memory_verification':{'reference_l1':0.,'residual_bound':0.}}})
         rows=MemorySummary.rows(campaign)
+        application=copy.deepcopy(campaign)
+        application['workloads']=['app_model'];application['subjects']=['hymeko']
+        application['application_inputs']={'app_model':'model.hymeko'}
+        application['cells']=[c for c in application['cells']
+                              if c['records']['CELL'][0]['workload']=='chain65k'
+                              and c['records']['CELL'][0]['subject']=='hymeko']
+        selected=Cell.select('memory',subjects=['hymeko'],workloads=['app_model'],
+                             application_workloads=('app_model',))[0]
+        for cell in application['cells']:
+            cell['id']=selected.key;cell['records']['CELL'][0]['workload']='app_model'
+        self.assertTrue(all(row['workload']=='app_model' for row in MemorySummary.rows(application)))
         solve=next(r for r in rows if r['metric']=='solve_peak')
         self.assertEqual(solve['median_mib'],36/1024)
         self.assertEqual(solve['worst_mib'],60/1024)

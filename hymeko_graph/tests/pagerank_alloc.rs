@@ -15,6 +15,60 @@ static ALLOCATOR: CountingAllocator = CountingAllocator;
 struct AllocationFixture;
 
 #[test]
+fn warm_quotient_auto_reuses_partition_lift_and_reduced_krylov_buffers() {
+    use hymeko_graph::{PageRankAutoConfig, PageRankQuotient};
+    let ir = support::Case::unsigned(
+        40,
+        &[
+            &[0, 1, 2, 3],
+            &[0, 4, 5, 6, 7],
+            &[0, 8, 9],
+            &[0, 10, 10, 11],
+            &[0, 12],
+        ],
+    )
+    .build()
+    .unwrap();
+    let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+    let config = PageRankConfig {
+        damping: 0.99,
+        tolerance: 1e-12,
+        ..Default::default()
+    };
+    let solver = PageRankSolver::Auto(PageRankAutoConfig {
+        quotient: PageRankQuotient::Pendant,
+        ..Default::default()
+    });
+    let mut workspace = PageRankWorkspace::new();
+    let result = rank
+        .run_with_solver(config, &mut workspace, None, solver)
+        .unwrap();
+    let selection = result.automatic.unwrap();
+    assert_eq!(selection.quotient_nodes, Some(8));
+    let expected: Vec<_> = result.scores.iter().map(|v| v.to_bits()).collect();
+    let retained = (rank.retained_bytes(), workspace.retained_bytes());
+    let before = AllocationSnapshot::current_thread();
+    let result = rank
+        .run_with_solver(config, &mut workspace, None, solver)
+        .unwrap();
+    let delta = AllocationSnapshot::current_thread().since(before);
+    assert!(result.progress.converged);
+    assert_eq!(result.automatic.unwrap(), selection);
+    assert!(
+        result
+            .scores
+            .iter()
+            .zip(expected)
+            .all(|(a, b)| a.to_bits() == b)
+    );
+    assert_eq!((delta.allocations, delta.bytes), (0, 0));
+    assert_eq!(
+        (rank.retained_bytes(), workspace.retained_bytes()),
+        retained
+    );
+}
+
+#[test]
 fn warm_automatic_selection_reuses_probe_basis_and_continuation_buffers() {
     let ir = AllocationFixture::hub(17);
     let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
@@ -29,6 +83,8 @@ fn warm_automatic_selection_reuses_probe_basis_and_continuation_buffers() {
     let selection = first.automatic.unwrap();
     assert!(selection.gmres_iterations > 0);
     assert!(first.progress.converged);
+    let expected_scores: Vec<_> = first.scores.iter().map(|v| v.to_bits()).collect();
+    let expected_progress = first.progress;
     let retained = workspace.retained_bytes();
     let before = AllocationSnapshot::current_thread();
     let result = rank
@@ -37,6 +93,14 @@ fn warm_automatic_selection_reuses_probe_basis_and_continuation_buffers() {
     let delta = AllocationSnapshot::current_thread().since(before);
     assert_eq!(result.automatic.unwrap(), selection);
     assert!(result.progress.converged);
+    assert_eq!(result.progress, expected_progress);
+    assert!(
+        result
+            .scores
+            .iter()
+            .zip(expected_scores)
+            .all(|(a, b)| a.to_bits() == b)
+    );
     assert_eq!((delta.allocations, delta.bytes), (0, 0));
     assert_eq!(workspace.retained_bytes(), retained);
 }

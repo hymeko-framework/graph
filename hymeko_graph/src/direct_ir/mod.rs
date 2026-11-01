@@ -68,8 +68,8 @@ pub use informed::{
 };
 pub use pagerank::{
     PageRank, PageRankAutoConfig, PageRankAutoReason, PageRankAutoSelection, PageRankConfig,
-    PageRankError, PageRankModel, PageRankOptions, PageRankResult, PageRankSolver,
-    PageRankWorkspace, RankFlow, RankOrdering, RankWeights,
+    PageRankError, PageRankModel, PageRankOptions, PageRankQuotient, PageRankResult,
+    PageRankSolver, PageRankWorkspace, RankFlow, RankOrdering, RankWeights,
 };
 pub use s_connect::{SComponentLabeling, s_connected_components};
 pub use tour::{BergeTour, Christofides, TourError, TourLimits};

@@ -10,15 +10,17 @@ use hymeko::{
         incidence::{IncidenceDomain, IncidenceIndex, IncidenceProjection, build_incidence_index},
         ir::{Ir, IrBuilder},
     },
-    util::measurement::Distribution,
+    module_store::{execution::CompiledModel, source_provider::StdFsProvider},
+    util::{measurement::Distribution, real_parser::RealParser},
 };
 use hymeko_graph::{
-    PageRank, PageRankAutoSelection, PageRankConfig, PageRankModel, PageRankSolver,
-    PageRankWorkspace, TraversalWorkspace, connected_components,
+    PageRank, PageRankAutoConfig, PageRankAutoSelection, PageRankConfig, PageRankModel,
+    PageRankQuotient, PageRankSolver, PageRankWorkspace, TraversalWorkspace, connected_components,
 };
 use std::{
     env,
     io::{self, Write},
+    path::{Path, PathBuf},
 };
 
 #[path = "native/library.rs"]
@@ -37,7 +39,7 @@ enum Backend {
     Phases,
     Ordered,
     Gmres,
-    Auto,
+    Auto(PageRankQuotient),
     Prepared,
     Hypergraphz,
 }
@@ -61,7 +63,8 @@ impl Selection {
                 "phases" if operation == "rank" => Backend::Phases,
                 "ordered" if operation == "rank" => Backend::Ordered,
                 "gmres" if operation == "rank" => Backend::Gmres,
-                "auto" if operation == "rank" => Backend::Auto,
+                "auto" if operation == "rank" => Backend::Auto(PageRankQuotient::Disabled),
+                "auto_quotient" if operation == "rank" => Backend::Auto(PageRankQuotient::Pendant),
                 "prepared" => Backend::Prepared,
                 "hypergraphz" => Backend::Hypergraphz,
                 _ => panic!("unknown backend"),
@@ -79,7 +82,10 @@ impl Selection {
     }
     fn solver(&self) -> PageRankSolver {
         match self.backend {
-            Backend::Auto => PageRankSolver::Auto(Default::default()),
+            Backend::Auto(quotient) => PageRankSolver::Auto(PageRankAutoConfig {
+                quotient,
+                ..Default::default()
+            }),
             Backend::Gmres => PageRankSolver::Gmres { restart: 20 },
             Backend::Ordered => PageRankSolver::OrderedPowerIteration,
             _ => PageRankSolver::PowerIteration,
@@ -143,6 +149,69 @@ impl InputStats {
     }
 }
 impl Input {
+    fn application_source() -> Option<PathBuf> {
+        env::var_os("HYMEKO_APPLICATION_SOURCE").map(PathBuf::from)
+    }
+
+    fn compile_source(path: &Path) -> Ir {
+        let model = CompiledModel::compile(StdFsProvider::new(), RealParser, path)
+            .expect("application model must compile through Core");
+        // Published Core IR tables are shared: this retains their allocations,
+        // rather than rebuilding or flattening the compiled application model.
+        model.program().ir.clone()
+    }
+
+    fn write_incidence(&self, path: &Path) -> io::Result<()> {
+        let mut output = std::fs::File::create(path)?;
+        for value in [self.ir.nodes.len(), self.ir.arcs.len(), self.members.len()] {
+            output.write_all(
+                &u32::try_from(value)
+                    .expect("u32 input domain")
+                    .to_le_bytes(),
+            )?;
+        }
+        for value in self.offsets.iter().chain(&self.members) {
+            output.write_all(&value.to_le_bytes())?;
+        }
+        Ok(())
+    }
+
+    fn emit_auto(
+        auto: PageRankAutoSelection,
+        solver: PageRankSolver,
+        selection_timed: bool,
+        iteration: Option<usize>,
+    ) {
+        let PageRankSolver::Auto(policy) = solver else {
+            unreachable!()
+        };
+        println!(
+            "EVIDENCE_AUTO\tpolicy=periodic_power_probe\tselection_timed={selection_timed}\titeration={}\treason={:?}\tprobe_interval={}\trestart_limit={}\tmax_basis_bytes={}\titeration_limit={}\tprobe_updates={}\tselection_checks={}\tpower_updates={}\tgmres_updates={}\trestart={}\tbasis_bytes={}\tpredicted_power_updates={}\tpower_work={}\tgmres_work={}",
+            iteration.map_or_else(|| "none".to_string(), |n| n.to_string()),
+            auto.reason,
+            policy.probe_iterations,
+            policy.restart,
+            policy.max_basis_bytes,
+            PageRankConfig::default().max_iterations,
+            auto.probe_iterations,
+            auto.selection_checks,
+            auto.power_iterations,
+            auto.gmres_iterations,
+            auto.restart,
+            auto.basis_bytes
+                .map_or_else(|| "none".to_string(), |n| n.to_string()),
+            auto.estimated_power_iterations,
+            auto.estimated_power_work,
+            auto.estimated_gmres_work,
+        );
+        println!(
+            "EVIDENCE_QUOTIENT\tpolicy={:?}\tselected_nodes={}\titeration={}\tcanonical_validation=true\tpairwise_matrix=false",
+            policy.quotient,
+            auto.quotient_nodes
+                .map_or_else(|| "none".to_string(), |n| n.to_string()),
+            iteration.map_or_else(|| "none".to_string(), |n| n.to_string())
+        );
+    }
     fn rank_with_phases(
         &self,
         scores: &mut [f64],
@@ -380,27 +449,7 @@ impl Input {
                     selection.solver(),
                 );
                 if let Some(auto) = automatic {
-                    let PageRankSolver::Auto(policy) = selection.solver() else {
-                        unreachable!()
-                    };
-                    println!(
-                        "EVIDENCE_AUTO\tpolicy=periodic_power_probe\tselection_timed=true\treason={:?}\tprobe_interval={}\trestart_limit={}\tmax_basis_bytes={}\titeration_limit={}\tprobe_updates={}\tselection_checks={}\tpower_updates={}\tgmres_updates={}\trestart={}\tbasis_bytes={}\tpredicted_power_updates={}\tpower_work={}\tgmres_work={}",
-                        auto.reason,
-                        policy.probe_iterations,
-                        policy.restart,
-                        policy.max_basis_bytes,
-                        PageRankConfig::default().max_iterations,
-                        auto.probe_iterations,
-                        auto.selection_checks,
-                        auto.power_iterations,
-                        auto.gmres_iterations,
-                        auto.restart,
-                        auto.basis_bytes
-                            .map_or_else(|| "none".to_string(), |n| n.to_string()),
-                        auto.estimated_power_iterations,
-                        auto.estimated_power_work,
-                        auto.estimated_gmres_work,
-                    );
+                    Self::emit_auto(auto, selection.solver(), true, None);
                 }
                 println!(
                     "EVIDENCE_LAYOUT\thymeko_prepared_bytes={}\tprojection_ranges={}",
@@ -471,7 +520,7 @@ impl Input {
                             &mut scores,
                             selection.workers,
                         ),
-                        Backend::Hymeko | Backend::Gmres | Backend::Ordered | Backend::Auto => {
+                        Backend::Hymeko | Backend::Gmres | Backend::Ordered | Backend::Auto(_) => {
                             let rank = PageRank::build(&self.ir, PageRankModel::default()).unwrap();
                             Self::solve_using(
                                 &rank,
@@ -532,7 +581,7 @@ impl Input {
                         | Backend::Phases
                         | Backend::Gmres
                         | Backend::Ordered
-                        | Backend::Auto => {
+                        | Backend::Auto(_) => {
                             panic!("components require the matched fresh-workspace API")
                         }
                     };
@@ -570,18 +619,24 @@ fn native_cell() {
     if matches!(selection.backend, Backend::Hypergraphz) {
         assert_eq!(selection.workers, 1, "native upstream is single-threaded");
     }
-    let fixture = Fixture::named(&workload);
-    let input = Input::new(fixture.generate().unwrap());
-    assert_eq!(input.members.len(), fixture.incidence_count());
-    input.relabeling_parity(fixture);
+    let source = Input::application_source();
+    let fixture = source.is_none().then(|| Fixture::named(&workload));
+    let input = Input::new(match source {
+        Some(path) => Input::compile_source(&path),
+        None => fixture.unwrap().generate().unwrap(),
+    });
+    if let Some(fixture) = fixture {
+        assert_eq!(input.members.len(), fixture.incidence_count());
+        input.relabeling_parity(fixture);
+    }
     let library = library::Library::load();
     let mut native = library.build(input.ir.nodes.len(), &input.offsets, &input.members);
     println!(
         "EVIDENCE_INPUT\tfingerprint={}\tseed={}\tarity_cap={}\ttopology={}\tshape_reported=true\tconstruction_timed=false\tindex_timed=false\tmetric_scope={}\tprocess_memory=includes_both_graphs_and_parity",
         input.fingerprint(),
-        fixture.seed,
-        fixture.arity,
-        fixture.membership.label(),
+        fixture.map_or_else(|| "none".to_owned(), |f| f.seed.to_string()),
+        fixture.map_or(0, |f| f.arity),
+        fixture.map_or("compiled_application", |f| f.membership.label()),
         selection.scope()
     );
     InputStats::new(&input).emit();
@@ -607,6 +662,41 @@ fn native_cell() {
         &measurement,
     );
     emit_phase(&run, &workload, &subject, "complete");
+}
+
+#[test]
+#[ignore = "explicit compiled application export and correctness; no measurements"]
+fn application_source_export() {
+    let source = Input::application_source().expect("explicit application source");
+    let output = env::var_os("HYMEKO_APPLICATION_EXPORT").expect("explicit export path");
+    let input = Input::new(Input::compile_source(&source));
+    let rank = PageRank::build(&input.ir, PageRankModel::default()).unwrap();
+    for name in ["rank_hymeko", "rank_gmres", "rank_auto"] {
+        let mut scores = vec![0.0; input.ir.nodes.len()];
+        Input::solve_using(
+            &rank,
+            &mut PageRankWorkspace::new(),
+            &mut scores,
+            1,
+            Selection::parse(name).solver(),
+        );
+        assert!(input.residual_bound(&scores) <= 1.01e-10);
+        if name == "rank_hymeko" {
+            println!("APPLICATION_RANKS\t{scores:?}");
+        }
+    }
+    input.write_incidence(Path::new(&output)).unwrap();
+    let index = build_incidence_index(&input.ir).unwrap();
+    let mut labels = vec![u32::MAX; input.ir.nodes.len()];
+    let components = Input::components(&index, &mut labels);
+    println!("APPLICATION_COMPONENTS\tcount={components}\tlabels={labels:?}");
+    println!(
+        "APPLICATION_EXPORT\tnodes={}\tarcs={}\tincidences={}\tfingerprint={}",
+        input.ir.nodes.len(),
+        input.ir.arcs.len(),
+        input.members.len(),
+        input.fingerprint()
+    );
 }
 
 #[test]
@@ -718,7 +808,13 @@ fn rank_solver_selection_and_independent_residuals_require_no_native_library_or_
             .unwrap(),
     );
     let rank = PageRank::build(&input.ir, PageRankModel::default()).unwrap();
-    for name in ["rank_hymeko", "rank_ordered", "rank_gmres", "rank_auto"] {
+    for name in [
+        "rank_hymeko",
+        "rank_ordered",
+        "rank_gmres",
+        "rank_auto",
+        "rank_auto_quotient",
+    ] {
         let selection = Selection::parse(name);
         let mut scores = vec![0.0; 7];
         let (iterations, auto) = Input::solve_using(
@@ -728,7 +824,7 @@ fn rank_solver_selection_and_independent_residuals_require_no_native_library_or_
             1,
             selection.solver(),
         );
-        assert_eq!(auto.is_some(), name == "rank_auto");
+        assert_eq!(auto.is_some(), name.starts_with("rank_auto"));
         if let Some(auto) = auto {
             assert_eq!(auto.power_iterations + auto.gmres_iterations, iterations);
         }
@@ -753,6 +849,10 @@ fn rank_solver_full_catalog_correctness() {
                 PageRankSolver::OrderedPowerIteration,
                 PageRankSolver::Gmres { restart: 20 },
                 PageRankSolver::Auto(Default::default()),
+                PageRankSolver::Auto(PageRankAutoConfig {
+                    quotient: PageRankQuotient::Pendant,
+                    ..Default::default()
+                }),
             ] {
                 let (steps, automatic) =
                     Input::solve_using(&rank, &mut ws, &mut candidate, 1, solver);

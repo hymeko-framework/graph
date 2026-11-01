@@ -3,6 +3,7 @@ use super::{
     PageRank, PageRankConfig, PageRankError, PageRankResult, PageRankWorkspace, PowerState,
     Progress,
 };
+use super::{PageRankQuotient, QuotientPlan};
 
 /// Controls for adaptive execution; these are work-model heuristics, not timing guarantees.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,6 +16,8 @@ pub struct PageRankAutoConfig {
     /// Excludes other scratch, allocator overhead and previously retained capacity.
     /// Zero disables Krylov admission without allocating its buffers.
     pub max_basis_bytes: usize,
+    /// Optional certified coordinate reduction, including its preparation cost.
+    pub quotient: PageRankQuotient,
 }
 impl Default for PageRankAutoConfig {
     fn default() -> Self {
@@ -22,6 +25,7 @@ impl Default for PageRankAutoConfig {
             probe_iterations: 4,
             restart: 20,
             max_basis_bytes: 64 * 1024 * 1024,
+            quotient: PageRankQuotient::Disabled,
         }
     }
 }
@@ -68,6 +72,9 @@ pub struct PageRankAutoSelection {
     pub basis_bytes: Option<usize>,
     /// Admitted directions, zero when no Krylov cycle is selected.
     pub restart: usize,
+    /// Reduced Krylov dimension when that execution view was selected.
+    /// None means the full operator domain; power probes always use full scores.
+    pub quotient_nodes: Option<usize>,
 }
 impl PageRankAutoSelection {
     fn new(reason: PageRankAutoReason) -> Self {
@@ -82,6 +89,7 @@ impl PageRankAutoSelection {
             estimated_gmres_work: 0,
             basis_bytes: None,
             restart: 0,
+            quotient_nodes: None,
         }
     }
 }
@@ -117,14 +125,55 @@ impl WorkModel {
         config: PageRankConfig,
         state: &PowerState,
     ) -> PageRankAutoSelection {
+        self.select_domain(policy, config, state, self.nodes, 0)
+    }
+
+    fn select_quotient(
+        &self,
+        policy: PageRankAutoConfig,
+        config: PageRankConfig,
+        state: &PowerState,
+        quotient: &QuotientPlan,
+    ) -> PageRankAutoSelection {
+        let full = self.select(policy, config, state);
+        let directions = policy.restart.min(quotient.nodes()).min(
+            config
+                .max_iterations
+                .saturating_sub(state.progress.iterations)
+                .saturating_sub(1),
+        );
+        let reduced = self.select_domain(
+            policy,
+            config,
+            state,
+            quotient.nodes(),
+            quotient.extra_work(directions),
+        );
+        if reduced.reason == PageRankAutoReason::KrylovEstimate
+            && (full.reason != PageRankAutoReason::KrylovEstimate
+                || reduced.estimated_gmres_work < full.estimated_gmres_work)
+        {
+            reduced
+        } else {
+            full
+        }
+    }
+
+    fn select_domain(
+        &self,
+        policy: PageRankAutoConfig,
+        config: PageRankConfig,
+        state: &PowerState,
+        krylov_nodes: usize,
+        extra_work: u128,
+    ) -> PageRankAutoSelection {
         let mut selection = PageRankAutoSelection::new(PageRankAutoReason::IterationBudget);
         let remaining = config.max_iterations - state.progress.iterations;
         if remaining < 2 {
             return selection;
         }
-        let directions = policy.restart.min(self.nodes).min(remaining - 1);
-        selection.basis_bytes = self
-            .nodes
+        let directions = policy.restart.min(krylov_nodes).min(remaining - 1);
+        selection.basis_bytes = krylov_nodes
             .checked_mul(directions)
             .and_then(|elements| elements.checked_mul(size_of::<f64>()));
         if selection
@@ -175,12 +224,14 @@ impl WorkModel {
         // MGS dots/axpys, basis updates and one canonical validation update.
         selection.estimated_gmres_work = (m + 2)
             .saturating_mul(contraction + 6 * n)
-            .saturating_add(2 * n * m * (m + 1))
-            .saturating_add(self.canonical + 16 * n);
+            .saturating_add(2 * krylov_nodes as u128 * m * (m + 1))
+            .saturating_add(self.canonical + 16 * n)
+            .saturating_add(extra_work);
         selection.reason = PageRankAutoReason::PowerEstimate;
         if selection.estimated_gmres_work < selection.estimated_power_work {
             selection.reason = PageRankAutoReason::KrylovEstimate;
             selection.restart = directions;
+            selection.quotient_nodes = (krylov_nodes != self.nodes).then_some(krylov_nodes);
         }
         selection
     }
@@ -214,6 +265,8 @@ impl<'ir> PageRank<'ir> {
             self.prepare_workspace(workspace);
             let model = WorkModel::from_rank(self);
             let mut checks = 0;
+            let mut quotient = None;
+            let mut quotient_checked = false;
             loop {
                 let stop = state
                     .progress
@@ -225,7 +278,23 @@ impl<'ir> PageRank<'ir> {
                     selection = PageRankAutoSelection::new(PageRankAutoReason::PowerConverged);
                     break;
                 }
-                selection = model.select(policy, config, &state);
+                // Converged short probes pay no partitioning cost. The immutable
+                // topology view is cached; personalization compatibility is per solve.
+                if !quotient_checked
+                    && policy.quotient == PageRankQuotient::Pendant
+                    && policy.max_basis_bytes > 0
+                {
+                    quotient = self
+                        .quotient
+                        .get_or_init(|| QuotientPlan::build(self))
+                        .as_ref()
+                        .filter(|plan| plan.compatible(&workspace.personalization));
+                    quotient_checked = true;
+                }
+                selection = quotient.map_or_else(
+                    || model.select(policy, config, &state),
+                    |plan| model.select_quotient(policy, config, &state, plan),
+                );
                 if selection.reason != PageRankAutoReason::PowerEstimate {
                     break;
                 }
@@ -241,7 +310,12 @@ impl<'ir> PageRank<'ir> {
                         ..config
                     };
                     let progress = self
-                        .run_krylov_initialized(cycle_config, workspace, selection.restart)?
+                        .run_krylov_initialized(
+                            cycle_config,
+                            workspace,
+                            selection.restart,
+                            selection.quotient_nodes.and(quotient),
+                        )?
                         .progress;
                     selection.gmres_iterations = progress.iterations;
                     state.progress = Progress {

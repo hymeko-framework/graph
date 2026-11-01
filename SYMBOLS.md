@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**10 package(s), 737 public symbol(s).**
+**11 package(s), 742 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -36,6 +36,14 @@ _No public symbols._
 - **Root:** `dev/dylib`
 - **Manifest:** `dev/dylib/Cargo.toml`
 - **Charter:** Native development linkage; algorithms and canonical types keep their owners.
+
+_No public symbols._
+
+## hymeko-linkage-memory (rust)
+
+- **Root:** `dev/memory`
+- **Manifest:** `dev/memory/Cargo.toml`
+- **Charter:** Opt-in resident-memory client; generation and PageRank keep their existing owners.
 
 _No public symbols._
 
@@ -232,6 +240,7 @@ _No public symbols._
 - `MultiEdgeSignResolution` — `hymeko_graph/src/signed_tuples.rs`
 - `PageRankAutoReason` — `hymeko_graph/src/direct_ir/pagerank/automatic.rs`
 - `PageRankError` — `hymeko_graph/src/direct_ir/pagerank.rs`
+- `PageRankQuotient` — `hymeko_graph/src/direct_ir/pagerank/quotient.rs`
 - `PageRankSolver` — `hymeko_graph/src/direct_ir/pagerank/krylov.rs`
 - `PrunerDecision` — `hymeko_graph/src/pruner.rs`
 - `RankFlow` — `hymeko_graph/src/direct_ir/pagerank.rs`
@@ -827,6 +836,7 @@ _No public symbols._
 
 ### classes
 
+- `ApplicationCatalog` — `scripts/performance_evidence/campaign.py`
 - `Campaign` — `scripts/performance_evidence/campaign.py`
 - `CampaignSummary` — `scripts/performance_evidence/campaign.py`
 - `CanonicalCase` — `scripts/performance_evidence/external.py`
@@ -839,6 +849,7 @@ _No public symbols._
 - `HostState` — `scripts/performance_evidence/host.py`
 - `HyperNetXBackend` — `scripts/performance_evidence/external.py`
 - `HypergraphxBackend` — `scripts/performance_evidence/external.py`
+- `LinkageStudy` — `scripts/performance_evidence/linkage.py`
 - `MemoryClient` — `scripts/performance_evidence/memory.py`
 - `MemoryEvidence` — `scripts/performance_evidence/memory.py`
 - `MemorySummary` — `scripts/performance_evidence/memory.py`
@@ -852,11 +863,13 @@ _No public symbols._
 - `QuietHostGuard` — `scripts/performance_evidence/host.py`
 - `RankResult` — `scripts/performance_evidence/ranking.py`
 - `RankingBackend` — `scripts/performance_evidence/ranking.py`
+- `ResidentCohort` — `scripts/performance_evidence/linkage.py`
 - `ReticulaBackend` — `scripts/performance_evidence/external.py`
 - `Route` — `scripts/performance_evidence/routing.py`
 - `RoutingBackend` — `scripts/performance_evidence/routing.py`
 - `RoutingHyperNetX` — `scripts/performance_evidence/routing.py`
 - `WindowsMemoryCapture` — `scripts/performance_evidence/memory.py`
+- `WindowsWorkingSet` — `scripts/performance_evidence/working_set.py`
 - `XGIBackend` — `scripts/performance_evidence/external.py`
 
 ### functions

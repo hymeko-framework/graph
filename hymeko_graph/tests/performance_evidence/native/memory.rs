@@ -6,7 +6,9 @@ use hymeko::ir::ir::{
     AnnoR, ArcPlacement, IncidenceSign, Ir, IrBuilder, IrCapacities, IrConstruction,
     ReferenceDraft, dispatch,
 };
-use hymeko_graph::{PageRank, PageRankModel, PageRankSolver, PageRankWorkspace};
+use hymeko_graph::{
+    PageRank, PageRankAutoSelection, PageRankModel, PageRankSolver, PageRankWorkspace,
+};
 use std::{
     env, fs,
     io::{self, Read, Write},
@@ -65,6 +67,23 @@ impl MemoryInput {
     }
     fn build(&self) -> hymeko::ir::ir::Ir {
         IrBuilder::build(self).expect("canonical Core construction")
+    }
+
+    fn build_application_or_fixture(&self, source: Option<&Path>) -> Ir {
+        match source {
+            None => self.build(),
+            Some(path) => {
+                let input = Input::new(Input::compile_source(path));
+                assert_eq!(
+                    self.nodes,
+                    input.ir.nodes.len(),
+                    "application node count drift"
+                );
+                assert_eq!(self.offsets, input.offsets, "application offsets drift");
+                assert_eq!(self.members, input.members, "application incidence drift");
+                input.ir
+            }
+        }
     }
 }
 
@@ -126,6 +145,17 @@ impl MemoryStrategy {
                 solver: PageRankSolver::Gmres { restart: 20 },
                 reuse: subject == "hymeko-gmres-reused",
             },
+            "hymeko-auto-fresh" | "hymeko-auto-reused" => Self {
+                solver: PageRankSolver::Auto(Default::default()),
+                reuse: subject == "hymeko-auto-reused",
+            },
+            "hymeko-auto-quotient-fresh" | "hymeko-auto-quotient-reused" => Self {
+                solver: PageRankSolver::Auto(hymeko_graph::PageRankAutoConfig {
+                    quotient: hymeko_graph::PageRankQuotient::Pendant,
+                    ..Default::default()
+                }),
+                reuse: subject.ends_with("reused"),
+            },
             _ => panic!("unknown HyMeKo memory strategy"),
         }
     }
@@ -135,13 +165,13 @@ impl MemoryStrategy {
         rank: &PageRank<'_>,
         workspace: &mut PageRankWorkspace,
         scores: &mut [f64],
-    ) -> (usize, usize) {
-        let (iterations, _) = Input::solve_using(rank, workspace, scores, 1, self.solver);
+    ) -> (usize, usize, Option<PageRankAutoSelection>) {
+        let (iterations, automatic) = Input::solve_using(rank, workspace, scores, 1, self.solver);
         let retained = workspace.retained_bytes();
         if !self.reuse {
             *workspace = PageRankWorkspace::new();
         }
-        (iterations, retained)
+        (iterations, retained, automatic)
     }
 }
 impl Phase {
@@ -182,7 +212,14 @@ fn memory_cell() {
     };
     assert!(matches!(
         phase.subject.as_str(),
-        "hymeko" | "hymeko-gmres-fresh" | "hymeko-gmres-reused" | "hypergraphz"
+        "hymeko"
+            | "hymeko-gmres-fresh"
+            | "hymeko-gmres-reused"
+            | "hypergraphz"
+            | "hymeko-auto-fresh"
+            | "hymeko-auto-reused"
+            | "hymeko-auto-quotient-fresh"
+            | "hymeko-auto-quotient-reused"
     ));
     let library = (phase.subject == "hypergraphz").then(library::Library::load);
     phase.mark("baseline");
@@ -218,7 +255,8 @@ fn memory_cell() {
     } else {
         #[cfg(feature = "evidence-heap")]
         let before_ir = crate::heap::live();
-        let ir = input.build();
+        let source = Input::application_source();
+        let ir = input.build_application_or_fixture(source.as_deref());
         #[cfg(feature = "evidence-heap")]
         let ir_bytes = crate::heap::live() - before_ir;
         #[cfg(feature = "evidence-heap")]
@@ -232,13 +270,16 @@ fn memory_cell() {
         phase.mark("prepared");
         for iteration in 0..7 {
             scores = vec![0.0; nodes];
-            let (steps, retained) = strategy.solve(&rank, &mut workspace, &mut scores);
+            let (steps, retained, automatic) = strategy.solve(&rank, &mut workspace, &mut scores);
+            if let Some(auto) = automatic {
+                Input::emit_auto(auto, strategy.solver, false, Some(iteration));
+            }
             println!(
                 "EVIDENCE_WORKSPACE\titeration={iteration}\tsolver={}\treused={}\tcapacity_b={retained}\tafter_call_b={}\toutput_b={}\tsteps={steps}",
-                if phase.subject == "hymeko" {
-                    "power"
-                } else {
-                    "gmres"
+                match strategy.solver {
+                    PageRankSolver::Auto(_) => "auto",
+                    PageRankSolver::Gmres { .. } => "gmres",
+                    _ => "power",
                 },
                 strategy.reuse,
                 workspace.retained_bytes(),
@@ -302,18 +343,58 @@ fn memory_cell() {
 }
 
 #[test]
+fn compiled_application_roundtrip_retains_canonical_records_and_checks_input() {
+    let source =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/application_rank.hymeko");
+    let expected = Input::new(Input::compile_source(&source));
+    let path = env::temp_dir().join(format!(
+        "hymeko-application-roundtrip-{}.bin",
+        std::process::id()
+    ));
+    expected.write_incidence(&path).unwrap();
+    let mut input = MemoryInput::read(fs::File::open(&path).unwrap()).unwrap();
+    fs::remove_file(&path).unwrap();
+    let actual = input.build_application_or_fixture(Some(&source));
+    assert_eq!(actual.decl_nodes.len(), expected.ir.decl_nodes.len());
+    assert_eq!(actual.files.len(), expected.ir.files.len());
+    assert!(actual.decl_nodes.len() > actual.nodes.len() + actual.edges.len());
+    assert_eq!(Input::new(actual).fingerprint(), expected.fingerprint());
+    assert_eq!(
+        Input::new(input.build_application_or_fixture(None)).fingerprint(),
+        expected.fingerprint()
+    );
+    input.nodes += 1;
+    assert!(
+        std::panic::catch_unwind(|| input.build_application_or_fixture(Some(&source))).is_err()
+    );
+}
+
+#[test]
 fn memory_solver_selection_preserves_scores_and_workspace_lifetime() {
     let ir = Case::unsigned(5, &[&[0, 1, 2], &[2, 3]]).build().unwrap();
     let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
     let mut expected = vec![0.0; 5];
     Input::solve(&rank, &mut PageRankWorkspace::new(), &mut expected, 1);
-    for subject in ["hymeko", "hymeko-gmres-fresh", "hymeko-gmres-reused"] {
+    for subject in [
+        "hymeko",
+        "hymeko-gmres-fresh",
+        "hymeko-gmres-reused",
+        "hymeko-auto-fresh",
+        "hymeko-auto-reused",
+        "hymeko-auto-quotient-fresh",
+        "hymeko-auto-quotient-reused",
+    ] {
         let strategy = MemoryStrategy::select(subject);
         let mut workspace = PageRankWorkspace::new();
         let mut scores = vec![0.0; 5];
         let mut previous = None;
         for _ in 0..3 {
-            let (_, capacity) = strategy.solve(&rank, &mut workspace, &mut scores);
+            let (steps, capacity, automatic) = strategy.solve(&rank, &mut workspace, &mut scores);
+            assert_eq!(automatic.is_some(), subject.contains("auto"));
+            if let Some(auto) = automatic {
+                assert_eq!(auto.power_iterations + auto.gmres_iterations, steps);
+                Input::emit_auto(auto, strategy.solver, false, Some(0));
+            }
             assert!(capacity > 0);
             assert_eq!(
                 workspace.retained_bytes(),

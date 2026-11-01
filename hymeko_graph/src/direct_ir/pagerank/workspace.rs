@@ -19,6 +19,7 @@ pub struct PageRankWorkspace {
     pub(super) arc_values: Vec<f64>,
     pub(super) krylov: GmresWorkspace,
     pub(super) rhs: Vec<f64>,
+    pub(super) quotient: super::quotient::QuotientWorkspace,
     pub(super) pool: Option<Arc<rayon::ThreadPool>>,
 }
 
@@ -67,6 +68,7 @@ impl PageRankWorkspace {
             + self.arc_values.capacity() * size_of::<f64>()
             + self.krylov.retained_bytes()
             + self.rhs.capacity() * size_of::<f64>()
+            + self.quotient.retained_bytes()
     }
 
     pub(super) fn initialize(
@@ -110,6 +112,31 @@ impl PageRankWorkspace {
     /// including recovery from any previous error, cannot inherit stale sums.
     pub(super) fn prepare_input(&mut self, outgoing: &[f64], weighted: bool) {
         self.prepare_vector(None, outgoing, weighted);
+    }
+
+    /// Admit a signed solver candidate as probability scores and stage the
+    /// canonical update that will certify its error bound. A failed candidate
+    /// never reaches the incidence contraction; initialize permits later reuse.
+    pub(super) fn prepare_candidate(
+        &mut self,
+        outgoing: &[f64],
+        weighted: bool,
+    ) -> Result<(), PageRankError> {
+        if self.scores.iter().any(|x| !x.is_finite()) {
+            return Err(PageRankError::NumericalMass);
+        }
+        for x in &mut self.scores {
+            *x = x.max(0.0);
+        }
+        let mass = Sum::of(self.scores.iter().copied());
+        if !mass.is_finite() || mass <= 0.0 {
+            return Err(PageRankError::NumericalMass);
+        }
+        for score in &mut self.scores {
+            *score /= mass;
+        }
+        self.prepare_input(outgoing, weighted);
+        Ok(())
     }
 
     /// Stage either the current probability scores or a signed Krylov vector

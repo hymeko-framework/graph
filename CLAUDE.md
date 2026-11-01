@@ -1,5 +1,5 @@
 @AGENTS.md
-@../hymeko/docs/agent-contract/global.md
+@../../hymeko/docs/agent-contract/global.md
 
 # Claude Code — Operating Contract (`graph` repository)
 

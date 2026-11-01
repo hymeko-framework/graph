@@ -22,11 +22,41 @@ approved_edits:
     authority: user explicitly requests early P-graph relaxation and internal matroid basis/lifetime search, and authorizes offline local edits
     scope: extend existing SSG constraints and binary matroid frontier, thin CLI transport and Quantum consumer verification; preserve unconstrained semantics and dependency revisions
     plan: ../transformation/docs/plans/2026-10-30-reverse-state-search/plan.pdf
+  - slug: application-pagerank-control
+    date: 2026-10-30
+    authority: user requests application-derived Auto/Power/GMRES timing and memory measurements on Katolab
+    scope: existing evidence clients and controller accept an explicit source catalog through the Core compiler; production solver policy and dependency versions remain unchanged
+    plan: reports/2026-10-30-application-pagerank/plan.json
   - slug: native-dev-dll
     date: 2026-10-28
     authority: user requests shared dynamic libraries and explicitly selects Core/Graph tests and tools
     scope: downstream development DLL re-export and original-source correctness/tool clients, workspace/profile/aliases; benchmark targets and production semantics unchanged
     plan: dev/README.txt
+  - slug: adaptive-pagerank-quotient
+    date: 2026-10-28
+    authority: user requests implementing exact vertex aggregation and a complete overnight control on kato21
+    scope: Graph-owned pendant/isolate quotient view, existing Auto and Tensor GMRES composition, correctness and same-binary guarded controls; no new IR or dependency
+    plan: reports/2026-10-28-pagerank-quotient/plan.pdf
+  - slug: auto-bounded-preparation
+    date: 2026-10-28
+    authority: user requests further reducing Auto execution cost after bounded-plan proposal
+    scope: strengthen existing component bound and fuse GMRES candidate sweeps; preserve selection, floating-point order, errors and canonical validation; correctness only
+    plan: reports/2026-10-27-pagerank-auto/plan.json
+  - slug: auto-generalization-memory-control
+    date: 2026-10-27
+    authority: user requests further Auto validation over VPN after additional-family and isolated-memory proposals
+    scope: existing evidence clients, explicit additional input admission, Auto fresh/reused memory subjects and five-process kato21 controls; production selection policy unchanged
+    plan: reports/2026-10-27-pagerank-auto/followup/plan.pdf
+  - slug: pagerank-candidate-validation
+    date: 2026-10-27
+    authority: user requests continuing removal of repeated checks and sweeps while retaining the numerical error bound
+    scope: existing PageRank workspace candidate admission and GMRES caller, focused equivalence/reuse tests; no new IR, dependencies or measurement without separate approval
+    plan: reports/2026-10-27-pagerank-auto/plan.json
+  - slug: prepare-search-reuse-control
+    date: 2026-10-27
+    authority: user requests extended shortest-path and graph-search evidence and explicitly selects preparation only
+    scope: existing informed evidence clients and controller; distance admission and fixed-goal query batches, untimed correctness and export checks; no production search changes, dependencies or measurements
+    plan: reports/2026-10-27-search-followup/plan.json
   - slug: adaptive-pagerank-solver
     date: 2026-10-27
     authority: user requests automatic GMRES selection to provide one measured HyMeKo column

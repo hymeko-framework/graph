@@ -206,6 +206,205 @@ impl DenseOracle {
 struct Verification;
 
 #[test]
+fn quotient_auto_matches_dense_solution_and_accounts_for_reduced_basis() {
+    use hymeko_graph::PageRankQuotient;
+    let case = Case::unsigned(
+        40,
+        &[
+            &[0, 1, 2, 3],
+            &[0, 4, 5, 6, 7],
+            &[0, 8, 9],
+            &[0, 10, 10, 11],
+            &[0, 12],
+        ],
+    );
+    let ir = case.clone().build().unwrap();
+    let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+    let config = PageRankConfig {
+        damping: 0.99,
+        tolerance: 1e-12,
+        ..Default::default()
+    };
+    let expected = DenseOracle::solve(
+        &case,
+        PageRankModel::default(),
+        config.damping,
+        &vec![1.0; 40],
+    );
+    let mut workspace = PageRankWorkspace::new();
+    let policy = PageRankAutoConfig {
+        quotient: PageRankQuotient::Pendant,
+        ..Default::default()
+    };
+    for max_basis_bytes in [512, 64 * 1024 * 1024] {
+        let result = rank
+            .run_with_solver(
+                config,
+                &mut workspace,
+                None,
+                PageRankSolver::Auto(PageRankAutoConfig {
+                    max_basis_bytes,
+                    ..policy
+                }),
+            )
+            .unwrap();
+        let selection = result.automatic.unwrap();
+        assert!(result.progress.converged);
+        assert_eq!(selection.quotient_nodes, Some(8));
+        assert_eq!(
+            selection.basis_bytes,
+            Some(8 * selection.restart * size_of::<f64>())
+        );
+        assert!(selection.basis_bytes.unwrap() <= max_basis_bytes);
+        assert_eq!(
+            selection.power_iterations + selection.gmres_iterations,
+            result.progress.iterations
+        );
+        Verification::scores(result.scores, &expected, 2e-12);
+    }
+    for cap in [1, 4, 5, 6, 10] {
+        let result = rank
+            .run_with_solver(
+                PageRankConfig {
+                    max_iterations: cap,
+                    ..config
+                },
+                &mut workspace,
+                None,
+                PageRankSolver::Auto(policy),
+            )
+            .unwrap();
+        assert!(result.progress.iterations <= cap);
+        assert_eq!(
+            result.progress.converged,
+            result.progress.error_bound_l1 <= config.tolerance
+        );
+        if result.progress.converged {
+            Verification::scores(result.scores, &expected, 2e-12);
+        }
+    }
+    // Unequal class masses are allowed when each class itself stays constant.
+    let mut compatible = vec![4.0; 40];
+    compatible[0] = 13.0;
+    compatible[1..4].fill(2.0);
+    compatible[4..8].fill(3.0);
+    compatible[8..10].fill(0.4);
+    compatible[10] = 0.02;
+    compatible[11] = 5.0;
+    compatible[12] = 7.0;
+    let result = rank
+        .run_with_solver(
+            config,
+            &mut workspace,
+            Some(&compatible),
+            PageRankSolver::Auto(policy),
+        )
+        .unwrap();
+    assert!(result.progress.converged);
+    assert_eq!(result.automatic.unwrap().quotient_nodes, Some(8));
+    Verification::scores(
+        result.scores,
+        &DenseOracle::solve(&case, PageRankModel::default(), config.damping, &compatible),
+        2e-12,
+    );
+    // One incompatible member must disable the entire proposed quotient.
+    let mut p = vec![1.0; 40];
+    p[1] = 2.0;
+    let result = rank
+        .run_with_solver(
+            config,
+            &mut workspace,
+            Some(&p),
+            PageRankSolver::Auto(policy),
+        )
+        .unwrap();
+    assert_eq!(result.automatic.unwrap().quotient_nodes, None);
+    Verification::scores(
+        result.scores,
+        &DenseOracle::solve(&case, PageRankModel::default(), config.damping, &p),
+        2e-12,
+    );
+    for model in [
+        PageRankModel {
+            weights: RankWeights::Component(0),
+            ..Default::default()
+        },
+        PageRankModel {
+            flow: RankFlow::InToOut,
+            ..Default::default()
+        },
+    ] {
+        let rank = PageRank::build(&ir, model).unwrap();
+        let result = rank
+            .run_with_solver(config, &mut workspace, None, PageRankSolver::Auto(policy))
+            .unwrap();
+        assert_eq!(result.automatic.unwrap().quotient_nodes, None);
+        Verification::scores(
+            result.scores,
+            &DenseOracle::solve(&case, model, config.damping, &vec![1.0; 40]),
+            2e-12,
+        );
+    }
+}
+
+#[test]
+fn quotient_policy_preserves_permuted_structural_regions_and_short_power_probes() {
+    use hymeko_graph::PageRankQuotient;
+    let policy = PageRankAutoConfig {
+        quotient: PageRankQuotient::Pendant,
+        ..Default::default()
+    };
+    let config = PageRankConfig {
+        tolerance: 1e-12,
+        ..Default::default()
+    };
+    for seed in [None, Some(17), Some(29)] {
+        let fixture = Fixture {
+            nodes: 256,
+            arcs: 128,
+            arity: 16,
+            relabel_seed: seed,
+            membership: Membership::Communities {
+                groups: 2,
+                active: 96,
+            },
+            ..Fixture::named("components8_1m")
+        };
+        let ir = fixture.generate().unwrap();
+        let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+        let mut reference = PageRankWorkspace::new();
+        let expected = rank
+            .run(config, &mut reference, None)
+            .unwrap()
+            .scores
+            .to_vec();
+        let mut workspace = PageRankWorkspace::new();
+        let result = rank
+            .run_with_solver(config, &mut workspace, None, PageRankSolver::Auto(policy))
+            .unwrap();
+        assert!(result.progress.converged);
+        assert_eq!(result.automatic.unwrap().quotient_nodes, Some(97));
+        Verification::scores(result.scores, &expected, 2e-12);
+    }
+    let ir = Case::unsigned(40, &[&[0, 1, 2, 3]]).build().unwrap();
+    let rank = PageRank::build(&ir, PageRankModel::default()).unwrap();
+    let mut workspace = PageRankWorkspace::new();
+    let result = rank
+        .run_with_solver(
+            PageRankConfig {
+                damping: 0.0,
+                ..config
+            },
+            &mut workspace,
+            None,
+            PageRankSolver::Auto(policy),
+        )
+        .unwrap();
+    assert!(result.progress.converged);
+    assert_eq!(result.automatic.unwrap().quotient_nodes, None);
+}
+
+#[test]
 fn automatic_reuses_the_prefix_and_bounds_krylov_and_power_completion() {
     let mut case = Case::unsigned(
         10,
