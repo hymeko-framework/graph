@@ -35,7 +35,8 @@
 //!
 //! # Operator structure
 //!
-//! [`Abb`] is the operator: the leaf regime and the node budget.
+//! [`Abb`] is the operator: the leaf regime, the node budget and the
+//! [`ChildOrder`].
 //! [`Abb::solve`] is the classic additive-cost ABB. [`BoundedAbb`]
 //! composes the operator with a [`StructureObjective`] and owns the
 //! single traversal, so the classic ABB is the bounded one under the
@@ -312,20 +313,48 @@ pub fn solve_with_objective(
     BoundedAbb::new(Abb::new(regime, opts.max_explored), objective).solve(p, msg)
 }
 
+/// Which child of a branch point the traversal visits first.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ChildOrder {
+    /// Include first: the classic Friedler order, which reaches a feasible
+    /// incumbent quickly.
+    #[default]
+    IncludeFirst,
+    /// The child with the lower objective bound first, include on ties. With
+    /// an exact bound the first descent reaches an optimum, which then cuts
+    /// every later sibling.
+    LowerBoundFirst,
+}
+
+impl ChildOrder {
+    fn include_first(self, include: f64, exclude: f64) -> bool {
+        match self {
+            Self::IncludeFirst => true,
+            Self::LowerBoundFirst => include <= exclude,
+        }
+    }
+}
+
 /// The ABB operator: Friedler include/exclude branch-and-bound over a
 /// maximal structure, with the reachability bound, the regime's leaf
-/// feasibility and a node budget.
+/// feasibility, a node budget and a child order.
 #[derive(Clone, Copy)]
 pub struct Abb<'r> {
     regime: &'r dyn Regime,
     max_explored: u64,
+    order: ChildOrder,
 }
 
 impl<'r> Abb<'r> {
     /// An operator admitting leaves by `regime`; `max_explored` caps the
-    /// explored nodes (0 = unlimited).
+    /// explored nodes (0 = unlimited). Children are visited include first.
     pub fn new(regime: &'r dyn Regime, max_explored: u64) -> Self {
-        Self { regime, max_explored }
+        Self { regime, max_explored, order: ChildOrder::default() }
+    }
+
+    /// The operator visiting the children of each branch point in `order`.
+    pub fn with_order(self, order: ChildOrder) -> Self {
+        Self { order, ..self }
     }
 
     /// The classic ABB: minimum [`AdditiveCost`].
@@ -390,14 +419,14 @@ impl<'a> BoundedAbb<'a> {
             bounded: *self,
             reach,
             included: BTreeSet::new(),
-            excluded: BTreeSet::new(),
             best: None,
             explored: 0,
             pruned_by_bound: 0,
             pruned_by_reachability: 0,
             stopped: false,
         };
-        search.branch(0);
+        let bound = self.objective.lower_bound(&search.included, &msg.units);
+        search.branch(0, &msg.units, bound);
         let Search { best, explored, pruned_by_bound, pruned_by_reachability, stopped, .. } = search;
         best.map(|(units, value)| ObjectiveSolution {
             units,
@@ -498,7 +527,6 @@ struct Search<'s> {
     bounded: BoundedAbb<'s>,
     reach: &'s mut dyn Producibility,
     included: BTreeSet<DeclId>,
-    excluded: BTreeSet<DeclId>,
     best: Option<(BTreeSet<DeclId>, f64)>,
     explored: u64,
     pruned_by_bound: u64,
@@ -507,21 +535,21 @@ struct Search<'s> {
 }
 
 impl Search<'_> {
-    fn branch(&mut self, depth: usize) {
+    /// The node deciding `order[depth]`: `open` is the undecided suffix and
+    /// `bound` its lower bound, computed by the parent to order the children.
+    fn branch(&mut self, depth: usize, open: &BTreeSet<DeclId>, bound: f64) {
         let budget = self.bounded.abb.max_explored;
         if budget != 0 && self.explored >= budget {
             self.stopped = true;
             return;
         }
         self.explored += 1;
-        let open = undecided(&self.order[depth..], &self.excluded);
         // An infinite bound admits no evaluable completion, incumbent or not.
-        let bound = self.bounded.objective.lower_bound(&self.included, &open);
         if bound == f64::INFINITY || self.best.as_ref().is_some_and(|(_, best)| bound >= *best) {
             self.pruned_by_bound += 1;
             return;
         }
-        let optimistic: BTreeSet<DeclId> = self.included.union(&open).copied().collect();
+        let optimistic: BTreeSet<DeclId> = self.included.union(open).copied().collect();
         if !self.reach.reaches_products(&optimistic) {
             self.pruned_by_reachability += 1;
             return;
@@ -531,12 +559,22 @@ impl Search<'_> {
             return;
         }
         let u = self.order[depth];
+        let mut rest = open.clone();
+        rest.remove(&u);
+        let exclude = self.bounded.objective.lower_bound(&self.included, &rest);
         self.included.insert(u);
-        self.branch(depth + 1);
-        self.included.remove(&u);
-        self.excluded.insert(u);
-        self.branch(depth + 1);
-        self.excluded.remove(&u);
+        let include = self.bounded.objective.lower_bound(&self.included, &rest);
+        if self.bounded.abb.order.include_first(include, exclude) {
+            self.branch(depth + 1, &rest, include);
+            self.included.remove(&u);
+            self.branch(depth + 1, &rest, exclude);
+        } else {
+            self.included.remove(&u);
+            self.branch(depth + 1, &rest, exclude);
+            self.included.insert(u);
+            self.branch(depth + 1, &rest, include);
+            self.included.remove(&u);
+        }
     }
 
     fn leaf(&mut self) {
@@ -550,9 +588,4 @@ impl Search<'_> {
             self.best = Some((self.included.clone(), value));
         }
     }
-}
-
-/// Units still open at a branch point: the undecided suffix minus exclusions.
-fn undecided(rest: &[DeclId], excluded: &BTreeSet<DeclId>) -> BTreeSet<DeclId> {
-    rest.iter().filter(|u| !excluded.contains(u)).copied().collect()
 }

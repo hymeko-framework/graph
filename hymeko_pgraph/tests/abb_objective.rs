@@ -1,7 +1,8 @@
 //! Objective-driven ABB (`solve_with_objective`): additive objectives agree with
 //! `solve`; a non-additive peak objective and objective-side rejection agree with
 //! brute force over the decision-mapping solution structures. The classic ABB
-//! reports an unproven incumbent.
+//! reports an unproven incumbent; lower-bound-first under an exact bound reaches
+//! the optimum on its first descent.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -10,8 +11,8 @@ use hymeko_pgraph::lowering::LoweredPGraph;
 use hymeko_pgraph::msg::maximal_structure_with_regime;
 use hymeko_pgraph::regime::{Canonical, Regime};
 use hymeko_pgraph::{
-    Abb, AbbOptions, AdditiveCost, StructureObjective, abb_solve, lower, solve_with_objective,
-    ssg_dm_enumerate,
+    Abb, AbbOptions, AdditiveCost, BoundedAbb, ChildOrder, StructureObjective, abb_solve, lower,
+    solve_with_objective, ssg_dm_enumerate,
 };
 use parser::parse_description;
 
@@ -155,4 +156,38 @@ fn classic_abb_reports_whether_its_search_completed() {
     assert_eq!(full.cost, brute_force(&p, &AdditiveCost::new(&p, None)).0);
     let cut = Abb::new(&Canonical, 7).solve(&p, &msg, None);
     assert!(cut.is_none_or(|s| !s.complete));
+}
+
+/// The best completion over the admissible structures: a bound with no slack.
+struct Exact(Vec<(BTreeSet<DeclId>, f64)>);
+
+impl StructureObjective for Exact {
+    fn lower_bound(&self, included: &BTreeSet<DeclId>, open: &BTreeSet<DeclId>) -> f64 {
+        self.0
+            .iter()
+            .filter(|(s, _)| included.is_subset(s) && s.iter().all(|u| included.contains(u) || open.contains(u)))
+            .fold(f64::INFINITY, |m, (_, v)| m.min(*v))
+    }
+    fn evaluate(&self, units: &BTreeSet<DeclId>) -> Option<f64> {
+        self.0.iter().find(|(s, _)| s == units).map(|(_, v)| *v)
+    }
+}
+
+#[test]
+fn lower_bound_first_under_an_exact_bound_reaches_the_optimum_on_its_first_descent() {
+    let p = graph();
+    let msg = maximal_structure_with_regime(&p, &Canonical);
+    let exact = Exact(
+        ssg_dm_enumerate(&p, &msg)
+            .into_iter()
+            .filter(|s| Canonical.structure_admissible(&p, &s.units))
+            .map(|s| (s.units.clone(), cost(&p, &s.units)))
+            .collect(),
+    );
+    let abb = Abb::new(&Canonical, 0).with_order(ChildOrder::LowerBoundFirst);
+    let found = BoundedAbb::new(abb, &exact).solve(&p, &msg).unwrap();
+    assert!(found.complete);
+    assert_eq!(found.value, brute_force(&p, &exact).0);
+    // The root, then per decided unit the descending child and its cut sibling.
+    assert_eq!(found.explored, 2 * msg.units.len() as u64 + 1);
 }

@@ -13,7 +13,7 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**11 package(s), 747 public symbol(s).**
+**11 package(s), 749 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
@@ -634,6 +634,7 @@ _No public symbols._
 
 - `AxiomViolation` — `hymeko_pgraph/src/axioms.rs`
 - `BuilderError` — `hymeko_pgraph/src/builder.rs`
+- `ChildOrder` — `hymeko_pgraph/src/abb.rs`
 - `CliError` — `hymeko_pgraph/src/cli.rs`
 - `DumpAlgorithm` — `hymeko_pgraph/src/dump.rs`
 - `ExtensionAxiomViolation` — `hymeko_pgraph/src/axiom_extensions.rs`
@@ -763,6 +764,7 @@ _No public symbols._
 - `validate` — `hymeko_pgraph/src/axioms.rs`
 - `validate` — `hymeko_pgraph/src/view.rs`
 - `validate_timed` — `hymeko_pgraph/src/axioms.rs`
+- `with_order` — `hymeko_pgraph/src/abb.rs`
 - `with_required_products` — `hymeko_pgraph/src/friedler.rs`
 - `with_valid_o_nodes` — `hymeko_pgraph/src/friedler.rs`
 - `write_pgip` — `hymeko_pgraph/src/pgip_io.rs`

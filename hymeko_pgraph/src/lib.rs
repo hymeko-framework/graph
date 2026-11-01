@@ -62,7 +62,7 @@ pub mod ssg_dm;
 pub mod view;
 
 pub use abb::{
-    Abb, AbbOptions, AbbSolution, AdditiveCost, BoundedAbb, ObjectiveSolution,
+    Abb, AbbOptions, AbbSolution, AdditiveCost, BoundedAbb, ChildOrder, ObjectiveSolution,
     StructureObjective, solve as abb_solve, solve_with_objective,
 };
 pub use andor::{
