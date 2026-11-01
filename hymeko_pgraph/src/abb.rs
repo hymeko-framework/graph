@@ -344,11 +344,11 @@ impl ObjectiveSearch<'_> {
         }
         self.explored += 1;
         let open = undecided(&self.order[depth..], &self.excluded);
-        if let Some((_, best)) = &self.best {
-            if self.objective.lower_bound(&self.included, &open) >= *best {
-                self.pruned_by_bound += 1;
-                return;
-            }
+        // An infinite bound admits no evaluable completion, incumbent or not.
+        let bound = self.objective.lower_bound(&self.included, &open);
+        if bound == f64::INFINITY || self.best.as_ref().is_some_and(|(_, best)| bound >= *best) {
+            self.pruned_by_bound += 1;
+            return;
         }
         if !products_reachable(p, &self.included, &open) {
             self.pruned_by_reachability += 1;

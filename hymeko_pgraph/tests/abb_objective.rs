@@ -128,3 +128,30 @@ fn exploration_limit_reports_an_unproven_incumbent() {
     let found = solve_with_objective(&p, &msg, &opts, &Canonical, &Additive(&p));
     assert!(found.is_none_or(|s| !s.complete));
 }
+
+/// Rejects every structure containing `banned`, with an infinite bound as soon as it is included.
+struct Banned<'a> {
+    p: &'a LoweredPGraph,
+    banned: DeclId,
+}
+
+impl StructureObjective for Banned<'_> {
+    fn lower_bound(&self, included: &BTreeSet<DeclId>, _open: &BTreeSet<DeclId>) -> f64 {
+        if included.contains(&self.banned) { f64::INFINITY } else { cost(self.p, included) }
+    }
+    fn evaluate(&self, units: &BTreeSet<DeclId>) -> Option<f64> {
+        (!units.contains(&self.banned)).then(|| cost(self.p, units))
+    }
+}
+
+#[test]
+fn an_infinite_bound_prunes_before_any_incumbent_exists() {
+    let p = graph();
+    let msg = maximal_structure_with_regime(&p, &Canonical);
+    // Include-first order enters the first unit's subtree first; it must be cut at once.
+    let banned = *msg.units.iter().next().unwrap();
+    let opts = AbbOptions { max_explored: 2 * msg.units.len() as u64 + 2, ..AbbOptions::default() };
+    let found = solve_with_objective(&p, &msg, &opts, &Canonical, &Banned { p: &p, banned }).unwrap();
+    assert!(!found.units.contains(&banned));
+    assert!(found.pruned_by_bound > 0);
+}
