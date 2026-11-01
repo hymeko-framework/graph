@@ -14,6 +14,7 @@ import json
 import math
 import os
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -75,6 +76,8 @@ COMPARISON_WORKLOADS = (
 
 GENERATED_WORKLOADS = ("steiner255", "complete32_3", "sunflower1024", "mycielski7")
 ASSISTED_WORKLOADS = ("grid200_d80", "map128", "transport128")
+SEARCH_WORKLOADS = ("grid200_d20", "grid200_d40", *ASSISTED_WORKLOADS)
+BATCH_SUBJECTS = tuple(f"batch_{method}_{count}" for method in ("bfs", "dijkstra", "astar", "assisted") for count in (1, 8, 64))
 ASSISTED_SUBJECTS = ("dijkstra", "astar", "assisted", "prepare", "first_dijkstra", "first_astar", "first_assisted")
 ROUTING_WORKLOADS = ASSISTED_WORKLOADS + ("tour16",)
 SCALING_WORKLOADS = ("grid512_d511", "map256", "transport256_off", "tour24", "tour32", "tour64", "tour64_corridor")
@@ -82,6 +85,8 @@ EXTERNAL_FRAMEWORKS = ("hypernetx", "xgi", "hypergraphx", "reticula")
 EXTERNAL_OPERATIONS = ("components", "reachable", "distance", "path", "astarpath", "unitpath", "tour", "pagerank")
 RANKING_WORKLOADS = tuple(w + suffix for w in ("chain65k","rank2_1m","hub32_1m","components8_1m")
                          for suffix in ("","@17"))
+RANKING_FOLLOWUP_WORKLOADS = tuple(w + suffix for w in
+    ("rank32_1m", "rank1000_1m", "mixed_1m", "sunflower1024") for suffix in ("", "@17"))
 TRAVERSAL_SUBJECTS = ("reachable", "dual_reachable", "berge_path", "dijkstra",
                       "generate_ir", "incidence_index", "levi", "s_components2")
 
@@ -115,7 +120,7 @@ class Cell:
         if self.test == "native::native_cell":
             result["HYMEKO_NATIVE_BENCH"] = "1"
             result["RAYON_NUM_THREADS"] = "1"
-        if self.test in {"assisted::assisted_cell", "assisted::tour_cell"}:
+        if self.test in {"assisted::assisted_cell", "assisted::tour_cell", "assisted::batch::batch_cell"}:
             result.update({"HYMEKO_ASSISTED_BENCH": "1", "RAYON_NUM_THREADS": "1"})
         if self.suite == "external":
             result.update({"HYMEKO_EXTERNAL_BENCH": "1", "RAYON_NUM_THREADS": "1",
@@ -130,13 +135,21 @@ class Cell:
     @staticmethod
     def select(suite: str = "graph", phases: list[str] | None = None,
                subjects: list[str] | None = None, smoke: bool = False,
-               workloads: list[str] | None = None) -> list[Cell]:
+               workloads: list[str] | None = None,
+               application_workloads: tuple[str, ...] = ()) -> list[Cell]:
         """Select an explicit subset of the existing matrix, never another runner."""
-        cells = Cell.matrix(suite, phases, workloads)
+        cells = Cell.matrix(suite, phases, workloads, application_workloads)
         if subjects is not None:
             known = set(TRAVERSAL_SUBJECTS) if suite == "traversal" else {cell.subject for cell in cells}
+            if suite == "ranking_solvers":
+                known.add("rank_auto_quotient")
+                if "rank_auto_quotient" in subjects:
+                    cells += [Cell("algorithm", "native::native_cell", workload, "rank_auto_quotient")
+                              for workload in dict.fromkeys(cell.workload for cell in cells)]
             if suite == "memory":
-                known.update(("hymeko-gmres-fresh", "hymeko-gmres-reused"))
+                known.update(("hymeko-gmres-fresh", "hymeko-gmres-reused",
+                              "hymeko-auto-fresh", "hymeko-auto-reused",
+                              "hymeko-auto-quotient-fresh", "hymeko-auto-quotient-reused"))
             if not subjects or len(set(subjects)) != len(subjects) or not set(subjects) <= known:
                 raise ValueError("subjects must be nonempty, unique members of the selected suite")
             if suite == "memory":
@@ -164,12 +177,19 @@ class Cell:
 
     @staticmethod
     def matrix(suite: str = "graph", phases: list[str] | None = None,
-               workloads: list[str] | None = None) -> list[Cell]:
+               workloads: list[str] | None = None,
+               application_workloads: tuple[str, ...] = ()) -> list[Cell]:
+        if application_workloads and suite not in {"ranking_solvers", "memory"}:
+            raise ValueError("application inputs require ranking_solvers or memory")
         if workloads is not None and (
-            suite not in {"comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "assisted", "routing", "routing_unit", "routing_scale"} or not workloads or len(set(workloads)) != len(workloads)
-            or not set(workloads) <= set(RANKING_WORKLOADS if suite in {"external_ranking", "ranking_phases", "ranking_solvers", "memory"} else SCALING_WORKLOADS if suite=="routing_scale" else ("grid200_d80",) if suite=="routing_unit" else ROUTING_WORKLOADS if suite=="routing" else ASSISTED_WORKLOADS if suite=="assisted" else COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
+            suite not in {"comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "assisted", "search_reuse", "routing", "routing_unit", "routing_scale"} or not workloads or len(set(workloads)) != len(workloads)
+            or not set(workloads) <= set(RANKING_WORKLOADS + RANKING_FOLLOWUP_WORKLOADS + application_workloads if suite in {"external_ranking", "ranking_phases", "ranking_solvers", "memory"} else SCALING_WORKLOADS if suite=="routing_scale" else ("grid200_d20", "grid200_d40", "grid200_d80") if suite=="routing_unit" else (*ROUTING_WORKLOADS, "grid200_d20", "grid200_d40") if suite=="routing" else SEARCH_WORKLOADS if suite in {"assisted", "search_reuse"} else COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
         ):
             raise ValueError("workloads must be nonempty unique names from the comparison/traversal catalog")
+        if suite == "search_reuse":
+            return [Cell("informed", "assisted::batch::batch_cell", w, s)
+                    for w in workloads or SEARCH_WORKLOADS for s in BATCH_SUBJECTS
+                    if not s.startswith("batch_bfs_") or w.startswith("grid")]
         if suite == "assisted":
             return [Cell("informed", "assisted::assisted_cell", w, s)
                     for w in (workloads or ASSISTED_WORKLOADS) for s in ASSISTED_SUBJECTS]
@@ -187,7 +207,8 @@ class Cell:
                     cells.append(Cell("external","external_cell",w,"reticula-unitpath-first"))
             return cells
         if suite == "routing_unit":
-            return [Cell("external","external_cell","grid200_d80",f"{b}-unitpath-first") for b in EXTERNAL_FRAMEWORKS]
+            return [Cell("external","external_cell",w,f"{b}-unitpath-first")
+                    for w in workloads or ("grid200_d80",) for b in EXTERNAL_FRAMEWORKS]
         if suite == "memory":
             selected = workloads or RANKING_WORKLOADS
             return ([Cell("external", "memory_cell", w, b) for w in selected for b in EXTERNAL_FRAMEWORKS]
@@ -322,6 +343,51 @@ class Cell:
 
 class Evidence:
     @staticmethod
+    def verify_search_batch(records, cell):
+        batch = Evidence.one(records, "BATCH")
+        result = Evidence.one(records, "RESULT")
+        if cell.get("subject") not in BATCH_SUBJECTS:
+            raise ValueError("unknown search-batch subject")
+        count = int(cell["subject"].rsplit("_",1)[1])
+        expected = {"verified":"true", "unit":"us_per_batch", "construction_timed":"false",
+                    "query_plan_timed":"false", "index_builds":"1",
+                    "caller_setups":"0" if cell["subject"].startswith("batch_bfs_") else "1",
+                    "workspace":"fresh_per_batch_reused_within",
+                    "metric_scope":"resident_ir_to_preparation_queries_full_paths_and_drop",
+                    "seed":"20261027", "queries":str(count)}
+        if any(batch.get(k)!=v for k,v in expected.items()) or result.get("items")!=str(count):
+            raise ValueError("search-batch boundary or result count drift")
+        queries = records.get("BATCH_QUERY", [])
+        nodes, arcs = int(cell["nodes"]), int(cell["arcs"])
+        if len(queries)!=count or [int(q["ordinal"]) for q in queries]!=list(range(count)):
+            raise ValueError("missing or reordered batch queries")
+        if not 0 <= int(batch["goal"]) < nodes or int(batch["query_hash"]) < 0:
+            raise ValueError("invalid batch identity")
+        if len({q["start"] for q in queries})!=count:
+            raise ValueError("repeated batch source")
+        for q in queries:
+            if not 0<=int(q["start"])<nodes or q["goal"]!=batch["goal"] or q["start"]==q["goal"]:
+                raise ValueError("invalid batch endpoints")
+            if q["cost_micros"]!=q["expected_cost_micros"]:
+                raise ValueError("batch optimum mismatch")
+            vertices, edges = json.loads(q["vertices"]), json.loads(q["arc_ids"])
+            if q["reachable"]=="true":
+                if (int(q["cost_micros"])<0 or int(q["hops"])<1 or len(edges)!=int(q["hops"])
+                        or len(vertices)!=len(edges)+1 or vertices[0]!=int(q["start"])
+                        or vertices[-1]!=int(q["goal"]) or any(not 0<=v<nodes for v in vertices)
+                        or any(not 0<=a<arcs for a in edges)):
+                    raise ValueError("invalid full batch witness")
+            elif q["reachable"]!="false" or q["cost_micros"]!="NA" or q["hops"]!="NA" or vertices or edges:
+                raise ValueError("invalid unreachable batch query")
+            if cell["subject"].startswith("batch_bfs_"):
+                if q["reachable"]=="true" and int(q["cost_micros"])!=int(q["hops"])*1_000_000:
+                    raise ValueError("unit-cost BFS batch cost/hop mismatch")
+                if q["expanded_nodes"]!="NA" or q["resolved_incidences"]!="NA":
+                    raise ValueError("BFS has no informed-search counters")
+            elif int(q["expanded_nodes"])<0 or int(q["resolved_incidences"])<0:
+                raise ValueError("negative batch work")
+
+    @staticmethod
     def verify_assisted(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
         source=Evidence.one(records,"INPUT")
         result=Evidence.one(records,"RESULT")
@@ -413,13 +479,13 @@ class Evidence:
                     raise ValueError("native PageRank parity/residual violation")
             if result.get("personalization") != "uniform" or result.get("tolerance") != "1e-10":
                 raise ValueError("native PageRank semantic drift")
-            if cell["subject"] == "rank_auto":
+            if cell["subject"] in {"rank_auto", "rank_auto_quotient"}:
                 Evidence.verify_auto(records, result)
 
     @staticmethod
-    def verify_auto(records, result):
+    def verify_auto(records, result, *, selection_timed=True):
         auto = Evidence.one(records, "AUTO")
-        if (auto.get("policy") != "periodic_power_probe" or auto.get("selection_timed") != "true"
+        if (auto.get("policy") != "periodic_power_probe" or auto.get("selection_timed") != str(selection_timed).lower()
                 or (auto.get("probe_interval"), auto.get("restart_limit"), auto.get("max_basis_bytes"),
                     auto.get("iteration_limit")) != ("4", "20", "67108864", "200")):
             raise ValueError("automatic PageRank policy/boundary drift")
@@ -437,9 +503,28 @@ class Evidence:
         if ((reason == "KrylovEstimate") != (gmres > 0)
                 or (restart > 0) != (gmres > 0)):
             raise ValueError("automatic PageRank decision/execution mismatch")
+        cell = Evidence.one(records, "CELL")
+        nodes = int(cell["nodes"])
+        reduction = records.get("QUOTIENT", [])
+        reduced_subject = cell["subject"] == "rank_auto_quotient" or cell["subject"].startswith("hymeko-auto-quotient-")
+        if reduced_subject and len(reduction) != 1:
+            raise ValueError("missing quotient policy evidence")
+        if reduction:
+            if len(reduction) != 1:
+                raise ValueError("duplicate quotient evidence")
+            q = reduction[0]
+            if (q.get("policy") != ("Pendant" if reduced_subject else "Disabled")
+                    or q.get("canonical_validation") != "true" or q.get("pairwise_matrix") != "false"
+                    or q.get("iteration", "none") != auto.get("iteration", "none")):
+                raise ValueError("quotient semantics mismatch")
+            if q.get("selected_nodes") != "none":
+                reduced_nodes = int(q["selected_nodes"])
+                if not reduced_subject or not gmres or not 0 < reduced_nodes < nodes:
+                    raise ValueError("invalid quotient dimension")
+                nodes = reduced_nodes
         if gmres and (auto.get("basis_bytes") == "none"
                       or not 0 < int(auto["basis_bytes"]) <= int(auto["max_basis_bytes"])
-                      or int(auto["basis_bytes"]) != int(Evidence.one(records, "CELL")["nodes"]) * restart * 8):
+                      or int(auto["basis_bytes"]) != nodes * restart * 8):
             raise ValueError("automatic PageRank basis admission mismatch")
         if any(int(auto[k]) < 0 for k in ("predicted_power_updates", "power_work", "gmres_work")):
             raise ValueError("negative automatic work estimate")
@@ -577,6 +662,7 @@ class Evidence:
                 "berge_shortest",
                 "berge_enumeration",
                 "heuristic_preparation",
+                "informed_query_batch",
             }
             and len(results) != 1
         ):
@@ -587,6 +673,8 @@ class Evidence:
             raise ValueError("result/cell mismatch")
         if cell.get("section") in {"informed_search","heuristic_preparation"} and cell.get("subject") in ASSISTED_SUBJECTS:
             Evidence.verify_assisted(records,cell)
+        if cell.get("section") == "informed_query_batch":
+            Evidence.verify_search_batch(records,cell)
         if cell.get("section") == "parsing":
             sources = records.get("SOURCE", [])
             if len(sources) != 1 or int(sources[0]["bytes"]) <= 0:
@@ -633,9 +721,38 @@ class Evidence:
         return records
 
 
+class ApplicationCatalog:
+    """Immutable source inputs for the existing compiler-backed evidence clients."""
+    def __init__(self, path):
+        self.path = Path(path).resolve()
+        self.digest = hashlib.sha256(self.path.read_bytes()).hexdigest()
+        data = json.loads(self.path.read_text(encoding="utf-8"))
+        self.root = (self.path.parent / data["root"]).resolve()
+        self.cases, self.files = data["cases"], data["files"]
+        if (not self.cases or not self.files
+                or any(not re.fullmatch(r"app_[a-z0-9_]+", name) for name in self.cases)
+                or not set(self.cases.values()) <= set(self.files)):
+            raise ValueError("invalid application source catalog")
+        self.identity()
+
+    def source(self, workload):
+        return self.root / self.cases[workload]
+
+    def identity(self):
+        if hashlib.sha256(self.path.read_bytes()).hexdigest() != self.digest:
+            raise ValueError("application catalog changed")
+        for name, digest in self.files.items():
+            path = (self.root / name).resolve()
+            if not path.is_relative_to(self.root) or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                raise ValueError("application source changed or escapes its root: " + name)
+        return self.digest
+
+
 class ProcessRunner:
     def __init__(self, args: argparse.Namespace):
         self.args = args
+        application = getattr(args, "application_input", None)
+        self.application = ApplicationCatalog(application) if application else None
         self.binaries = {}
         if args.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing_unit"}:
             self.binaries["informed"] = Path(args.informed).resolve()
@@ -672,7 +789,8 @@ class ProcessRunner:
             raise ValueError("native library changed during campaign")
         if {key: hashlib.sha256(path.read_bytes()).hexdigest() for key,path in self.external_files.items()} != self.external_hashes:
             raise ValueError("external input, client or dependency lock changed")
-        return {"path": str(self.native_library) if self.native_library else None, "sha256": self.native_sha, **self.external_hashes}
+        application = {"application_catalog_sha256": self.application.identity()} if self.application else {}
+        return {"path": str(self.native_library) if self.native_library else None, "sha256": self.native_sha, **self.external_hashes, **application}
 
     def cpu_set(self) -> list[int] | None:
         """Validate explicit processor sets while preserving the single-CPU CLI."""
@@ -733,6 +851,11 @@ class ProcessRunner:
     ) -> dict[str, Any]:
         binary = self.binaries[suite]
         self.dependency_identity()
+        workload = environment.get("EVIDENCE_WORKLOAD")
+        if self.application and workload:
+            if suite != "algorithm":
+                raise ValueError("application source inputs require the canonical Rust client")
+            environment = environment | {"HYMEKO_APPLICATION_SOURCE": str(self.application.source(workload))}
         if self.native_library:
             environment = environment | {"HYMEKO_NATIVE_LIBRARY": str(self.native_library)}
         command = [str(binary), *arguments]
@@ -1049,6 +1172,7 @@ class Campaign:
                 for k, v in self.runner.binaries.items()
             },
             "native_dependency": self.runner.dependency_identity(),
+            "application_inputs": self.runner.application.cases if self.runner.application else {},
             "cells": [],
             "correctness": [],
         }
@@ -1088,6 +1212,7 @@ class Campaign:
         cells = Cell.select(
             self.args.suite, self.args.phases, getattr(self.args, "subjects", None), self.args.smoke,
             getattr(self.args, "workloads", None),
+            tuple(self.runner.application.cases) if self.runner.application else (),
         )
         previous = {
             c["id"]: c["records"]["CELL"][0]["checksum"] for c in result["cells"]
@@ -1198,6 +1323,7 @@ class CampaignSummary:
             for cell in Cell.select(
                 campaign.get("suite", "graph"), campaign.get("phases"), campaign.get("subjects"),
                 workloads=campaign.get("workloads"),
+                application_workloads=tuple(campaign.get("application_inputs", {})),
             )
         }
         if self.selected_cells is not None and self.selected_cells != expected:
@@ -1208,10 +1334,20 @@ class CampaignSummary:
             raise ValueError("campaign process count does not match declared matrix")
         groups: dict[str, list[dict[str, Any]]] = {}
         results: dict[tuple[int, str, str], list[dict[str, str]]] = {}
+        batch_queries = {}
         for observation in campaign["cells"]:
             key = observation["id"]
             records = observation["records"]
             cell = records["CELL"][0]
+            if cell.get("section")=="informed_query_batch":
+                batch=Evidence.one(records,"BATCH")
+                Evidence.verify_search_batch(records,cell)
+                batch_key=(observation["run"],cell["workload"],batch["queries"])
+                query_contract=(batch["query_hash"],tuple(
+                    (q["start"],q["goal"],q["reachable"],q["expected_cost_micros"])
+                    for q in records["BATCH_QUERY"]))
+                if batch_queries.setdefault(batch_key,query_contract)!=query_contract:
+                    raise ValueError(f"different query batch or optimum across search methods: {batch_key}")
             if cell["status"] == "OK":
                 self.stage_rows.extend(self.phase_rows(campaign["platform"], observation))
             identity = {
@@ -1260,8 +1396,14 @@ class CampaignSummary:
             if sorted(o["run"] for o in observations) != list(range(1, runs + 1)):
                 raise ValueError(f"missing/duplicate independent process run: {key}")
             cell = observations[0]["records"]["CELL"][0]
-            if cell.get("subject") == "rank_auto" and any(
+            if cell.get("section") == "informed_query_batch" and any(
+                o["records"].get("BATCH") != observations[0]["records"].get("BATCH")
+                or o["records"].get("BATCH_QUERY") != observations[0]["records"].get("BATCH_QUERY")
+                for o in observations[1:]):
+                raise ValueError(f"batch inputs or witnesses changed across identical-input processes: {key}")
+            if cell.get("subject") in {"rank_auto", "rank_auto_quotient"} and any(
                 observation["records"].get("AUTO") != observations[0]["records"].get("AUTO")
+                or observation["records"].get("QUOTIENT") != observations[0]["records"].get("QUOTIENT")
                 for observation in observations[1:]
             ):
                 raise ValueError(f"automatic decision changed across identical-input processes: {key}")
@@ -1323,11 +1465,15 @@ class CampaignSummary:
                     "q1_ns": samples[len(samples) // 4] * 1000,
                     "q3_ns": samples[3 * len(samples) // 4] * 1000,
                     "nodes": cell["nodes"], "arcs": cell["arcs"], "incidences": cell["incidences"],
+                    **{"batch_"+field: observations[0]["records"].get("BATCH",[{}])[0].get(field, "")
+                       for field in ("queries", "goal", "seed", "query_hash", "unit", "metric_scope")},
                     **{key: shape.get(key, "") for key in ("arity_min", "arity_median", "arity_max", "degree_min", "degree_median", "degree_max", "isolated_nodes")},
                     "components": native.get("components", ""),
                     **{"auto_" + field: observations[0]["records"].get("AUTO", [{}])[0].get(field, "")
                        for field in ("reason", "probe_updates", "selection_checks", "power_updates", "gmres_updates",
                                      "restart", "basis_bytes", "predicted_power_updates", "power_work", "gmres_work")},
+                    **{"quotient_" + field: observations[0]["records"].get("QUOTIENT", [{}])[0].get(field, "")
+                       for field in ("policy", "selected_nodes")},
                     **{column: observations[0]["records"].get(record, [{}])[0].get(field, "")
                        for column, record, field in (
                            ("algebra_value", "ALGEBRA", "value"),
@@ -1467,6 +1613,8 @@ class CampaignSummary:
         provenance = {
             "source_commit": next(iter(self.source_commits)),
             "measurement_contract": (
+                "Complete fixed-goal batch: one index and caller setup, fresh workspace reused within the batch, every complete path and disposal. Reported time is per batch, not per query; IR construction and query-list generation excluded."
+                if campaigns[0].get("suite") == "search_reuse" else
                 "Resident graph to prepared operator, fresh solve workspace and complete rank result. HyMeKo compares structural power, ordered power, matrix-free GMRES and bounded Auto selection; Auto includes its probe and decision in the timed call. HyperNetX uses SciPy. Graph construction is excluded. Native process RSS includes both parity graphs; this is not isolated solver memory."
                 if campaigns[0].get("suite") == "ranking_solvers" else
                 "Same-call phase attribution with separate uninstrumented whole-call controls. Phase sums are checked per sample, never reconstructed by summing independent medians. Solve includes workspace, convergence and output handling; source loading and graph construction excluded."
@@ -1524,11 +1672,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--informed")
     parser.add_argument("--algorithm")
-    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "assisted", "routing", "routing_unit", "routing_scale"), default="graph")
+    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "assisted", "search_reuse", "routing", "routing_unit", "routing_scale"), default="graph")
     parser.add_argument("--external-python", help="isolated Python interpreter for external framework cells")
     parser.add_argument("--external-input", help="immutable canonical-IR fixture export")
     parser.add_argument("--subjects", nargs="+", help="explicit operations from the selected suite's existing matrix")
-    parser.add_argument("--workloads", nargs="+", choices=COMPARISON_WORKLOADS + GENERATED_WORKLOADS + ROUTING_WORKLOADS + SCALING_WORKLOADS + RANKING_WORKLOADS,
+    parser.add_argument("--application-input", help="explicit immutable source catalog for application-derived inputs")
+    parser.add_argument("--workloads", nargs="+",
                         help="explicit comparison/traversal fixtures; omitted keeps each suite's default matrix")
     parser.add_argument("--native-library", help="explicit pinned Windows native comparison adapter")
     parser.add_argument("--source-manifest", help="explicit source-byte snapshot for unpublished local source and dependency roots")
@@ -1576,7 +1725,13 @@ if __name__ == "__main__":
     if arguments.runs < 1 or (arguments.platform == "arm64" and not arguments.qemu):
         parser.error("positive --runs and an ARM64 --qemu path are required")
     try:
-        selected = Cell.select(arguments.suite, arguments.phases, arguments.subjects, arguments.smoke, arguments.workloads)
+        application = ApplicationCatalog(arguments.application_input) if arguments.application_input else None
+        if application and (not arguments.workloads or not set(arguments.workloads) <= set(application.cases)):
+            raise ValueError("select explicit workloads from the application catalog")
+        selected = Cell.select(arguments.suite, arguments.phases, arguments.subjects, arguments.smoke, arguments.workloads,
+                               tuple(application.cases) if application else ())
+        if application and any(cell.suite != "algorithm" for cell in selected):
+            raise ValueError("select canonical Rust strategies for application source inputs")
         if arguments.suite in {"external", "external_ranking", "ranking_phases", "ranking_solvers", "memory"}:
             if any(c.suite == "algorithm" for c in selected) and not arguments.algorithm:
                 parser.error("selected native baselines require --algorithm")

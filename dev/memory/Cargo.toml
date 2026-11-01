@@ -1,0 +1,39 @@
+[workspace]
+resolver = "3"
+
+[package]
+name = "hymeko-linkage-memory"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autobins = false
+
+[features]
+default = []
+static-link = ["dep:graph_static"]
+dynamic-link = ["dep:graph_dynamic"]
+
+[dependencies]
+hymeko = { package = "hymeko_core", git = "ssh://git@192.168.1.228:2222/hymeko/core.git", rev = "a70f46bbbd13716a6721d28e9387ed598676605b" }
+graph_static = { package = "hymeko_graph", git = "ssh://git@192.168.1.228:2222/hymeko/graph.git", rev = "d006ba5780cf23dfe8cdea96688011a08f99ce52", optional = true }
+graph_dynamic = { package = "hymeko-graph-dylib", git = "ssh://git@192.168.1.228:2222/hymeko/graph.git", rev = "d006ba5780cf23dfe8cdea96688011a08f99ce52", optional = true }
+
+[profile.dev-dll]
+inherits = "dev"
+debug = "line-tables-only"
+
+[[bin]]
+name = "linkage-a"
+path = "src/main.rs"
+
+[[bin]]
+name = "linkage-b"
+path = "src/main.rs"
+
+[[bin]]
+name = "linkage-c"
+path = "src/main.rs"
+
+[[bin]]
+name = "linkage-d"
+path = "src/main.rs"

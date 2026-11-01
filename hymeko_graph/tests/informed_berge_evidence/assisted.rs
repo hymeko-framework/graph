@@ -7,6 +7,9 @@ use hymeko_graph::direct_ir::{
 };
 use workloads::search::{SearchResult, SearchRunner};
 
+#[path = "assisted_batch.rs"]
+mod batch;
+
 #[derive(Clone, Copy, PartialEq)]
 enum Method {
     Dijkstra,
@@ -169,14 +172,24 @@ impl Scenario {
         path: &Option<WeightedBergePath>,
         expected: Option<f64>,
     ) {
+        self.verify_from(index, cost, self.start, path, expected);
+    }
+    fn verify_from(
+        &self,
+        index: &IncidenceIndex<'_>,
+        cost: &FixtureCost,
+        start: NodeId,
+        path: &Option<WeightedBergePath>,
+        expected: Option<f64>,
+    ) {
         assert_eq!(
             path.as_ref().map(|p| p.total_cost),
             expected,
             "optimal cost mismatch"
         );
         if let Some(path) = path {
-            assert_eq!(path.start, self.start);
-            let mut node = self.start;
+            assert_eq!(path.start, start);
+            let mut node = start;
             let mut sum = 0.0;
             for step in &path.steps {
                 assert_eq!(step.from.node, node);

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from campaign import (
+    ApplicationCatalog,
     COMPARISON_WORKLOADS,
     PHASES,
     Campaign,
@@ -21,6 +22,130 @@ from campaign import (
 
 
 class EvidenceContract(unittest.TestCase):
+    def test_application_catalog_freezes_sources_and_extends_only_explicit_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'model.hymeko';source.write_text('application {}')
+            data={'root':'.','cases':{'app_model':'model.hymeko'},
+                  'files':{'model.hymeko':hashlib.sha256(source.read_bytes()).hexdigest()}}
+            path=root/'catalog.json';path.write_text(json.dumps(data))
+            catalog=ApplicationCatalog(path)
+            self.assertEqual(catalog.source('app_model'),source)
+            self.assertEqual(catalog.identity(),hashlib.sha256(path.read_bytes()).hexdigest())
+            cells=Cell.select('ranking_solvers',subjects=['rank_auto','rank_hymeko','rank_gmres'],
+                              workloads=['app_model'],application_workloads=tuple(catalog.cases))
+            self.assertEqual(len(cells),3)
+            self.assertTrue(all(c.test=='native::native_cell' for c in cells))
+            memory=Cell.select('memory',subjects=['hymeko','hymeko-auto-fresh','hymeko-gmres-fresh'],
+                               workloads=['app_model'],application_workloads=tuple(catalog.cases))
+            self.assertEqual(len(memory),3)
+            with self.assertRaises(ValueError):Cell.select('ranking_solvers',workloads=['app_model'])
+            with self.assertRaises(ValueError):Cell.select('traversal',application_workloads=('app_model',))
+            self.assertEqual(len(Cell.select('ranking_solvers')),48)
+            source.write_text('changed {}')
+            with self.assertRaises(ValueError):catalog.identity()
+            path.write_text(json.dumps(data)+' ')
+            with self.assertRaises(ValueError):catalog.identity()
+
+    def test_quotient_is_explicit_and_basis_uses_certified_dimension(self):
+        self.assertEqual(len(Cell.select('ranking_solvers')),48)
+        cells=Cell.select('ranking_solvers',workloads=['components8_1m'],subjects=['rank_auto','rank_auto_quotient'])
+        self.assertEqual({c.subject for c in cells},{'rank_auto','rank_auto_quotient'})
+        for cell in cells:self.assertEqual(cell.environment(1)['HYMEKO_NATIVE_BENCH'],'1')
+        records=Evidence.parse(self.native_fixture('rank2_1m','rank_hymeko'))
+        records['CELL'][0]['subject']='rank_auto_quotient'
+        records['NATIVE'][0]['hymeko_iterations']='7'
+        records['AUTO']=[dict(policy='periodic_power_probe',selection_timed='true',iteration='none',
+            reason='KrylovEstimate',probe_interval='4',restart_limit='20',max_basis_bytes='67108864',
+            iteration_limit='200',probe_updates='4',selection_checks='1',power_updates='4',gmres_updates='3',
+            restart='2',basis_bytes='32',predicted_power_updates='30',power_work='10000',gmres_work='5000')]
+        records['QUOTIENT']=[dict(policy='Pendant',selected_nodes='2',iteration='none',canonical_validation='true',pairwise_matrix='false')]
+        Evidence.verify_native(records,records['CELL'][0])
+        for key,value in [('selected_nodes','0'),('selected_nodes','3'),('policy','Disabled'),
+                          ('canonical_validation','false'),('pairwise_matrix','true'),('iteration','1')]:
+            bad=copy.deepcopy(records);bad['QUOTIENT'][0][key]=value
+            with self.assertRaises(ValueError):Evidence.verify_native(bad,bad['CELL'][0])
+        bad=copy.deepcopy(records);del bad['QUOTIENT']
+        with self.assertRaises(ValueError):Evidence.verify_native(bad,bad['CELL'][0])
+        bad=copy.deepcopy(records);bad['AUTO'][0]['basis_bytes']='48'
+        with self.assertRaises(ValueError):Evidence.verify_native(bad,bad['CELL'][0])
+
+    def test_followup_rank_inputs_are_explicit_and_preserve_existing_defaults(self):
+        from campaign import RANKING_FOLLOWUP_WORKLOADS
+        self.assertEqual(len(Cell.select('ranking_solvers')), 48)
+        cells=Cell.select('ranking_solvers', workloads=list(RANKING_FOLLOWUP_WORKLOADS),
+                          subjects=['rank_auto','rank_hymeko','rank_gmres','rank_hypergraphz','hypernetx-pagerank-first'])
+        self.assertEqual(len(cells),40)
+        self.assertEqual({c.workload for c in cells},set(RANKING_FOLLOWUP_WORKLOADS))
+        for cell in cells:
+            self.assertEqual(cell.environment(1).get('HYMEKO_NATIVE_BENCH') if cell.suite=='algorithm'
+                             else cell.environment(1).get('HYMEKO_EXTERNAL_BENCH'), '1')
+        memory=Cell.select('memory',workloads=['rank32_1m@17'],subjects=['hymeko-auto-fresh','hymeko-auto-reused'])
+        self.assertEqual(len(memory),2)
+        self.assertTrue(all(c.environment(1)['HYMEKO_MEMORY_BENCH']=='1' for c in memory))
+
+    def test_batch_summary_keeps_per_batch_units_and_rejects_different_method_inputs(self):
+        subjects=['batch_astar_1','batch_assisted_1']
+        cells=Cell.select('search_reuse',workloads=['grid200_d20'],subjects=subjects)
+        observations=[]
+        for c in cells:
+            records=Evidence.parse(self.native_fixture())
+            records['CELL'][0].update(subject=c.subject,workload=c.workload,section='informed_query_batch')
+            records['BATCH']=[dict(queries='1',goal='2',seed='20261027',query_hash='10',verified='true',
+                unit='us_per_batch',construction_timed='false',query_plan_timed='false',index_builds='1',caller_setups='1',
+                workspace='fresh_per_batch_reused_within',metric_scope='resident_ir_to_preparation_queries_full_paths_and_drop')]
+            records['RESULT']=[dict(items='1',path_hash=records['CELL'][0]['checksum'],reachable='NA',hops='NA',cost_micros='NA')]
+            records['BATCH_QUERY']=[dict(ordinal='0',start='0',goal='2',reachable='true',cost_micros='1000000',
+                expected_cost_micros='1000000',hops='1',vertices='[0,2]',arc_ids='[0]',expanded_nodes='2',resolved_incidences='3')]
+            observations.append(dict(id=c.key,run=1,records=records,resources=dict(exit_code=0,peak_rss_bytes=1000,wall_seconds=1.)))
+        campaign=dict(complete=True,smoke=False,runs=1,suite='search_reuse',platform='native',source_commit='b'*40,
+            workloads=['grid200_d20'],subjects=subjects,cells=observations)
+        summary=CampaignSummary(Path('unused'));summary.accept(campaign)
+        self.assertEqual({r['batch_unit'] for r in summary.rows},{'us_per_batch'})
+        self.assertEqual({r['batch_queries'] for r in summary.rows},{'1'})
+        observations[-1]['records']['BATCH_QUERY'][0].update(start='1',vertices='[1,2]')
+        observations[-1]['records']['BATCH'][0]['query_hash']='11'
+        with self.assertRaises(ValueError):CampaignSummary(Path('unused')).accept(campaign)
+
+    def test_search_reuse_extends_existing_runner_without_changing_old_defaults(self):
+        cells=Cell.select('search_reuse')
+        self.assertEqual(len(cells),54)
+        self.assertEqual({c.test for c in cells},{'assisted::batch::batch_cell'})
+        self.assertTrue(all(c.environment(1)['HYMEKO_ASSISTED_BENCH']=='1' for c in cells))
+        self.assertTrue(all(c.environment(1)['RAYON_NUM_THREADS']=='1' for c in cells))
+        self.assertEqual(len(Cell.select('search_reuse',workloads=['grid200_d20'],subjects=['batch_astar_8'])),1)
+        self.assertEqual(len(Cell.select('assisted')),21)
+        self.assertEqual(len(Cell.select('assisted',workloads=['grid200_d20','grid200_d40'])),14)
+        self.assertEqual(len(Cell.select('routing',workloads=['grid200_d20','grid200_d40'])),22)
+        self.assertEqual(len(Cell.select('routing_unit',workloads=['grid200_d20','grid200_d40'])),8)
+        with self.assertRaises(ValueError):Cell.select('search_reuse',workloads=['map128'],subjects=['batch_bfs_1'])
+        with self.assertRaises(ValueError):Cell.select('search_reuse',subjects=['batch_astar_1000'])
+
+    def test_search_batch_rejects_changed_boundaries_costs_and_incomplete_witnesses(self):
+        cell=dict(subject='batch_assisted_1',nodes='3',arcs='1',section='informed_query_batch')
+        records={'BATCH':[dict(queries='1',goal='2',seed='20261027',query_hash='10',verified='true',
+            unit='us_per_batch',construction_timed='false',query_plan_timed='false',index_builds='1',caller_setups='1',
+            workspace='fresh_per_batch_reused_within',metric_scope='resident_ir_to_preparation_queries_full_paths_and_drop')],
+            'RESULT':[dict(items='1')],
+            'BATCH_QUERY':[dict(ordinal='0',start='0',goal='2',reachable='true',cost_micros='1000000',
+                expected_cost_micros='1000000',hops='1',vertices='[0,2]',arc_ids='[0]',expanded_nodes='2',resolved_incidences='3')]}
+        Evidence.verify_search_batch(records,cell)
+        for record,key,value in [('BATCH','unit','us_per_query'),('BATCH','index_builds','0'),
+                ('BATCH','queries','8'),('BATCH_QUERY','goal','1'),('BATCH_QUERY','cost_micros','2000000'),
+                ('BATCH_QUERY','vertices','[0]'),('BATCH_QUERY','arc_ids','[3]')]:
+            bad=copy.deepcopy(records);bad[record][0][key]=value
+            with self.subTest(key=key),self.assertRaises(ValueError):Evidence.verify_search_batch(bad,cell)
+        records['BATCH_QUERY'][0].update(reachable='false',cost_micros='NA',expected_cost_micros='NA',
+            hops='NA',vertices='[]',arc_ids='[]')
+        Evidence.verify_search_batch(records,cell)
+        cell['subject']='batch_bfs_1';records['BATCH'][0]['caller_setups']='0'
+        records['BATCH_QUERY'][0].update(expanded_nodes='NA',resolved_incidences='NA')
+        Evidence.verify_search_batch(records,cell)
+        records['BATCH_QUERY'][0].update(reachable='true',cost_micros='1000000',expected_cost_micros='1000000',
+            hops='1',vertices='[0,2]',arc_ids='[0]')
+        Evidence.verify_search_batch(records,cell)
+        records['BATCH_QUERY'][0].update(cost_micros='2000000',expected_cost_micros='2000000')
+        with self.assertRaises(ValueError):Evidence.verify_search_batch(records,cell)
+
     def test_solver_summary_names_the_solver_contract_without_parsing_or_qemu_claims(self):
         cell=Cell.select('ranking_solvers',workloads=['rank2_1m'],subjects=['rank_hymeko'])[0]
         campaign={'complete':True,'smoke':False,'runs':1,'suite':'ranking_solvers',

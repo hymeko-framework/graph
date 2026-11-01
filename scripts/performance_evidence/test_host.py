@@ -7,6 +7,24 @@ from host import HostState, QuietHostGuard, HostBusy, ProcessMemory
 
 
 class HostContracts(unittest.TestCase):
+    def test_observe_mode_keeps_host_cpu_data_and_all_other_admission_checks(self):
+        guard = QuietHostGuard({'cpus':[4,12], 'host_cpu_policy':'observe'}, uid=1000, user='owner')
+        observation = {'human_uids':[1000], 'sessions':['owner pts/0'],
+                       'available_bytes':64*1024**3, 'active':{'cpu':.25,'cpu4':.01,'cpu12':0.}}
+        original = copy.deepcopy(observation)
+        self.assertEqual(guard.reasons(observation), [])
+        self.assertEqual(observation, original)
+        for field,value in [('human_uids',[1000,1001]),('sessions',['other pts/1']),
+                            ('available_bytes',8*1024**3),
+                            ('active',{'cpu':.25,'cpu4':.1,'cpu12':0.}),
+                            ('active',{'cpu':.25,'cpu4':0.,'cpu12':.1})]:
+            changed=copy.deepcopy(observation);changed[field]=value
+            self.assertTrue(guard.reasons(changed), field)
+        strict = QuietHostGuard({'cpus':[4,12]}, uid=1000, user='owner')
+        self.assertIn('host CPU activity exceeds the quiet threshold', strict.reasons(observation))
+        with self.assertRaises(ValueError):
+            QuietHostGuard({'cpus':[4], 'host_cpu_policy':'unknown'}, uid=1000)
+
     def test_linux_memory_snapshot_handles_live_zombie_and_reaped_children(self):
         with patch('host.os.name', 'posix'), patch('host.Path') as path:
             path.return_value.read_text.side_effect = [

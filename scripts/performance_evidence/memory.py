@@ -168,17 +168,34 @@ class MemoryEvidence:
                     or int(owned['construction_peak_extra_b'])<int(owned['live_requested_b'])
                     or int(owned['reference_capacity_b'])<int(owned['reference_len_b'])):
                 raise ValueError('invalid IR heap ownership evidence')
-        if subject in {"hymeko-gmres-fresh", "hymeko-gmres-reused"}:
+        if subject in {"hymeko-gmres-fresh", "hymeko-gmres-reused", "hymeko-auto-fresh", "hymeko-auto-reused",
+                       "hymeko-auto-quotient-fresh", "hymeko-auto-quotient-reused"}:
             workspaces = records.get("WORKSPACE", [])
             reuse = subject.endswith("reused")
+            solver = "auto" if "auto" in subject else "gmres"
             if len(workspaces) != 7:
-                raise ValueError("missing GMRES workspace observations")
+                raise ValueError("missing solver workspace observations")
             for i, row in enumerate(workspaces):
                 capacity, after = int(row["capacity_b"]), int(row["after_call_b"])
-                if (int(row["iteration"]) != i or row["solver"] != "gmres"
+                if (int(row["iteration"]) != i or row["solver"] != solver
                         or row["reused"] != str(reuse).lower() or capacity <= 0
                         or after != (capacity if reuse else 0)):
-                    raise ValueError("incorrect GMRES workspace lifecycle")
+                    raise ValueError("incorrect solver workspace lifecycle")
+            if solver == "auto":
+                from campaign import Evidence
+                decisions = records.get("AUTO", [])
+                if len(decisions) != 7:
+                    raise ValueError("missing Auto memory decisions")
+                quotients = records.get("QUOTIENT", [])
+                if (quotients or "quotient" in subject) and len(quotients) != 7:
+                    raise ValueError("missing quotient memory decisions")
+                for i, (decision, workspace) in enumerate(zip(decisions, workspaces)):
+                    if int(decision['iteration']) != i:
+                        raise ValueError("Auto memory decision order changed")
+                    evidence = {'AUTO':[decision], 'CELL':cells}
+                    if quotients: evidence['QUOTIENT'] = [quotients[i]]
+                    Evidence.verify_auto(evidence,
+                                         {'hymeko_iterations':workspace['steps']}, selection_timed=False)
 
     @staticmethod
     def verify_scores(directory, workload, path, fingerprint):
@@ -253,7 +270,8 @@ class MemorySummary:
         from campaign import Cell
         if campaign.get("suite") != "memory" or not campaign.get("complete") or campaign.get("runs", 0) < 5:
             raise ValueError("complete five-process memory campaign required")
-        selected = Cell.select("memory", workloads=campaign.get("workloads"), subjects=campaign.get("subjects"))
+        selected = Cell.select("memory", workloads=campaign.get("workloads"), subjects=campaign.get("subjects"),
+                               application_workloads=tuple(campaign.get("application_inputs", {})))
         expected = {(run, cell.key) for run in range(1, campaign['runs']+1) for cell in selected}
         actual = {(cell['run'], cell['id']) for cell in campaign['cells']}
         if actual != expected or len(actual) != len(campaign['cells']):
@@ -308,23 +326,32 @@ class MemorySummary:
         with (directory/'memory-summary.csv').open('w',newline='',encoding='utf8') as stream:
             writer=csv.DictWriter(stream,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)
         indexed={(r['workload'],r['backend'],r['metric']):r for r in rows}
-        catalog = {'hymeko':'HyMeKo power', 'hymeko-gmres-fresh':'GMRES fresh',
+        catalog = {'hymeko-auto-fresh':'Auto fresh', 'hymeko-auto-reused':'Auto reused',
+                   'hymeko-auto-quotient-fresh':'Auto quotient fresh', 'hymeko-auto-quotient-reused':'Auto quotient reused',
+                   'hymeko':'HyMeKo power', 'hymeko-gmres-fresh':'GMRES fresh',
                    'hymeko-gmres-reused':'GMRES reused', 'hypergraphz':'Hypergraphz',
                    'hypernetx':'HNX + SciPy', 'xgi':'XGI + SciPy',
                    'hypergraphx':'HGX + SciPy', 'reticula':'Reticula + SciPy'}
         frameworks=tuple(b for b in catalog if any(r['backend']==b for r in rows))
         labels=tuple(catalog[b] for b in frameworks)
-        families={'chain65k':'Chain: 131,070 incidences','rank2_1m':'Binary: 1,000,000 incidences',
+        family_labels={'chain65k':'Chain: 131,070 incidences','rank2_1m':'Binary: 1,000,000 incidences',
                   'hub32_1m':'Hub: 1,000,000 incidences','components8_1m':'Eight regions: 1,000,000 incidences'}
-        palette=('#087f8c','#319fce','#184e77','#dc8c24','#7755aa','#4267a5','#c26470','#6b8055')
+        families={name:family_labels.get(name,name) for name in dict.fromkeys(row['workload'].split('@')[0] for row in rows)}
+        palette=('#004c54','#63b7af','#9654a0','#c490bd','#087f8c','#319fce','#184e77','#dc8c24','#7755aa','#4267a5','#c26470','#6b8055')
         colors=tuple(palette[list(catalog).index(b)] for b in frameworks)
         sampled=campaign['cells'][0]['records']['PHASE'][0].get('peak_method')=='sampled_working_set'
         plt.rcParams.update({'font.family':'DejaVu Sans','font.size':10,'axes.spines.top':False,'axes.spines.right':False})
         with PdfPages(directory/'memory-report.pdf') as pdf:
             for view in ('chart', 'table'):
                 for suffix,layout in [('', 'Original numbering'),('@17','Seed-17 permutation')]:
-                    fig,axes=plt.subplots(2,2,figsize=(12,9),layout='constrained')
+                    if not any(row['workload']==family+suffix for family in families for row in rows):
+                        continue
+                    count=(len(families)+1)//2
+                    fig,axes=plt.subplots(count,2,figsize=(12,4.5*count),squeeze=False,layout='constrained')
                     for ax,(family,title) in zip(axes.flat,families.items()):
+                        if not all((family+suffix,b,'solve_peak') in indexed for b in frameworks):
+                            ax.set_visible(False)
+                            continue
                         if view == 'chart':
                             selected=[indexed[(family+suffix,b,'solve_peak')] for b in frameworks]
                             values=[r['median_mib'] for r in selected]

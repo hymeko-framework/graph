@@ -200,6 +200,8 @@ class HostBusy(RuntimeError):
 class QuietHostGuard:
     def __init__(self, config: dict[str, Any], *, uid: int | None = None, user: str | None = None):
         self.config = config
+        if config.get('host_cpu_policy', 'strict') not in {'strict', 'observe'}:
+            raise ValueError('host CPU policy must be strict or observe')
         if uid is None:
             getuid = getattr(os, "getuid", None)
             if getuid is None and os.name != "nt":
@@ -227,7 +229,8 @@ class QuietHostGuard:
                 result.append("another login session is present")
         if observation["available_bytes"] < self.config.get("min_available_bytes", 32 * 1024**3):
             result.append("available memory is below the declared headroom")
-        if observation["active"]["cpu"] > self.config.get("max_host_fraction", 0.005):
+        if (self.config.get('host_cpu_policy', 'strict') == 'strict'
+                and observation["active"]["cpu"] > self.config.get("max_host_fraction", 0.005)):
             result.append("host CPU activity exceeds the quiet threshold")
         for cpu in self.config["cpus"]:
             if observation["active"][f"cpu{cpu}"] > self.config.get("max_core_fraction", 0.05):
