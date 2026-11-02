@@ -4,17 +4,28 @@
 //! the public APIs, records full-result hashes outside timed boundaries and emits machine-readable
 //! rows for `scripts/informed_berge_evidence/run.ps1`.
 
+#[path = "informed_berge_evidence/execution.rs"]
+mod execution;
+#[path = "informed_berge_evidence/reporting.rs"]
+mod reporting;
+use execution::*;
+#[path = "informed_berge_evidence/assisted.rs"]
+mod assisted;
+use reporting::{EvidenceCell, ResultSummary};
+
+use hymeko_graph::direct_ir::{HopHeuristic, MaxHeuristic};
 use std::collections::HashSet;
 use std::env;
+use workloads::MapPositions as Positions;
+use workloads::search::{AStar, Dijkstra, SearchCase};
 
 use hymeko::common::ids::{DeclId, NodeId};
 use hymeko::ir::incidence::{IncidenceIndex, build_incidence_index};
 use hymeko::ir::ir::Ir;
 use hymeko_graph::direct_ir::{
     BergeCycle, BergeHeuristic, BergePath, BudgetKind, EnumBudget, HyperTraversal,
-    IncidenceWeightCost, InformedSearchWorkspace, MetricHeuristic, PositionProvider, SearchStats,
-    TraversalWorkspace, Undirected, UnitCost, WeightedBergePath, astar_berge_path,
-    dijkstra_berge_path, enumerate_berge_cycles, enumerate_berge_paths,
+    IncidenceWeightCost, InformedSearchWorkspace, MetricHeuristic, SearchStats, TraversalWorkspace,
+    Undirected, UnitCost, WeightedBergePath, enumerate_berge_cycles, enumerate_berge_paths,
 };
 
 #[path = "informed_common/parsing.rs"]
@@ -28,109 +39,6 @@ mod telemetry;
 mod workloads;
 
 use statistics::{Measurement, measure_calibrated_verified};
-
-fn dimensions(ir: &Ir) -> (usize, usize, usize) {
-    (
-        ir.nodes.len(),
-        ir.arcs.len(),
-        ir.arcs.iter().map(|arc| arc.refs.len()).sum(),
-    )
-}
-
-fn optional(value: Option<f64>) -> String {
-    value.map_or_else(|| "NA".to_string(), |value| format!("{value:.3}"))
-}
-
-fn emit_phase(run: &str, workload: &str, subject: &str, phase: &str) {
-    match telemetry::memory_snapshot() {
-        Some(memory) => println!(
-            "EVIDENCE_PHASE\trun={run}\tworkload={workload}\tsubject={subject}\tphase={phase}\tworking_set_b={}\tself_peak_b={}",
-            memory.working_set_bytes, memory.peak_working_set_bytes
-        ),
-        None => println!(
-            "EVIDENCE_PHASE\trun={run}\tworkload={workload}\tsubject={subject}\tphase={phase}\tworking_set_b=NA\tself_peak_b=NA"
-        ),
-    }
-}
-
-fn emit_measurement(
-    run: &str,
-    section: &str,
-    workload: &str,
-    subject: &str,
-    ir: &Ir,
-    measurement: &Measurement,
-) {
-    let (nodes, arcs, incidences) = dimensions(ir);
-    for sample in &measurement.samples {
-        println!(
-            "EVIDENCE_SAMPLE\trun={run}\tsection={section}\tworkload={workload}\tsubject={subject}\tordinal={}\trepetitions={}\twall_us={:.3}\tcpu_us={}\tchecksum={}",
-            sample.ordinal,
-            measurement.repetitions_per_sample,
-            sample.wall_us,
-            optional(sample.cpu_us),
-            sample.checksum
-        );
-    }
-    println!(
-        "EVIDENCE_CELL\trun={run}\tsection={section}\tworkload={workload}\tsubject={subject}\tstatus=OK\tnodes={nodes}\tarcs={arcs}\tincidences={incidences}\twarmups={}\tsamples={}\trepetitions={}\twall_median_us={:.3}\twall_q1_us={:.3}\twall_q3_us={:.3}\twall_worst_us={:.3}\tcpu_median_us={}\tcpu_q1_us={}\tcpu_q3_us={}\tcpu_worst_us={}\tchecksum={}",
-        measurement.warmups,
-        measurement.samples.len(),
-        measurement.repetitions_per_sample,
-        measurement.wall.median,
-        measurement.wall.q1,
-        measurement.wall.q3,
-        measurement.wall.worst,
-        optional(measurement.cpu.map(|distribution| distribution.median)),
-        optional(measurement.cpu.map(|distribution| distribution.q1)),
-        optional(measurement.cpu.map(|distribution| distribution.q3)),
-        optional(measurement.cpu.map(|distribution| distribution.worst)),
-        measurement.checksum
-    );
-}
-
-fn emit_work(run: &str, workload: &str, subject: &str, stats: SearchStats) {
-    println!(
-        "EVIDENCE_WORK\trun={run}\tworkload={workload}\tsubject={subject}\texpanded_nodes={}\texpanded_arcs={}\tresolved_incidences={}\tpushes={}\tpops={}\tstale_pops={}\theuristic_evals={}\treopened={}",
-        stats.expanded_nodes,
-        stats.expanded_arcs,
-        stats.resolved_incidences,
-        stats.pushes,
-        stats.pops,
-        stats.stale_pops,
-        stats.heuristic_evals,
-        stats.reopened
-    );
-}
-
-#[allow(clippy::too_many_arguments)]
-fn emit_result(
-    run: &str,
-    section: &str,
-    workload: &str,
-    subject: &str,
-    reachable: &str,
-    cost_micros: &str,
-    hops: &str,
-    path_hash: u64,
-    items: &str,
-    bound: &str,
-    budget: Option<EnumBudget>,
-) {
-    let (max_depth, max_results, max_expansions) = budget.map_or_else(
-        || ("NA".to_string(), "NA".to_string(), "NA".to_string()),
-        |b| {
-            (
-                b.max_depth.to_string(),
-                b.max_results.to_string(),
-                b.max_expansions.to_string(),
-            )
-        },
-    );
-    println!(
-        "EVIDENCE_RESULT\trun={run}\tsection={section}\tworkload={workload}\tsubject={subject}\treachable={reachable}\tcost_micros={cost_micros}\thops={hops}\tpath_hash={path_hash}\titems={items}\tbound={bound}\tmax_depth={max_depth}\tmax_results={max_results}\tmax_expansions={max_expansions}"
-    );
-}
 
 fn fnv_mix(mut hash: u64, bytes: &[u8]) -> u64 {
     for &byte in bytes {
@@ -189,35 +97,6 @@ fn hash_cycles(items: &[BergeCycle], bound: Option<BudgetKind>) -> u64 {
     hash
 }
 
-struct Positions(Vec<Option<[f64; 2]>>);
-
-impl Positions {
-    fn from_ir(ir: &Ir) -> Self {
-        Self(
-            (0..ir.decl_nodes.len())
-                .map(|raw| workloads::ir_position(ir, DeclId::new(raw)))
-                .collect(),
-        )
-    }
-
-    fn from_grid(width: usize, height: usize) -> Self {
-        let positions = workloads::grid_positions(width, height)
-            .into_iter()
-            .map(Some)
-            .collect();
-        Self(positions)
-    }
-}
-
-impl PositionProvider for Positions {
-    fn position(&self, node: DeclId) -> Option<&[f64]> {
-        self.0
-            .get(node.raw())
-            .and_then(Option::as_ref)
-            .map(|position| position.as_slice())
-    }
-}
-
 struct ManhattanHeuristic<'a> {
     positions: &'a Positions,
     goal: [f64; 2],
@@ -238,168 +117,6 @@ impl BergeHeuristic for ManhattanHeuristic<'_> {
     }
 }
 
-struct DiscreteHeuristic {
-    hops: Vec<u32>,
-    min_cost: f64,
-}
-
-impl BergeHeuristic for DiscreteHeuristic {
-    const ADMISSIBLE: bool = true;
-    const CONSISTENT: bool = true;
-
-    fn h(&self, _ir: &Ir, node: DeclId) -> f64 {
-        self.hops.get(node.raw()).copied().map_or(0.0, |hops| {
-            if hops == u32::MAX {
-                0.0
-            } else {
-                f64::from(hops) * self.min_cost
-            }
-        })
-    }
-}
-
-struct CombinedHeuristic<'a> {
-    metric: MetricHeuristic<'a, Positions>,
-    discrete: &'a DiscreteHeuristic,
-}
-
-impl BergeHeuristic for CombinedHeuristic<'_> {
-    const ADMISSIBLE: bool = true;
-    const CONSISTENT: bool = true;
-
-    fn h(&self, ir: &Ir, node: DeclId) -> f64 {
-        self.metric.h(ir, node).max(self.discrete.h(ir, node))
-    }
-}
-
-fn measure_weighted_query(
-    mut query: impl FnMut(&mut InformedSearchWorkspace) -> Option<WeightedBergePath>,
-) -> (Measurement, SearchStats, Option<WeightedBergePath>) {
-    let mut workspace = InformedSearchWorkspace::new();
-    let (expected, measurement) = {
-        let mut measured = |strong: bool| {
-            query(&mut workspace).map_or(0, |path| {
-                if strong {
-                    path.path_hash().raw()
-                } else {
-                    (1_u64 << 63) ^ path.hyperedge_len() as u64
-                }
-            })
-        };
-        let expected = measured(true);
-        let measurement = measure_calibrated_verified(&mut measured);
-        (expected, measurement)
-    };
-    assert_eq!(measurement.checksum, expected);
-
-    let measured_stats = workspace.stats();
-    let result = query(&mut workspace);
-    assert_eq!(workspace.stats(), measured_stats, "search work drift");
-    let result_hash = result.as_ref().map_or(0, |p| p.path_hash().raw());
-    assert_eq!(result_hash, expected, "weighted path hash drift");
-    (measurement, measured_stats, result)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn emit_weighted_search<C, H>(
-    run: &str,
-    section: &str,
-    workload: &str,
-    subject: &str,
-    ir: &Ir,
-    index: &IncidenceIndex<'_>,
-    start: NodeId,
-    goal: NodeId,
-    cost: &C,
-    heuristic: &H,
-) where
-    C: hymeko_graph::direct_ir::BergeCost,
-    H: BergeHeuristic,
-{
-    let traversal = HyperTraversal::new(index);
-    emit_phase(run, workload, subject, "prepared");
-    let (measurement, stats, result) = measure_weighted_query(|workspace| {
-        astar_berge_path(
-            &traversal,
-            start,
-            goal,
-            cost,
-            heuristic,
-            &Undirected,
-            workspace,
-        )
-        .expect("A* evidence query")
-    });
-    emit_measurement(run, section, workload, subject, ir, &measurement);
-    emit_work(run, workload, subject, stats);
-    let reachable = result.is_some().to_string();
-    let cost_micros = result.as_ref().map_or_else(
-        || "NA".to_string(),
-        |path| format!("{:.0}", path.total_cost * 1_000_000.0),
-    );
-    let hops = result
-        .as_ref()
-        .map_or_else(|| "NA".to_string(), |path| path.hyperedge_len().to_string());
-    let path_hash = result.as_ref().map_or(0, |p| p.path_hash().raw());
-    emit_result(
-        run,
-        section,
-        workload,
-        subject,
-        &reachable,
-        &cost_micros,
-        &hops,
-        path_hash,
-        "NA",
-        "NA",
-        None,
-    );
-}
-
-#[allow(clippy::too_many_arguments)]
-fn emit_dijkstra<C: hymeko_graph::direct_ir::BergeCost>(
-    run: &str,
-    section: &str,
-    workload: &str,
-    subject: &str,
-    ir: &Ir,
-    index: &IncidenceIndex<'_>,
-    start: NodeId,
-    goal: NodeId,
-    cost: &C,
-) {
-    let traversal = HyperTraversal::new(index);
-    emit_phase(run, workload, subject, "prepared");
-    let (measurement, stats, result) = measure_weighted_query(|workspace| {
-        dijkstra_berge_path(&traversal, start, goal, cost, &Undirected, workspace)
-            .expect("Dijkstra evidence query")
-    });
-    emit_measurement(run, section, workload, subject, ir, &measurement);
-    emit_work(run, workload, subject, stats);
-    let reachable = result.is_some().to_string();
-    let cost_micros = result.as_ref().map_or_else(
-        || "NA".to_string(),
-        |path| format!("{:.0}", path.total_cost * 1_000_000.0),
-    );
-    let hops = result
-        .as_ref()
-        .map_or_else(|| "NA".to_string(), |path| path.hyperedge_len().to_string());
-    let path_hash = result.as_ref().map_or(0, |p| p.path_hash().raw());
-    emit_result(
-        run,
-        section,
-        workload,
-        subject,
-        &reachable,
-        &cost_micros,
-        &hops,
-        path_hash,
-        "NA",
-        "NA",
-        None,
-    );
-}
-
 fn search_fixture(name: &str) -> (Ir, NodeId, NodeId) {
     match name {
         "grid200_d20" | "grid200_d40" | "grid200_d80" => {
@@ -416,7 +133,12 @@ fn search_fixture(name: &str) -> (Ir, NodeId, NodeId) {
                 NodeId::new(row * side + column + distance),
             )
         }
-        "map32" | "map128" | "map512" => {
+        "grid512_d511" => (
+            workloads::grid_ir(512, 512),
+            NodeId::new(256 * 512),
+            NodeId::new(256 * 512 + 511),
+        ),
+        "map32" | "map128" | "map256" | "map512" => {
             let side = name
                 .strip_prefix("map")
                 .and_then(|value| value.parse::<usize>().ok())
@@ -435,6 +157,39 @@ fn search_fixture(name: &str) -> (Ir, NodeId, NodeId) {
             let goal = NodeId::new(ir.nodes.len() - 1);
             (ir, NodeId::new(0), goal)
         }
+        "transport256_off" => {
+            let ir = workloads::map_grid_with_transport_ir(256, 256, &HashSet::new(), 32, 0.5);
+            let goal = NodeId::new(ir.nodes.len() - 2);
+            (ir, NodeId::new(1), goal)
+        }
+        "tour8" | "tour16" | "tour24" | "tour32" | "tour64" => {
+            let (width, height, stations) = match name {
+                "tour8" => (4, 2, 4),
+                "tour16" => (4, 4, 4),
+                "tour24" => (4, 6, 6),
+                "tour32" => (4, 8, 8),
+                "tour64" => (8, 8, 8),
+                _ => unreachable!(),
+            };
+            let ir = workloads::map_grid_with_transport_ir(
+                width,
+                height,
+                &HashSet::new(),
+                stations,
+                0.5,
+            );
+            let goal = NodeId::new(ir.nodes.len() - 1);
+            (ir, NodeId::new(0), goal)
+        }
+        "tour64_corridor" => {
+            let mut ir = workloads::corridor_map_ir(8, 8);
+            let refs = [0, 21, 42, 63]
+                .into_iter()
+                .map(|v| workloads::plus_ref(ir.nodes[v].decl, Some(0.5)))
+                .collect();
+            workloads::push_arc(&mut ir, refs);
+            (ir, NodeId::new(0), NodeId::new(63))
+        }
         other => panic!("unknown informed-search workload {other}"),
     }
 }
@@ -445,123 +200,80 @@ fn search_cell() {
     let run = env::var("INFORMED_BERGE_RUN").unwrap_or_else(|_| "manual".to_string());
     let workload = env::var("INFORMED_BERGE_WORKLOAD").expect("INFORMED_BERGE_WORKLOAD");
     let subject = env::var("INFORMED_BERGE_SUBJECT").expect("INFORMED_BERGE_SUBJECT");
-    emit_phase(&run, &workload, &subject, "process_baseline");
+    let cell = EvidenceCell {
+        run: &run,
+        section: "informed_search",
+        workload: &workload,
+        subject: &subject,
+    };
+    cell.phase("process_baseline");
     let (ir, start, goal) = search_fixture(&workload);
-    emit_phase(&run, &workload, &subject, "canonical_ir");
+    cell.phase("canonical_ir");
     let index = build_incidence_index(&ir).expect("incidence index");
-    emit_phase(&run, &workload, &subject, "incidence_index");
-
-    if workload.starts_with("grid200_") {
+    cell.phase("incidence_index");
+    if workload.starts_with("grid200_d") {
         let positions = Positions::from_grid(200, 200);
         let goal_decl = ir.nodes[goal.raw()].decl;
-        let goal_position = positions.0[goal_decl.raw()].expect("goal position");
         match subject.as_str() {
-            "dijkstra_unit" => emit_dijkstra(
-                &run,
-                "informed_search",
-                &workload,
-                &subject,
-                &ir,
+            "dijkstra_unit" => {
+                cell.weighted(&index, start, goal, Dijkstra::new(&UnitCost, &Undirected))
+            }
+            "astar_l1" => cell.weighted(
                 &index,
                 start,
                 goal,
-                &UnitCost,
+                AStar::new(
+                    &UnitCost,
+                    &ManhattanHeuristic {
+                        positions: &positions,
+                        goal: positions.0[goal_decl.raw()].unwrap(),
+                    },
+                    &Undirected,
+                ),
             ),
-            "astar_l1" => emit_weighted_search(
-                &run,
-                "informed_search",
-                &workload,
-                &subject,
-                &ir,
+            "astar_l2" => cell.weighted(
                 &index,
                 start,
                 goal,
-                &UnitCost,
-                &ManhattanHeuristic {
-                    positions: &positions,
-                    goal: goal_position,
-                },
+                AStar::new(
+                    &UnitCost,
+                    &MetricHeuristic::new(&positions, goal_decl),
+                    &Undirected,
+                ),
             ),
-            "astar_l2" => emit_weighted_search(
-                &run,
-                "informed_search",
-                &workload,
-                &subject,
-                &ir,
-                &index,
-                start,
-                goal,
-                &UnitCost,
-                &MetricHeuristic::new(&positions, goal_decl),
-            ),
-            other => panic!("invalid grid subject {other}"),
+            other => panic!("invalid grid search subject {other}"),
         }
     } else {
         let cost = IncidenceWeightCost { base: 0.0 };
         let positions = Positions::from_ir(&ir);
         let goal_decl = ir.nodes[goal.raw()].decl;
         let hops = workloads::hop_distances_from(&ir, &index, goal);
-        let discrete = DiscreteHeuristic {
-            hops,
-            min_cost: workloads::map_min_edge_cost(&ir),
-        };
+        let discrete = HopHeuristic::new(&hops, workloads::map_min_edge_cost(&ir));
         let metric = MetricHeuristic::new(&positions, goal_decl);
-        let combined = CombinedHeuristic {
-            metric: MetricHeuristic::new(&positions, goal_decl),
-            discrete: &discrete,
-        };
+        let combined = MaxHeuristic::new(&metric, &discrete);
         match subject.as_str() {
-            "dijkstra_weight" => emit_dijkstra(
-                &run,
-                "informed_search",
-                &workload,
-                &subject,
-                &ir,
+            "dijkstra_weight" => {
+                cell.weighted(&index, start, goal, Dijkstra::new(&cost, &Undirected))
+            }
+            "astar_metric" if workload != "transport128" => {
+                cell.weighted(&index, start, goal, AStar::new(&cost, &metric, &Undirected))
+            }
+            "astar_discrete" => cell.weighted(
                 &index,
                 start,
                 goal,
-                &cost,
+                AStar::new(&cost, &discrete, &Undirected),
             ),
-            "astar_metric" if workload != "transport128" => emit_weighted_search(
-                &run,
-                "informed_search",
-                &workload,
-                &subject,
-                &ir,
+            "astar_combined" if workload != "transport128" => cell.weighted(
                 &index,
                 start,
                 goal,
-                &cost,
-                &metric,
-            ),
-            "astar_discrete" => emit_weighted_search(
-                &run,
-                "informed_search",
-                &workload,
-                &subject,
-                &ir,
-                &index,
-                start,
-                goal,
-                &cost,
-                &discrete,
-            ),
-            "astar_combined" if workload != "transport128" => emit_weighted_search(
-                &run,
-                "informed_search",
-                &workload,
-                &subject,
-                &ir,
-                &index,
-                start,
-                goal,
-                &cost,
-                &combined,
+                AStar::new(&cost, &combined, &Undirected),
             ),
             other => panic!("invalid weighted-map subject {other}"),
         }
     }
-    emit_phase(&run, &workload, &subject, "measured");
+    cell.phase("measured");
 }
 
 fn hash_hops(hops: &[u32]) -> u64 {
@@ -577,48 +289,30 @@ fn hash_hops(hops: &[u32]) -> u64 {
 fn preparation_cell() {
     let run = env::var("INFORMED_BERGE_RUN").unwrap_or_else(|_| "manual".to_string());
     let workload = env::var("INFORMED_BERGE_WORKLOAD").expect("INFORMED_BERGE_WORKLOAD");
-    let subject = "discrete_hops";
-    emit_phase(&run, &workload, subject, "process_baseline");
-    let (ir, _, goal) = search_fixture(&workload);
-    emit_phase(&run, &workload, subject, "canonical_ir");
-    let index = build_incidence_index(&ir).expect("incidence index");
-    emit_phase(&run, &workload, subject, "incidence_index");
-    let mut prepare = |strong: bool| {
-        let hops = workloads::hop_distances_from(&ir, &index, goal);
-        if strong {
-            hash_hops(&hops)
-        } else {
-            ((hops.len() as u64) << 32) ^ hops.last().copied().map_or(u64::MAX, u64::from)
-        }
+    let cell = EvidenceCell {
+        run: &run,
+        section: "heuristic_preparation",
+        workload: &workload,
+        subject: "discrete_hops",
     };
-    let expected = prepare(true);
-    let measurement = measure_calibrated_verified(&mut prepare);
-    let hops = workloads::hop_distances_from(&ir, &index, goal);
-    let checksum = hash_hops(&hops);
-    assert_eq!(expected, checksum);
-    assert_eq!(measurement.checksum, checksum);
-    emit_measurement(
-        &run,
-        "heuristic_preparation",
-        &workload,
-        subject,
-        &ir,
-        &measurement,
-    );
-    emit_result(
-        &run,
-        "heuristic_preparation",
-        &workload,
-        subject,
-        "NA",
-        "NA",
-        "NA",
-        checksum,
-        &hops.len().to_string(),
-        "none",
-        None,
-    );
-    emit_phase(&run, &workload, subject, "measured");
+    cell.phase("process_baseline");
+    let (ir, _, goal) = search_fixture(&workload);
+    cell.phase("canonical_ir");
+    let index = build_incidence_index(&ir).expect("incidence index");
+    cell.phase("incidence_index");
+    let mut operation = HopPreparation {
+        index: &index,
+        goal,
+    };
+    let run = VerifiedRun::collect(&mut operation, &Calibrated);
+    cell.measurement(&ir, &run.measurement);
+    cell.result(&ResultSummary::Items {
+        count: run.result.len(),
+        bound: None,
+        budget: None,
+        hash: run.hash,
+    });
+    cell.phase("measured");
 }
 
 fn shortest_fixture(name: &str) -> Ir {
@@ -638,79 +332,39 @@ fn shortest_cell() {
     let run = env::var("INFORMED_BERGE_RUN").unwrap_or_else(|_| "manual".to_string());
     let workload = env::var("INFORMED_BERGE_WORKLOAD").expect("INFORMED_BERGE_WORKLOAD");
     let subject = env::var("INFORMED_BERGE_SUBJECT").expect("INFORMED_BERGE_SUBJECT");
-    emit_phase(&run, &workload, &subject, "process_baseline");
+    let cell = EvidenceCell {
+        run: &run,
+        section: "berge_shortest",
+        workload: &workload,
+        subject: &subject,
+    };
+    cell.phase("process_baseline");
     let ir = shortest_fixture(&workload);
-    emit_phase(&run, &workload, &subject, "canonical_ir");
+    cell.phase("canonical_ir");
     let index = build_incidence_index(&ir).expect("incidence index");
-    emit_phase(&run, &workload, &subject, "incidence_index");
+    cell.phase("incidence_index");
     let start = NodeId::new(0);
     let goal = NodeId::new(ir.nodes.len() - 1);
     let traversal = HyperTraversal::new(&index);
-
     match subject.as_str() {
         "bfs_shortest" => {
-            let mut workspace = TraversalWorkspace::new();
-            emit_phase(&run, &workload, &subject, "prepared");
-            let (expected, measurement) = {
-                let mut query = |strong: bool| {
-                    traversal
-                        .berge_shortest_path(&mut workspace, start, goal)
-                        .expect("BFS Berge shortest")
-                        .map_or(0, |path| {
-                            if strong {
-                                hash_berge_path(&path)
-                            } else {
-                                (1_u64 << 63) ^ path.hyperedge_len() as u64
-                            }
-                        })
-                };
-                let expected = query(true);
-                let measurement = measure_calibrated_verified(&mut query);
-                (expected, measurement)
+            let mut operation = ShortestQuery {
+                traversal: &traversal,
+                start,
+                goal,
+                workspace: TraversalWorkspace::new(),
             };
-            assert_eq!(measurement.checksum, expected);
-            let result = traversal
-                .berge_shortest_path(&mut workspace, start, goal)
-                .expect("BFS Berge result");
-            assert_eq!(result.as_ref().map_or(0, hash_berge_path), expected);
-            emit_measurement(
-                &run,
-                "berge_shortest",
-                &workload,
-                &subject,
-                &ir,
-                &measurement,
-            );
-            emit_result(
-                &run,
-                "berge_shortest",
-                &workload,
-                &subject,
-                &result.is_some().to_string(),
-                "NA",
-                &result
-                    .as_ref()
-                    .map_or_else(|| "NA".to_string(), |path| path.hyperedge_len().to_string()),
-                expected,
-                "NA",
-                "NA",
-                None,
-            );
+            cell.phase("prepared");
+            let run = VerifiedRun::collect(&mut operation, &Calibrated);
+            cell.measurement(&ir, &run.measurement);
+            cell.result(&ResultSummary::shortest(&run.result, run.hash));
         }
-        "dijkstra_unit" => emit_dijkstra(
-            &run,
-            "berge_shortest",
-            &workload,
-            &subject,
-            &ir,
-            &index,
-            start,
-            goal,
-            &UnitCost,
-        ),
-        other => panic!("invalid shortest-path subject {other}"),
+        "dijkstra_unit" => {
+            cell.weighted(&index, start, goal, Dijkstra::new(&UnitCost, &Undirected))
+        }
+        other => panic!("invalid shortest subject {other}"),
     }
-    emit_phase(&run, &workload, &subject, "measured");
+    cell.phase("measured");
 }
 
 fn layered_ir(layers: usize) -> Ir {
@@ -785,106 +439,25 @@ fn enumeration_cell() {
     let run = env::var("INFORMED_BERGE_RUN").unwrap_or_else(|_| "manual".to_string());
     let workload = env::var("INFORMED_BERGE_WORKLOAD").expect("INFORMED_BERGE_WORKLOAD");
     let subject = env::var("INFORMED_BERGE_SUBJECT").expect("INFORMED_BERGE_SUBJECT");
-    emit_phase(&run, &workload, &subject, "process_baseline");
+    let cell = EvidenceCell {
+        run: &run,
+        section: "berge_enumeration",
+        workload: &workload,
+        subject: &subject,
+    };
+    cell.phase("process_baseline");
     let (ir, start, goal, budget) = enumeration_fixture(&workload);
-    emit_phase(&run, &workload, &subject, "canonical_ir");
+    cell.phase("canonical_ir");
     let index = build_incidence_index(&ir).expect("incidence index");
-    emit_phase(&run, &workload, &subject, "incidence_index");
-    emit_phase(&run, &workload, &subject, "prepared");
-
+    cell.phase("incidence_index");
+    cell.phase("prepared");
     match subject.as_str() {
-        "paths_goal" | "paths_all" => {
-            let requested_goal = if subject == "paths_goal" { goal } else { None };
-            let mut query = |strong: bool| {
-                let outcome = enumerate_berge_paths(&index, start, requested_goal, budget)
-                    .expect("Berge path enumeration");
-                if strong {
-                    hash_paths(&outcome.items, outcome.bound)
-                } else {
-                    ((outcome.items.len() as u64) << 2)
-                        ^ match outcome.bound {
-                            None => 0,
-                            Some(BudgetKind::Depth) => 1,
-                            Some(BudgetKind::Results) => 2,
-                            Some(BudgetKind::Expansions) => 3,
-                        }
-                }
-            };
-            let expected = query(true);
-            let measurement = measure_calibrated_verified(&mut query);
-            assert_eq!(measurement.checksum, expected);
-            let outcome = enumerate_berge_paths(&index, start, requested_goal, budget)
-                .expect("Berge path result");
-            assert_eq!(hash_paths(&outcome.items, outcome.bound), expected);
-            emit_measurement(
-                &run,
-                "berge_enumeration",
-                &workload,
-                &subject,
-                &ir,
-                &measurement,
-            );
-            emit_result(
-                &run,
-                "berge_enumeration",
-                &workload,
-                &subject,
-                "NA",
-                "NA",
-                "NA",
-                expected,
-                &outcome.items.len().to_string(),
-                bound_key(outcome.bound),
-                Some(budget),
-            );
-        }
-        "cycles" => {
-            let mut query = |strong: bool| {
-                let outcome =
-                    enumerate_berge_cycles(&index, start, budget).expect("Berge cycle enumeration");
-                if strong {
-                    hash_cycles(&outcome.items, outcome.bound)
-                } else {
-                    ((outcome.items.len() as u64) << 2)
-                        ^ match outcome.bound {
-                            None => 0,
-                            Some(BudgetKind::Depth) => 1,
-                            Some(BudgetKind::Results) => 2,
-                            Some(BudgetKind::Expansions) => 3,
-                        }
-                }
-            };
-            let expected = query(true);
-            let measurement = measure_calibrated_verified(&mut query);
-            assert_eq!(measurement.checksum, expected);
-            let outcome =
-                enumerate_berge_cycles(&index, start, budget).expect("Berge cycle result");
-            assert_eq!(hash_cycles(&outcome.items, outcome.bound), expected);
-            emit_measurement(
-                &run,
-                "berge_enumeration",
-                &workload,
-                &subject,
-                &ir,
-                &measurement,
-            );
-            emit_result(
-                &run,
-                "berge_enumeration",
-                &workload,
-                &subject,
-                "NA",
-                "NA",
-                "NA",
-                expected,
-                &outcome.items.len().to_string(),
-                bound_key(outcome.bound),
-                Some(budget),
-            );
-        }
+        "paths_goal" => cell.enumeration(&index, start, budget, Paths(goal)),
+        "paths_all" => cell.enumeration(&index, start, budget, Paths(None)),
+        "cycles" => cell.enumeration(&index, start, budget, Cycles),
         other => panic!("invalid enumeration subject {other}"),
     }
-    emit_phase(&run, &workload, &subject, "measured");
+    cell.phase("measured");
 }
 
 #[test]
@@ -902,42 +475,27 @@ fn informed_search_evidence_subjects_agree() {
     };
     let l2 = MetricHeuristic::new(&positions, goal_decl);
     let mut workspace = InformedSearchWorkspace::new();
-    let dijkstra = dijkstra_berge_path(
-        &traversal,
-        start,
-        goal,
-        &UnitCost,
-        &Undirected,
-        &mut workspace,
-    )
-    .unwrap()
-    .unwrap();
-    let a1 = astar_berge_path(
-        &traversal,
-        start,
-        goal,
-        &UnitCost,
-        &l1,
-        &Undirected,
-        &mut workspace,
-    )
-    .unwrap()
-    .unwrap();
-    assert_eq!(workspace.stats().reopened, 0);
-    let a2 = astar_berge_path(
-        &traversal,
-        start,
-        goal,
-        &UnitCost,
-        &l2,
-        &Undirected,
-        &mut workspace,
-    )
-    .unwrap()
-    .unwrap();
-    assert_eq!(workspace.stats().reopened, 0);
+    let mut case = SearchCase::new(&traversal, start, goal, &mut workspace);
+    let dijkstra = case
+        .run(&Dijkstra::new(&UnitCost, &Undirected))
+        .unwrap()
+        .unwrap();
+    let a1 = case
+        .run(&AStar::new(&UnitCost, &l1, &Undirected))
+        .unwrap()
+        .unwrap();
+    assert_eq!(case.stats().reopened, 0);
+    let a2 = case
+        .run(&AStar::new(&UnitCost, &l2, &Undirected))
+        .unwrap()
+        .unwrap();
+    assert_eq!(case.stats().reopened, 0);
     assert_eq!(dijkstra.total_cost, a1.total_cost);
     assert_eq!(dijkstra.total_cost, a2.total_cost);
+
+    assert_eq!(dijkstra.path_hash().raw(), 0x67d1f5421918527c);
+    assert_eq!(a1.path_hash(), dijkstra.path_hash());
+    assert_eq!(a2.path_hash(), dijkstra.path_hash());
 }
 
 #[test]
@@ -985,4 +543,7 @@ fn enumeration_evidence_fixtures_pin_counts_and_hashes() {
         hash_cycles(&cycles.items, cycles.bound),
         hash_cycles(&cycles_again.items, cycles_again.bound)
     );
+
+    assert_eq!(hash_paths(&paths.items, paths.bound), 0x5e30e2bae0258b4a);
+    assert_eq!(hash_cycles(&cycles.items, cycles.bound), 0xa70363a1887c28e5);
 }

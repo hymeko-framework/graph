@@ -12,11 +12,9 @@
 
 use std::collections::BTreeSet;
 
-use hymeko::common::ids::{DeclId, HyperArcId, NodeId, SymId};
+use hymeko::common::ids::{HyperArcId, SymId};
 use hymeko::ir::incidence::build_incidence_index;
-use hymeko::ir::ir::{
-    AnnoR, ArcRec, DeclKind, DeclNode, Ir, NodeRec, RefAtomR, SignedRefR, ValueR,
-};
+use hymeko::ir::ir::{AnnoR, DeclKind, DeclNode, Ir};
 use hymeko_graph::{
     GraphicMatroidWorkspace, IncrementalRank2, MatroidError, MatroidRef, TraversalWorkspace,
     connected_components, rank2_rank, rank2_spanning_forest, rank2_weighted_basis,
@@ -25,6 +23,7 @@ use hymeko_graph::{
 #[path = "informed_common/mod.rs"]
 mod ic;
 use ic::SignMode;
+use ic::{node_decl as one_node_decl, plus_ref, push_arc, weighted_graph_ir};
 
 // ---------------------------------------------------------------------------------------------------
 // Independent oracles (from-scratch; never call into the matroid module).
@@ -41,7 +40,7 @@ fn oracle_endpoints(ir: &Ir, arc: usize) -> (usize, usize) {
 /// The first numeric weight of an arc's first reference (mirrors the module's `arc_weight` on the
 /// weighted test graphs, where every reference carries a weight), defaulting to 1.0.
 fn oracle_weight(ir: &Ir, arc: usize) -> f64 {
-    ic::first_num_weight_pub(&ir.arcs[arc].refs[0])
+    ic::first_num_weight_pub(ir, &ir.arcs[arc].refs[0])
 }
 
 /// A from-scratch union-find, textbook (recursive find + path compression), sharing no code with the
@@ -136,52 +135,6 @@ fn engine_component_count(ir: &Ir) -> u32 {
 
 // ---- small inline builders for the fault cases ----------------------------------------------------
 
-fn one_node_decl(ir: &mut Ir) -> DeclId {
-    let d = ir.push_decl(DeclNode {
-        kind: DeclKind::Node,
-        name: SymId::new(0),
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    });
-    let nid = NodeId::new(ir.nodes.len());
-    ir.nodes.push(NodeRec::new(d, Vec::new()));
-    ir.bind_node_decl(d, nid).expect("bind node");
-    d
-}
-
-fn plus_ref(target: DeclId, weight: Option<f64>) -> SignedRefR {
-    SignedRefR::Plus(RefAtomR {
-        target,
-        anno: AnnoR::default(),
-        weights: weight.map(|w| vec![ValueR::Num(w)]),
-        direction: Default::default(),
-    })
-}
-
-fn push_arc(ir: &mut Ir, refs: Vec<SignedRefR>) {
-    ir.arcs.push(ArcRec {
-        anno: AnnoR::default(),
-        in_edge: DeclId::NONE,
-        refs,
-    });
-}
-
-/// A weighted pairwise graph on `n` nodes from an explicit edge list.
-fn weighted_graph_ir(n: usize, edges: &[(usize, usize, f64)]) -> Ir {
-    let mut ir = Ir::default();
-    let decls: Vec<DeclId> = (0..n).map(|_| one_node_decl(&mut ir)).collect();
-    for &(u, v, w) in edges {
-        push_arc(
-            &mut ir,
-            vec![plus_ref(decls[u], Some(w)), plus_ref(decls[v], Some(w))],
-        );
-    }
-    ir
-}
-
 fn mref<'a, 'ir>(idx: &'a hymeko::ir::incidence::IncidenceIndex<'ir>) -> MatroidRef<'a, 'ir> {
     MatroidRef::new(idx)
 }
@@ -238,15 +191,11 @@ fn rank_correct_with_offset_node_decl_ids() {
     // correct NodeId-keyed DSU from a bug that used the raw DeclId as the dense DSU coordinate (which
     // would index out of the N-sized DSU). A triangle → rank 2.
     let mut ir = Ir::default();
-    let _edge = ir.push_decl(DeclNode {
-        kind: DeclKind::Edge,
-        name: SymId::new(0),
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    });
+    let _edge = ir.push_decl(DeclNode::root(
+        DeclKind::Edge,
+        SymId::new(0),
+        AnnoR::default(),
+    ));
     let a = one_node_decl(&mut ir);
     let b = one_node_decl(&mut ir);
     let c = one_node_decl(&mut ir);
@@ -675,15 +624,11 @@ fn dangling_non_node_target_is_rejected() {
     let mut ir = Ir::default();
     let node = one_node_decl(&mut ir);
     // an edge-kind decl: not a node, so decl_to_node returns None for it.
-    let edge = ir.push_decl(DeclNode {
-        kind: DeclKind::Edge,
-        name: SymId::new(0),
-        parent: DeclId::NONE,
-        first_child: DeclId::NONE,
-        last_child: DeclId::NONE,
-        next_sibling: DeclId::NONE,
-        anno: AnnoR::default(),
-    });
+    let edge = ir.push_decl(DeclNode::root(
+        DeclKind::Edge,
+        SymId::new(0),
+        AnnoR::default(),
+    ));
     push_arc(&mut ir, vec![plus_ref(node, None), plus_ref(edge, None)]);
     let idx = build_incidence_index(&ir).unwrap();
     let mut ws = GraphicMatroidWorkspace::new();

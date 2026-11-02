@@ -1,11 +1,10 @@
 //! Independent P3.4 T/S-norm reproduction using the production propagation implementation.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
+use hymeko::util::measurement::{AllocationSnapshot, CountingAllocator};
+use hymeko::util::measurement::{MeasurementRunner, Runner};
 use std::fs::OpenOptions;
 use std::hint::black_box;
 use std::io::Write;
-use std::time::Instant;
 
 use hymeko::common::ids::DeclId;
 use hymeko::ir::incidence::build_incidence_index;
@@ -22,30 +21,12 @@ use hymeko_pgraph::view::PGraphView;
 const META: &str = include_str!("../data/meta_pgraph.hymeko");
 const HEADER: &str = "R {\n    @\"meta_pgraph.hymeko\";\n    using pgraph.raw as raw;\n    using pgraph.product as product;\n    using pgraph.intermediate as inter;\n    using pgraph.process as process;\n}\nbody {\n";
 
-thread_local! {
-    static ALLOCS: Cell<u64> = const { Cell::new(0) };
-    static BYTES: Cell<u64> = const { Cell::new(0) };
-}
-
-struct Counting;
-
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let _ = ALLOCS.try_with(|c| c.set(c.get() + 1));
-        let _ = BYTES.try_with(|c| c.set(c.get() + layout.size() as u64));
-        unsafe { System.alloc(layout) }
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
 #[global_allocator]
-static GLOBAL: Counting = Counting;
+static GLOBAL: CountingAllocator = CountingAllocator;
 
 fn snapshot() -> (u64, u64) {
-    (ALLOCS.with(Cell::get), BYTES.with(Cell::get))
+    let snapshot = AllocationSnapshot::current_thread();
+    (snapshot.allocations, snapshot.bytes)
 }
 
 fn delta(before: (u64, u64)) -> (u64, u64) {
@@ -53,31 +34,10 @@ fn delta(before: (u64, u64)) -> (u64, u64) {
     (after.0 - before.0, after.1 - before.1)
 }
 
-#[derive(Clone, Copy)]
-struct Stats {
-    median_us: f64,
-    q1_us: f64,
-    q3_us: f64,
-    worst_us: f64,
-}
+type Stats = hymeko::util::measurement::Distribution;
 
-fn measure(mut f: impl FnMut()) -> Stats {
-    for _ in 0..2 {
-        f();
-    }
-    let mut samples = Vec::with_capacity(9);
-    for _ in 0..9 {
-        let start = Instant::now();
-        f();
-        samples.push(start.elapsed().as_secs_f64() * 1e6);
-    }
-    samples.sort_by(f64::total_cmp);
-    Stats {
-        median_us: samples[4],
-        q1_us: samples[2],
-        q3_us: samples[6],
-        worst_us: samples[8],
-    }
+fn measure(f: impl FnMut()) -> Stats {
+    MeasurementRunner::new(2, 9).run(f)
 }
 
 fn chain_source(n: usize) -> String {
@@ -146,10 +106,10 @@ fn measure_norm<N: AndOrNorm, R: Reliability>(
             incidences.to_string(),
             "2".to_string(),
             "9".to_string(),
-            format!("{:.3}", stats.median_us),
-            format!("{:.3}", stats.q1_us),
-            format!("{:.3}", stats.q3_us),
-            format!("{:.3}", stats.worst_us),
+            format!("{:.3}", stats.median),
+            format!("{:.3}", stats.q1),
+            format!("{:.3}", stats.q3),
+            format!("{:.3}", stats.worst),
             checksum.to_string(),
             checksum.to_string(),
             "producible_count".to_string(),

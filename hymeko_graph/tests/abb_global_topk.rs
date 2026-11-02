@@ -13,6 +13,7 @@
 //!    Erdős–Rényi fixture, both with `NoOpPruner` and with
 //!    `CartwrightHararyPruner(OnlyBalanced)`.
 
+use hymeko_graph::signed_graph::{GraphGenerator, SignedGraphGenerator};
 use std::collections::BTreeSet;
 
 use hymeko_graph::{
@@ -24,33 +25,6 @@ use hymeko_graph::{
         scorers,
     },
 };
-
-fn lcg(state: &mut u32) -> u32 {
-    *state = state.wrapping_mul(1664525).wrapping_add(1013904223);
-    *state
-}
-
-fn synthetic_signed_graph(n: u32, edge_prob_pm: u32, pos_prob_pm: u32, seed: u32) -> SignedGraph {
-    let mut rng = seed;
-    let mut us: Vec<u32> = Vec::new();
-    let mut vs: Vec<u32> = Vec::new();
-    let mut ss: Vec<i8> = Vec::new();
-    for u in 0..n {
-        for v in (u + 1)..n {
-            if lcg(&mut rng) % 1_000_000 < edge_prob_pm * 1_000 {
-                us.push(u);
-                vs.push(v);
-                let s = if lcg(&mut rng) % 1_000_000 < pos_prob_pm * 1_000 {
-                    1i8
-                } else {
-                    -1i8
-                };
-                ss.push(s);
-            }
-        }
-    }
-    SignedGraph::from_parts(n, &us, &vs, &ss)
-}
 
 fn canonical_set(cycles: &[(f64, Vec<u32>, Vec<i8>)]) -> BTreeSet<Vec<u32>> {
     cycles
@@ -97,25 +71,33 @@ fn assert_root_ub_admissible<S: BoundedScorer>(
 
 #[test]
 fn ub_admissible_fraction_negative() {
-    let g = synthetic_signed_graph(80, 100, 700, 11);
+    let g = SignedGraphGenerator::new(80, 100, 700, 11)
+        .generate()
+        .unwrap();
     assert_root_ub_admissible(&g, 4, &FractionNegativeScorer, "fraction_negative");
 }
 
 #[test]
 fn ub_admissible_balance() {
-    let g = synthetic_signed_graph(80, 100, 700, 12);
+    let g = SignedGraphGenerator::new(80, 100, 700, 12)
+        .generate()
+        .unwrap();
     assert_root_ub_admissible(&g, 4, &BalanceScorer, "balance");
 }
 
 #[test]
 fn ub_admissible_sign_product_abs() {
-    let g = synthetic_signed_graph(80, 100, 700, 13);
+    let g = SignedGraphGenerator::new(80, 100, 700, 13)
+        .generate()
+        .unwrap();
     assert_root_ub_admissible(&g, 4, &SignProductAbsScorer, "sign_product_abs");
 }
 
 #[test]
 fn ub_admissible_low_root() {
-    let g = synthetic_signed_graph(80, 100, 700, 14);
+    let g = SignedGraphGenerator::new(80, 100, 700, 14)
+        .generate()
+        .unwrap();
     assert_root_ub_admissible(&g, 4, &LowRootScorer, "low_root");
 }
 
@@ -168,7 +150,9 @@ fn ub_monotonic_along_descent_fraction_negative() {
 
 #[test]
 fn parity_par_vs_par_bb_balance_pruner() {
-    let g = synthetic_signed_graph(150, 60, 700, 21);
+    let g = SignedGraphGenerator::new(150, 60, 700, 21)
+        .generate()
+        .unwrap();
     let pruner = CartwrightHararyPruner {
         mode: BalanceMode::OnlyBalanced,
     };
@@ -218,7 +202,9 @@ fn parity_par_vs_par_bb_balance_pruner() {
 #[test]
 fn parity_par_vs_par_bb_no_pruner() {
     use hymeko_graph::pruner::NoOpPruner;
-    let g = synthetic_signed_graph(150, 60, 700, 22);
+    let g = SignedGraphGenerator::new(150, 60, 700, 22)
+        .generate()
+        .unwrap();
     let k = 4;
     let k_keep = 200;
     let baseline =
@@ -241,7 +227,9 @@ fn parity_par_vs_par_bb_balance_scorer() {
     // Output must be exactly identical to baseline (modulo
     // tie-breaking).
     use hymeko_graph::pruner::NoOpPruner;
-    let g = synthetic_signed_graph(150, 60, 700, 23);
+    let g = SignedGraphGenerator::new(150, 60, 700, 23)
+        .generate()
+        .unwrap();
     let k = 4;
     let k_keep = 200;
     let baseline = enumerate_top_k_cycles_par(&g, k, &NoOpPruner, k_keep, scorers::balance);

@@ -4,18 +4,14 @@
 //! [`GraphicMatroidWorkspace`] DSU (no second union-find).
 
 use hymeko::common::ids::{HyperArcId, NodeId};
-use hymeko::ir::ir::{ArcRec, Ir, SignedRefR, ValueR};
+use hymeko::ir::ir::{ArcRec, Ir, ValueR};
 
 use super::{GraphicMatroidWorkspace, MatroidError, MatroidRef};
 use crate::direct_ir::decl_to_node;
 
-fn arc_weight(arc: &ArcRec) -> Option<f64> {
+fn arc_weight(ir: &Ir, arc: &ArcRec) -> Option<f64> {
     arc.refs.iter().find_map(|r| {
-        let w = match r {
-            SignedRefR::Plus(x) | SignedRefR::Minus(x) | SignedRefR::Neutral(x) => {
-                x.weights.as_deref()
-            }
-        };
+        let w = ir.reference_atom(r).expect("model-local reference").weights;
         w.and_then(|ws| {
             ws.iter().find_map(|v| match v {
                 ValueR::Num(n) => Some(*n),
@@ -127,7 +123,7 @@ pub fn rank2_weighted_basis(
     for ai in 0..ir.arcs.len() {
         let arc = HyperArcId::new(ai);
         let (u, v) = rank2_endpoints(ir, arc)?;
-        let w = arc_weight(&ir.arcs[ai]).unwrap_or(1.0);
+        let w = arc_weight(ir, &ir.arcs[ai]).unwrap_or(1.0);
         if !w.is_finite() {
             return Err(MatroidError::NonFiniteWeight { arc });
         }

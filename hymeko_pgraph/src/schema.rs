@@ -99,6 +99,70 @@ pub struct PGraphSchema {
 /// incidence on the queried side (avoids allocating per call).
 static EMPTY_NEIGHBOURS: BTreeSet<DeclId> = BTreeSet::new();
 
+/// Explicit-ID schema construction, without a named material/unit model.
+/// Collects the caller's records and delegates validation and adjacency creation
+/// to [`PGraphSchema::try_new`]. It does not infer, renumber or repair endpoints.
+#[derive(Debug, Default)]
+pub struct PGraphSchemaBuilder {
+    kinds: BTreeMap<DeclId, PNodeKind>,
+    edges: BTreeMap<EdgeId, (DeclId, DeclId)>,
+    conflict: Option<PGraphError>,
+}
+
+impl PGraphSchemaBuilder {
+    /// Start an empty schema. Empty partitions and disconnected nodes are valid.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Declare materials. Repeated equal declarations are idempotent; assigning
+    /// both roles to one ID is reported by `build` as `ConflictingKind`.
+    pub fn materials(mut self, ids: impl IntoIterator<Item = DeclId>) -> Self {
+        self.add_kind(ids, PNodeKind::Material);
+        self
+    }
+
+    /// Declare operating units, using the same conflict policy as `materials`.
+    pub fn operating_units(mut self, ids: impl IntoIterator<Item = DeclId>) -> Self {
+        self.add_kind(ids, PNodeKind::OperatingUnit);
+        self
+    }
+
+    fn add_kind(&mut self, ids: impl IntoIterator<Item = DeclId>, kind: PNodeKind) {
+        for id in ids {
+            if let Some(&first) = self.kinds.get(&id) {
+                if first != kind && self.conflict.is_none() {
+                    self.conflict = Some(PGraphError::ConflictingKind {
+                        decl: id,
+                        first,
+                        second: kind,
+                    });
+                }
+            } else {
+                self.kinds.insert(id, kind);
+            }
+        }
+    }
+
+    /// Add explicit edge IDs and endpoints. Repeated edge IDs use the last value,
+    /// exactly as the underlying BTreeMap-based constructor does.
+    pub fn edges(mut self, edges: impl IntoIterator<Item = (EdgeId, (DeclId, DeclId))>) -> Self {
+        self.edges.extend(edges);
+        self
+    }
+
+    /// Validate the collected schema and derive its adjacency once.
+    /// # Errors
+    /// The first conflicting role assignment, or the canonical constructor's
+    /// first unknown endpoint/non-bipartite edge in EdgeId order.
+    pub fn build(self) -> Result<PGraphSchema, PGraphError> {
+        if let Some(error) = self.conflict {
+            return Err(error);
+        }
+        PGraphSchema::try_new(self.kinds, self.edges)
+    }
+}
+
 impl PGraphSchema {
     /// Construct a [`PGraphSchema`] from explicit kind assignments and
     /// directed edges. Returns the schema if every edge is bipartite
@@ -252,9 +316,114 @@ impl PGraphSchema {
 
 // ─── Tests ───────────────────────────────────────────────────────────
 
+/// Declarative test input; numeric IDs are explicit data, never inferred from
+/// position or role. Error cases use the same canonical schema constructor.
+#[cfg(test)]
+pub(crate) struct SchemaCase<'a> {
+    materials: &'a [usize],
+    units: &'a [usize],
+    edges: &'a [(usize, usize, usize)],
+}
+
+#[cfg(test)]
+impl<'a> SchemaCase<'a> {
+    pub(crate) fn new(
+        materials: &'a [usize],
+        units: &'a [usize],
+        edges: &'a [(usize, usize, usize)],
+    ) -> Self {
+        Self {
+            materials,
+            units,
+            edges,
+        }
+    }
+
+    pub(crate) fn build(&self) -> Result<PGraphSchema, PGraphError> {
+        PGraphSchemaBuilder::new()
+            .materials(self.materials.iter().copied().map(DeclId::new))
+            .operating_units(self.units.iter().copied().map(DeclId::new))
+            .edges(
+                self.edges.iter().map(|&(edge, src, dst)| {
+                    (EdgeId::new(edge), (DeclId::new(src), DeclId::new(dst)))
+                }),
+            )
+            .build()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn builder_matches_explicit_maps_and_preserves_edge_replacement() {
+        let expected = PGraphSchema::try_new(
+            BTreeMap::from([
+                (d(0), PNodeKind::Material),
+                (d(1), PNodeKind::OperatingUnit),
+            ]),
+            BTreeMap::from([(e(7), (d(1), d(0)))]),
+        )
+        .unwrap();
+        let actual = PGraphSchemaBuilder::new()
+            .materials([d(0), d(0)])
+            .operating_units([d(1)])
+            .edges([(e(7), (d(0), d(1)))])
+            .edges([(e(7), (d(1), d(0)))])
+            .build()
+            .unwrap();
+        assert_eq!(actual.nodes, expected.nodes);
+        assert_eq!(actual.edges, expected.edges);
+        assert_eq!(actual.incoming, expected.incoming);
+        assert_eq!(actual.outgoing, expected.outgoing);
+        assert_eq!(actual.m_nodes, expected.m_nodes);
+        assert_eq!(actual.o_nodes, expected.o_nodes);
+        let case = SchemaCase::new(&[0], &[1], &[(7, 1, 0)]).build().unwrap();
+        assert_eq!(case.nodes, expected.nodes);
+        assert_eq!(
+            case.edges, expected.edges,
+            "explicit edge IDs are not renumbered"
+        );
+        let empty = PGraphSchemaBuilder::default().build().unwrap();
+        assert_eq!(
+            (
+                empty.n_materials(),
+                empty.n_operating_units(),
+                empty.n_edges()
+            ),
+            (0, 0, 0)
+        );
+    }
+
+    #[test]
+    fn builder_keeps_first_role_conflict_and_canonical_endpoint_errors() {
+        let error = PGraphSchemaBuilder::new()
+            .materials([d(2), d(3)])
+            .operating_units([d(3), d(2)])
+            .build()
+            .unwrap_err();
+        assert_eq!(
+            error,
+            PGraphError::ConflictingKind {
+                decl: d(3),
+                first: PNodeKind::Material,
+                second: PNodeKind::OperatingUnit
+            }
+        );
+        let error = PGraphSchemaBuilder::new()
+            .materials([d(2)])
+            .edges([(e(9), (d(2), d(4)))])
+            .build()
+            .unwrap_err();
+        assert_eq!(
+            error,
+            PGraphError::UnknownEndpoint {
+                edge: e(9),
+                decl: d(4)
+            }
+        );
+    }
 
     fn d(i: usize) -> DeclId {
         DeclId::new(i)
@@ -266,12 +435,9 @@ mod tests {
     /// Smallest valid schema: 1 M-node, 1 O-node, 1 edge.
     #[test]
     fn smallest_valid() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit),
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1)))]);
-        let s = PGraphSchema::try_new(kinds, edges).expect("valid bipartite");
+        let s = SchemaCase::new(&[0], &[1], &[(0, 0, 1)])
+            .build()
+            .expect("valid bipartite");
         assert_eq!(s.n_materials(), 1);
         assert_eq!(s.n_operating_units(), 1);
         assert_eq!(s.n_edges(), 1);
@@ -285,9 +451,9 @@ mod tests {
     /// M↔M edge rejected at construction time.
     #[test]
     fn rejects_m_to_m() {
-        let kinds = BTreeMap::from([(d(0), PNodeKind::Material), (d(1), PNodeKind::Material)]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1)))]);
-        let err = PGraphSchema::try_new(kinds, edges).unwrap_err();
+        let err = SchemaCase::new(&[0, 1], &[], &[(0, 0, 1)])
+            .build()
+            .unwrap_err();
         match err {
             PGraphError::NonBipartite {
                 src_kind: PNodeKind::Material,
@@ -301,21 +467,19 @@ mod tests {
     /// O↔O edge rejected at construction time.
     #[test]
     fn rejects_o_to_o() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::OperatingUnit),
-            (d(1), PNodeKind::OperatingUnit),
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1)))]);
-        let err = PGraphSchema::try_new(kinds, edges).unwrap_err();
+        let err = SchemaCase::new(&[], &[0, 1], &[(0, 0, 1)])
+            .build()
+            .unwrap_err();
         assert!(matches!(err, PGraphError::NonBipartite { .. }));
     }
 
     /// Edge endpoint with no kind assignment rejected.
     #[test]
     fn rejects_unknown_endpoint() {
-        let kinds = BTreeMap::from([(d(0), PNodeKind::Material)]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1)))]); // d(1) has no kind
-        let err = PGraphSchema::try_new(kinds, edges).unwrap_err();
+        // d(1) has no kind
+        let err = SchemaCase::new(&[0], &[], &[(0, 0, 1)])
+            .build()
+            .unwrap_err();
         assert!(matches!(err, PGraphError::UnknownEndpoint { .. }));
     }
 
@@ -323,18 +487,16 @@ mod tests {
     /// materials and producing one — the canonical P-graph atom.
     #[test]
     fn unit_with_two_inputs_one_output() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),      // input A
-            (d(1), PNodeKind::Material),      // input B
-            (d(2), PNodeKind::OperatingUnit), // unit U
-            (d(3), PNodeKind::Material),      // product P
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(2))), // A → U
-            (e(1), (d(1), d(2))), // B → U
-            (e(2), (d(2), d(3))), // U → P
-        ]);
-        let s = PGraphSchema::try_new(kinds, edges).expect("valid");
+        // input A
+        // input B
+        // unit U
+        // product P
+        // A → U
+        // B → U
+        // U → P
+        let s = SchemaCase::new(&[0, 1, 3], &[2], &[(0, 0, 2), (1, 1, 2), (2, 2, 3)])
+            .build()
+            .expect("valid");
         assert_eq!(s.n_materials(), 3);
         assert_eq!(s.n_operating_units(), 1);
         assert_eq!(s.in_degree(d(2)), 2);
@@ -346,18 +508,16 @@ mod tests {
     /// produced ones — and the dual holds for a material.
     #[test]
     fn predecessors_successors_match_incidence() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),      // input A
-            (d(1), PNodeKind::Material),      // input B
-            (d(2), PNodeKind::OperatingUnit), // unit U
-            (d(3), PNodeKind::Material),      // product P
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(2))), // A → U
-            (e(1), (d(1), d(2))), // B → U
-            (e(2), (d(2), d(3))), // U → P
-        ]);
-        let s = PGraphSchema::try_new(kinds, edges).expect("valid");
+        // input A
+        // input B
+        // unit U
+        // product P
+        // A → U
+        // B → U
+        // U → P
+        let s = SchemaCase::new(&[0, 1, 3], &[2], &[(0, 0, 2), (1, 1, 2), (2, 2, 3)])
+            .build()
+            .expect("valid");
         // Unit U: predecessors = {A, B} (inputs), successors = {P} (output).
         assert_eq!(*s.predecessors(d(2)), BTreeSet::from([d(0), d(1)]));
         assert_eq!(*s.successors(d(2)), BTreeSet::from([d(3)]));
@@ -370,12 +530,10 @@ mod tests {
     /// from the schema, both yield the empty neighbour set.
     #[test]
     fn empty_and_absent_neighbours() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit),
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1)))]); // A → U
-        let s = PGraphSchema::try_new(kinds, edges).expect("valid");
+        // A → U
+        let s = SchemaCase::new(&[0], &[1], &[(0, 0, 1)])
+            .build()
+            .expect("valid");
         // U produces nothing (disposal sink): no successors.
         assert!(s.successors(d(1)).is_empty());
         // A is consumed by nothing's predecessor: no predecessors.

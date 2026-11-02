@@ -4,7 +4,7 @@
 //! Prints tables (`-- --nocapture`); single host, median-of-9, PROVISIONAL wall. Run this file in the P1.2
 //! (A) and P1.3 (B) worktrees to obtain the A/B (exact output identical — asserted).
 
-use std::time::Instant;
+use hymeko::util::measurement::{MeasurementRunner, Runner};
 
 use hymeko::ir::incidence::build_incidence_index;
 use hymeko::module_store::module_store::ModuleStore;
@@ -21,18 +21,8 @@ use hymeko_pgraph::view::PGraphView;
 const META: &str = include_str!("../data/meta_pgraph.hymeko");
 const HDR: &str = "R {\n    @\"meta_pgraph.hymeko\";\n    using pgraph.raw as raw;\n    using pgraph.product as product;\n    using pgraph.intermediate as inter;\n    using pgraph.process as process;\n}\n";
 
-fn median_us(iters: usize, mut f: impl FnMut()) -> f64 {
-    for _ in 0..2 {
-        f();
-    }
-    let mut s = Vec::with_capacity(iters);
-    for _ in 0..iters {
-        let t = Instant::now();
-        f();
-        s.push(t.elapsed().as_secs_f64() * 1e6);
-    }
-    s.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    s[s.len() / 2]
+fn median_us(iters: usize, f: impl FnMut()) -> f64 {
+    MeasurementRunner::new(2, iters).run(f).median
 }
 
 /// chain: raw -> n-1 units -> product (deep A4 reachability).

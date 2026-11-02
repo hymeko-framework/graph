@@ -18,10 +18,16 @@
 # neither library resolves criterion. See that manifest.
 [workspace]
 resolver = "3"
-members = ["hymeko_graph", "hymeko_pgraph", "hymeko_sbsh"]
+members = ["hymeko_graph", "hymeko_pgraph", "hymeko_sbsh", "dev", "dev/dylib"]
+default-members = ["hymeko_graph", "hymeko_pgraph", "hymeko_sbsh"]
+
+[profile.dev-dll]
+inherits = "dev"
+debug = "line-tables-only"
 
 [workspace.dependencies]
 # The split-out HyMeKo repos. `hymeko_framework_rust` is retired; these are
 # the live ones.
-hymeko_core = { git = "ssh://git@192.168.1.228:2222/hymeko/core.git", rev = "c4715f3a0bb78133db88d41cfdfe991e5a184419" }
+hymeko_core = { git = "ssh://git@192.168.1.228:2222/hymeko/core.git", rev = "7664d55458120030fe451321f63ff48975a982c4" }
 parser = { git = "ssh://git@192.168.1.228:2222/hymeko/parser.git", rev = "f11628591a8183586492807ecdf43c64e6d31c5f" }
+hymeko_numerics = { git = "ssh://git@192.168.1.228:2222/hymeko/tensor.git", rev = "1929e4d3902a8b51f45b5366460314783c1ec9e6" }

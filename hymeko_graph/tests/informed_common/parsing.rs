@@ -6,14 +6,15 @@ use std::io::Write as IoWrite;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use hymeko::ir::ir::{AnnoR, RefAtomR, SignedRefR, ValueR};
-use hymeko::ir::lower::lower_to_ir;
+use hymeko::ir::ir::{AnnoR, SignedRefR, ValueR};
+use hymeko::ir::lower::{IrBuilder, IrLowering};
 use hymeko::module_store::module_store::{CompiledProgram, HymekoParser, ModuleStore};
 use hymeko::module_store::source_provider::MemProvider;
 use hymeko::resolution::intern_pass::intern_ast;
 use hymeko::resolution::resolve::build_index_sym;
 use hymeko::util::real_parser::RealParser;
 
+use super::reporting::dimensions;
 use super::*;
 
 type Store = ModuleStore<MemProvider, RealParser>;
@@ -91,22 +92,26 @@ impl SourceFixture {
         }
     }
 
-    fn atom(reference: &SignedRefR) -> (&str, &RefAtomR) {
-        match reference {
-            SignedRefR::Plus(atom) => ("+", atom),
-            SignedRefR::Minus(atom) => ("-", atom),
-            SignedRefR::Neutral(atom) => ("~", atom),
-        }
+    fn atom<'a>(
+        ir: &'a Ir,
+        reference: &SignedRefR,
+    ) -> (&'static str, hymeko::ir::ir::ReferenceView<'a>) {
+        let sign = match reference.sign() {
+            1 => "+",
+            -1 => "-",
+            _ => "~",
+        };
+        (sign, ir.reference_atom(reference).unwrap())
     }
 
     fn project(ir: &Ir) -> String {
         let mut source = String::from("ParsingBenchmark {}\n");
         for (i, node) in ir.nodes.iter().enumerate() {
             assert!(
-                node.bases.is_empty(),
+                ir[node.bases].is_empty(),
                 "fixture bases require a different projection"
             );
-            let anno = &ir.decl_nodes[node.decl.raw()].anno;
+            let anno = ir.decl_annotation(node.decl).unwrap();
             let supported = AnnoR {
                 value: anno.value.clone(),
                 ..AnnoR::default()
@@ -118,13 +123,13 @@ impl SourceFixture {
             }
         }
         for (i, arc) in ir.arcs.iter().enumerate() {
-            assert_eq!(arc.anno, AnnoR::default(), "unsupported arc annotation");
+            assert_eq!(ir[arc.anno], AnnoR::default(), "unsupported arc annotation");
             write!(source, "@e{i} {{ (").unwrap();
             for (j, reference) in arc.refs.iter().enumerate() {
-                let (sign, atom) = Self::atom(reference);
+                let (sign, atom) = Self::atom(ir, reference);
                 assert_eq!(
                     atom.anno,
-                    AnnoR::default(),
+                    &AnnoR::default(),
                     "unsupported incidence annotation"
                 );
                 assert_eq!(
@@ -185,15 +190,15 @@ impl SourceFixture {
         );
         for (expected, actual) in self.ir.nodes.iter().zip(&ir.nodes) {
             assert_eq!(
-                self.ir.decl_nodes[expected.decl.raw()].anno,
-                ir.decl_nodes[actual.decl.raw()].anno
+                self.ir.decl_annotation(expected.decl).unwrap(),
+                ir.decl_annotation(actual.decl).unwrap()
             );
         }
         for (expected, actual) in self.ir.arcs.iter().zip(&ir.arcs) {
             assert_eq!(expected.refs.len(), actual.refs.len(), "arc rank");
             for (expected, actual) in expected.refs.iter().zip(&actual.refs) {
-                let (expected_sign, expected) = Self::atom(expected);
-                let (actual_sign, actual) = Self::atom(actual);
+                let (expected_sign, expected) = Self::atom(&self.ir, expected);
+                let (actual_sign, actual) = Self::atom(ir, actual);
                 assert_eq!(expected_sign, actual_sign, "incidence sign");
                 assert_eq!(
                     self.ir.node_for_decl(expected.target).map(|(id, _)| id),
@@ -215,23 +220,13 @@ impl SourceFixture {
         let traversal = HyperTraversal::new(index);
         let mut workspace = InformedSearchWorkspace::new();
         if self.weighted {
-            dijkstra_berge_path(
-                &traversal,
-                self.start,
-                self.goal,
+            SearchCase::new(&traversal, self.start, self.goal, &mut workspace).run(&Dijkstra::new(
                 &IncidenceWeightCost { base: 0.0 },
                 &Undirected,
-                &mut workspace,
-            )
+            ))
         } else {
-            dijkstra_berge_path(
-                &traversal,
-                self.start,
-                self.goal,
-                &UnitCost,
-                &Undirected,
-                &mut workspace,
-            )
+            SearchCase::new(&traversal, self.start, self.goal, &mut workspace)
+                .run(&Dijkstra::new(&UnitCost, &Undirected))
         }
         .expect("source query")
     }
@@ -267,7 +262,8 @@ impl SourceFixture {
                     let mut interned = intern_ast(&ast);
                     let index = build_index_sym(&interned.ast, &interned.interner)
                         .expect("name resolution");
-                    let ir = lower_to_ir(&interned.ast, &index, &mut interned.interner)
+                    let ir = IrLowering::new(&interned.ast, &index, &mut interned.interner)
+                        .build()
                         .expect("AST lowering");
                     (ir, hash)
                 });
@@ -400,7 +396,13 @@ fn parsing_cell() {
     let run = env::var("INFORMED_BERGE_RUN").unwrap_or_else(|_| "manual".into());
     let workload = env::var("INFORMED_BERGE_WORKLOAD").expect("workload");
     let subject = env::var("INFORMED_BERGE_SUBJECT").expect("phase");
-    emit_phase(&run, &workload, &subject, "process_baseline");
+    let cell = EvidenceCell {
+        run: &run,
+        section: "parsing",
+        workload: &workload,
+        subject: &subject,
+    };
+    cell.phase("process_baseline");
     let fixture = SourceFixture::named(&workload);
     fixture.validate();
     println!(
@@ -414,21 +416,14 @@ fn parsing_cell() {
             "NA"
         }
     );
-    emit_phase(&run, &workload, &subject, "source_validated");
+    cell.phase("source_validated");
     let measurement = fixture.measure(&subject);
     assert!(
         measurement.wall.worst < 15_000_000.0,
         "phase exceeds 15 second latency budget"
     );
-    emit_measurement(
-        &run,
-        "parsing",
-        &workload,
-        &subject,
-        &fixture.ir,
-        &measurement,
-    );
-    emit_phase(&run, &workload, &subject, "complete");
+    cell.measurement(&fixture.ir, &measurement);
+    cell.phase("complete");
 }
 
 #[test]
@@ -446,7 +441,9 @@ fn source_round_trip_preserves_signed_weights_positions_and_reachability() {
         let ast = RealParser.parse(&fixture.source).unwrap();
         let mut interned = intern_ast(&ast);
         let index = build_index_sym(&interned.ast, &interned.interner).unwrap();
-        let ir = lower_to_ir(&interned.ast, &index, &mut interned.interner).unwrap();
+        let ir = IrLowering::new(&interned.ast, &index, &mut interned.interner)
+            .build()
+            .unwrap();
         fixture.assert_equivalent(&ir);
     }
 }
@@ -477,6 +474,7 @@ fn unsupported_fixture_value_is_rejected() {
 }
 
 #[test]
+#[ignore = "real nine-sample timing matrix; opt in with --ignored --exact"]
 fn every_phase_runs_real_production_code_and_returns_nine_samples() {
     let fixture = SourceFixture::named("parallel16");
     for phase in [
@@ -496,6 +494,33 @@ fn every_phase_runs_real_production_code_and_returns_nine_samples() {
         assert_eq!(measurement.checksum, fixture.source_hash());
         assert!(measurement.wall.median > 0.0);
     }
+}
+
+#[test]
+fn source_pipeline_preserves_query_without_measurement() {
+    let fixture = SourceFixture::named("parallel16");
+    assert_eq!(SourceFixture::project(&fixture.ir), fixture.source.as_ref());
+    let ast = RealParser.parse(&fixture.source).expect("source parse");
+    let mut interned = intern_ast(&ast);
+    let index = build_index_sym(&interned.ast, &interned.interner).expect("resolve");
+    let lowered = IrLowering::new(&interned.ast, &index, &mut interned.interner)
+        .build()
+        .expect("lower");
+    fixture.assert_equivalent(&lowered);
+    let (_, compiled) = fixture.compile();
+    fixture.assert_equivalent(&compiled.ir);
+    let index = build_incidence_index(&compiled.ir).unwrap();
+    let query = |path: Option<WeightedBergePath>| path.map(|p| (p.total_cost, p.hyperedge_len()));
+    let expected = query(fixture.query(&fixture.ir));
+    assert!(expected.is_some());
+    assert_eq!(query(fixture.query(&lowered)), expected);
+    assert_eq!(query(fixture.query_prepared(&index)), expected);
+    let file = SourceFile::new(&fixture.source);
+    let source = file.read().unwrap();
+    assert_eq!(source, fixture.source.as_ref());
+    let (_, from_file) = SourceFixture::compile_source(source.into());
+    fixture.assert_equivalent(&from_file.ir);
+    assert_eq!(query(fixture.query(&from_file.ir)), expected);
 }
 
 #[test]

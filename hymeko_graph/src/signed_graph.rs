@@ -6,6 +6,12 @@
 
 use std::collections::HashMap;
 
+mod generation;
+mod loading;
+pub use generation::SignedGraphGenerator;
+pub use hymeko::generators::{GraphGenerator, SyntheticGenerator};
+pub use loading::{Loader, SignedEdgeListLoader};
+
 /// Edge sign in a signed graph.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Sign {

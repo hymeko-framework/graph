@@ -61,7 +61,10 @@ pub mod ssg;
 pub mod ssg_dm;
 pub mod view;
 
-pub use abb::{AbbOptions, AbbSolution, solve as abb_solve};
+pub use abb::{
+    AbbOptions, AbbSolution, ObjectiveSolution, StructureObjective, solve as abb_solve,
+    solve_with_objective,
+};
 pub use andor::{
     AndOrNorm, AndOrWorkspace, Availability, BooleanExact, Godel, Lukasiewicz, NormError, Product,
     PropagationConfig, Reliability, UnitReliability, propagate,
@@ -92,7 +95,7 @@ pub use msg::{
 #[cfg(feature = "pgip")]
 pub use pgip_io::{PgipError, read_pgip, write_pgip};
 pub use regime::{Canonical, Composite, CostDominance, NoExcess, Regime};
-pub use schema::{PGraphError, PGraphSchema, PNodeKind};
+pub use schema::{PGraphError, PGraphSchema, PGraphSchemaBuilder, PNodeKind};
 pub use ssg::{SolutionStructure, SsgOptions, enumerate as ssg_enumerate};
 pub use ssg_dm::{
     SsgDmOptions, SsgDmResult, enumerate as ssg_dm_enumerate,

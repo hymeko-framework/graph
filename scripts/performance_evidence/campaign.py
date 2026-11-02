@@ -14,11 +14,18 @@ import json
 import math
 import os
 import platform
+import re
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+if __package__:
+    from .host import HostBusy, QuietHostGuard, ProcessMemory
+else:
+    from host import HostBusy, QuietHostGuard, ProcessMemory
 
 PHASES = (
     (
@@ -61,6 +68,27 @@ PHASES = (
     ),
 )
 
+COMPARISON_WORKLOADS = (
+    "rank2_1m", "rank32_1m", "rank1000_1m",
+    "mixed_1m", "hub32_1m", "components8_1m", "chain65k", "scale_small", "scale_large",
+)
+
+
+GENERATED_WORKLOADS = ("steiner255", "complete32_3", "sunflower1024", "mycielski7")
+ASSISTED_WORKLOADS = ("grid200_d80", "map128", "transport128")
+SEARCH_WORKLOADS = ("grid200_d20", "grid200_d40", *ASSISTED_WORKLOADS)
+BATCH_SUBJECTS = tuple(f"batch_{method}_{count}" for method in ("bfs", "dijkstra", "astar", "assisted") for count in (1, 8, 64))
+ASSISTED_SUBJECTS = ("dijkstra", "astar", "assisted", "prepare", "first_dijkstra", "first_astar", "first_assisted")
+ROUTING_WORKLOADS = ASSISTED_WORKLOADS + ("tour16",)
+SCALING_WORKLOADS = ("grid512_d511", "map256", "transport256_off", "tour24", "tour32", "tour64", "tour64_corridor")
+EXTERNAL_FRAMEWORKS = ("hypernetx", "xgi", "hypergraphx", "reticula")
+EXTERNAL_OPERATIONS = ("components", "reachable", "distance", "path", "astarpath", "unitpath", "tour", "pagerank")
+RANKING_WORKLOADS = tuple(w + suffix for w in ("chain65k","rank2_1m","hub32_1m","components8_1m")
+                         for suffix in ("","@17"))
+RANKING_FOLLOWUP_WORKLOADS = tuple(w + suffix for w in
+    ("rank32_1m", "rank1000_1m", "mixed_1m", "sunflower1024") for suffix in ("", "@17"))
+TRAVERSAL_SUBJECTS = ("reachable", "dual_reachable", "berge_path", "dijkstra",
+                      "generate_ir", "incidence_index", "levi", "s_components2")
 
 @dataclass(frozen=True)
 class Cell:
@@ -86,12 +114,153 @@ class Cell:
         else:
             result["EVIDENCE_OPERATION"] = self.subject
             result["EVIDENCE_THREADS"] = str(self.threads)
+        if self.test == "ranking::ranking_cell":
+            result["HYMEKO_RANK_BENCH"] = "1"
+            result["RAYON_NUM_THREADS"] = "1"
+        if self.test == "native::native_cell":
+            result["HYMEKO_NATIVE_BENCH"] = "1"
+            result["RAYON_NUM_THREADS"] = "1"
+        if self.test in {"assisted::assisted_cell", "assisted::tour_cell", "assisted::batch::batch_cell"}:
+            result.update({"HYMEKO_ASSISTED_BENCH": "1", "RAYON_NUM_THREADS": "1"})
+        if self.suite == "external":
+            result.update({"HYMEKO_EXTERNAL_BENCH": "1", "RAYON_NUM_THREADS": "1",
+                           "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1",
+                           "MKL_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"})
+        if self.test in {"memory_cell", "native::memory::memory_cell"}:
+            result.update({"HYMEKO_MEMORY_BENCH": "1", "RAYON_NUM_THREADS": "1"})
+        if self.subject == "rank_phases" or self.subject.endswith("-profile"):
+            result["HYMEKO_PHASE_BENCH"] = "1"
         return result
 
     @staticmethod
-    def matrix(suite: str = "graph", phases: list[str] | None = None) -> list[Cell]:
+    def select(suite: str = "graph", phases: list[str] | None = None,
+               subjects: list[str] | None = None, smoke: bool = False,
+               workloads: list[str] | None = None,
+               application_workloads: tuple[str, ...] = ()) -> list[Cell]:
+        """Select an explicit subset of the existing matrix, never another runner."""
+        cells = Cell.matrix(suite, phases, workloads, application_workloads)
+        if subjects is not None:
+            known = set(TRAVERSAL_SUBJECTS) if suite == "traversal" else {cell.subject for cell in cells}
+            if suite == "ranking_solvers":
+                known.add("rank_auto_quotient")
+                if "rank_auto_quotient" in subjects:
+                    cells += [Cell("algorithm", "native::native_cell", workload, "rank_auto_quotient")
+                              for workload in dict.fromkeys(cell.workload for cell in cells)]
+            if suite == "memory":
+                known.update(("hymeko-gmres-fresh", "hymeko-gmres-reused",
+                              "hymeko-auto-fresh", "hymeko-auto-reused",
+                              "hymeko-auto-quotient-fresh", "hymeko-auto-quotient-reused"))
+            if not subjects or len(set(subjects)) != len(subjects) or not set(subjects) <= known:
+                raise ValueError("subjects must be nonempty, unique members of the selected suite")
+            if suite == "memory":
+                chosen_workloads = list(dict.fromkeys(cell.workload for cell in cells))
+                cells = [Cell("external" if subject in EXTERNAL_FRAMEWORKS else "algorithm",
+                              "memory_cell" if subject in EXTERNAL_FRAMEWORKS else "native::memory::memory_cell",
+                              workload, subject)
+                         for workload in chosen_workloads for subject in subjects]
+            elif suite == "traversal":
+                chosen_workloads = list(dict.fromkeys(cell.workload for cell in cells))
+                cells = [Cell("algorithm", "ranking::ranking_cell", workload, subject)
+                         for workload in chosen_workloads for subject in subjects]
+            else:
+                cells = [cell for cell in cells if cell.subject in subjects]
+        if not smoke or workloads is not None:
+            return cells
         if suite == "parsing":
-            workloads = (
+            return [c for c in cells if (
+                c.workload in {"map512", "random1e6"}
+                and c.subject in (subjects or phases or ["compile"])
+            ) or (c.workload, c.subject) == ("grid5", "parse_ast")]
+        if suite in {"ranking", "comparison"}:
+            return [c for c in cells if c.workload == "rank32_1m"]
+        return [cells[0], cells[-1]] if len(cells) > 1 else cells
+
+    @staticmethod
+    def matrix(suite: str = "graph", phases: list[str] | None = None,
+               workloads: list[str] | None = None,
+               application_workloads: tuple[str, ...] = ()) -> list[Cell]:
+        if application_workloads and suite not in {"ranking_solvers", "memory"}:
+            raise ValueError("application inputs require ranking_solvers or memory")
+        if workloads is not None and (
+            suite not in {"comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "assisted", "search_reuse", "routing", "routing_unit", "routing_scale"} or not workloads or len(set(workloads)) != len(workloads)
+            or not set(workloads) <= set(RANKING_WORKLOADS + RANKING_FOLLOWUP_WORKLOADS + application_workloads if suite in {"external_ranking", "ranking_phases", "ranking_solvers", "memory"} else SCALING_WORKLOADS if suite=="routing_scale" else ("grid200_d20", "grid200_d40", "grid200_d80") if suite=="routing_unit" else (*ROUTING_WORKLOADS, "grid200_d20", "grid200_d40") if suite=="routing" else SEARCH_WORKLOADS if suite in {"assisted", "search_reuse"} else COMPARISON_WORKLOADS + GENERATED_WORKLOADS)
+        ):
+            raise ValueError("workloads must be nonempty unique names from the comparison/traversal catalog")
+        if suite == "search_reuse":
+            return [Cell("informed", "assisted::batch::batch_cell", w, s)
+                    for w in workloads or SEARCH_WORKLOADS for s in BATCH_SUBJECTS
+                    if not s.startswith("batch_bfs_") or w.startswith("grid")]
+        if suite == "assisted":
+            return [Cell("informed", "assisted::assisted_cell", w, s)
+                    for w in (workloads or ASSISTED_WORKLOADS) for s in ASSISTED_SUBJECTS]
+        if suite in {"routing", "routing_scale"}:
+            cells=[]
+            for w in workloads or (SCALING_WORKLOADS if suite=="routing_scale" else ROUTING_WORKLOADS):
+                if w.startswith("tour"):
+                    cells.append(Cell("informed","assisted::tour_cell",w,"christofides"))
+                    operations=("tour",)
+                else:
+                    cells.extend(Cell("informed","assisted::assisted_cell",w,s) for s in ("first_dijkstra","first_astar","first_assisted"))
+                    operations=("path","astarpath")
+                cells.extend(Cell("external","external_cell",w,f"{b}-{op}-first") for b in EXTERNAL_FRAMEWORKS for op in operations)
+                if w == "grid512_d511":
+                    cells.append(Cell("external","external_cell",w,"reticula-unitpath-first"))
+            return cells
+        if suite == "routing_unit":
+            return [Cell("external","external_cell",w,f"{b}-unitpath-first")
+                    for w in workloads or ("grid200_d80",) for b in EXTERNAL_FRAMEWORKS]
+        if suite == "memory":
+            selected = workloads or RANKING_WORKLOADS
+            return ([Cell("external", "memory_cell", w, b) for w in selected for b in EXTERNAL_FRAMEWORKS]
+                    + [Cell("algorithm", "native::memory::memory_cell", w, b)
+                       for w in selected for b in ("hymeko", "hypergraphz")])
+        if suite == "ranking_solvers":
+            selected = workloads or RANKING_WORKLOADS
+            return ([Cell("external", "external_cell", w, "hypernetx-pagerank-first") for w in selected]
+                    + [Cell("algorithm", "native::native_cell", w, subject)
+                       for w in selected for subject in ("rank_hymeko", "rank_ordered", "rank_gmres", "rank_auto", "rank_hypergraphz")])
+        if suite == "ranking_phases":
+            selected = workloads or RANKING_WORKLOADS
+            return ([Cell("external", "external_cell", w, "hypernetx-pagerank-" + mode)
+                     for w in selected for mode in ("first", "profile")]
+                    + [Cell("algorithm", "native::native_cell", w, subject)
+                       for w in selected for subject in ("rank_hymeko", "rank_phases")])
+        if suite == "external_ranking":
+            selected = workloads or RANKING_WORKLOADS
+            return ([Cell("external","external_cell",w,f"{b}-pagerank-first")
+                     for w in selected for b in EXTERNAL_FRAMEWORKS]
+                    + [Cell("algorithm","native::native_cell",w,s)
+                       for w in selected for s in ("rank_hymeko","rank_hypergraphz")])
+        if suite == "external":
+            selected = workloads or ["chain65k", "hub32_1m", "components8_1m", *GENERATED_WORKLOADS]
+            foreign = [Cell("external", "external_cell", w, f"{backend}-{operation}-{mode}")
+                       for w in selected for backend in EXTERNAL_FRAMEWORKS
+                       for operation in ("components","reachable","distance") for mode in ("prepared", "cold")]
+            native = [Cell("algorithm", "native::native_cell", w, subject)
+                      for w in selected for subject in ("components_hymeko", "components_hypergraphz")]
+            searches = [Cell("algorithm", "ranking::ranking_cell", w, subject)
+                        for w in selected for subject in ("reachable", "berge_path", "dijkstra")]
+            return foreign + native + searches
+        if suite == "traversal":
+            return [Cell("algorithm", "ranking::ranking_cell", workload, operation)
+                    for workload in (workloads if workloads is not None else
+                                     ("scale_small", "hub32_1m", "components8_1m", "chain65k"))
+                    for operation in ("reachable", "dual_reachable", "berge_path", "dijkstra")]
+        if suite == "comparison":
+            return [
+                Cell("algorithm", "native::native_cell", workload, operation)
+                for workload in (workloads if workloads is not None else COMPARISON_WORKLOADS[:3])
+                for operation in ("rank_hymeko", "rank_hypergraphz", "rank_prepared",
+                                  "components_hymeko", "components_hypergraphz")
+            ]
+        if suite == "ranking":
+            return [
+                Cell("algorithm", "ranking::ranking_cell", workload, operation)
+                for workload in ("rank2_1m", "rank32_1m", "rank1000_1m", "disjoint_1m")
+                for operation in ("prepare", "solve", "reachable")
+            ]
+        if suite == "parsing":
+            parsing_workloads = (
                 "grid200_d80",
                 "map32",
                 "map128",
@@ -120,7 +289,7 @@ class Cell:
                 raise ValueError("unknown parsing phase")
             return [
                 Cell("informed", "parsing::parsing_cell", w, p)
-                for w in workloads
+                for w in parsing_workloads
                 for p in selected
             ]
         if suite != "graph":
@@ -174,6 +343,281 @@ class Cell:
 
 class Evidence:
     @staticmethod
+    def verify_search_batch(records, cell):
+        batch = Evidence.one(records, "BATCH")
+        result = Evidence.one(records, "RESULT")
+        if cell.get("subject") not in BATCH_SUBJECTS:
+            raise ValueError("unknown search-batch subject")
+        count = int(cell["subject"].rsplit("_",1)[1])
+        expected = {"verified":"true", "unit":"us_per_batch", "construction_timed":"false",
+                    "query_plan_timed":"false", "index_builds":"1",
+                    "caller_setups":"0" if cell["subject"].startswith("batch_bfs_") else "1",
+                    "workspace":"fresh_per_batch_reused_within",
+                    "metric_scope":"resident_ir_to_preparation_queries_full_paths_and_drop",
+                    "seed":"20261027", "queries":str(count)}
+        if any(batch.get(k)!=v for k,v in expected.items()) or result.get("items")!=str(count):
+            raise ValueError("search-batch boundary or result count drift")
+        queries = records.get("BATCH_QUERY", [])
+        nodes, arcs = int(cell["nodes"]), int(cell["arcs"])
+        if len(queries)!=count or [int(q["ordinal"]) for q in queries]!=list(range(count)):
+            raise ValueError("missing or reordered batch queries")
+        if not 0 <= int(batch["goal"]) < nodes or int(batch["query_hash"]) < 0:
+            raise ValueError("invalid batch identity")
+        if len({q["start"] for q in queries})!=count:
+            raise ValueError("repeated batch source")
+        for q in queries:
+            if not 0<=int(q["start"])<nodes or q["goal"]!=batch["goal"] or q["start"]==q["goal"]:
+                raise ValueError("invalid batch endpoints")
+            if q["cost_micros"]!=q["expected_cost_micros"]:
+                raise ValueError("batch optimum mismatch")
+            vertices, edges = json.loads(q["vertices"]), json.loads(q["arc_ids"])
+            if q["reachable"]=="true":
+                if (int(q["cost_micros"])<0 or int(q["hops"])<1 or len(edges)!=int(q["hops"])
+                        or len(vertices)!=len(edges)+1 or vertices[0]!=int(q["start"])
+                        or vertices[-1]!=int(q["goal"]) or any(not 0<=v<nodes for v in vertices)
+                        or any(not 0<=a<arcs for a in edges)):
+                    raise ValueError("invalid full batch witness")
+            elif q["reachable"]!="false" or q["cost_micros"]!="NA" or q["hops"]!="NA" or vertices or edges:
+                raise ValueError("invalid unreachable batch query")
+            if cell["subject"].startswith("batch_bfs_"):
+                if q["reachable"]=="true" and int(q["cost_micros"])!=int(q["hops"])*1_000_000:
+                    raise ValueError("unit-cost BFS batch cost/hop mismatch")
+                if q["expanded_nodes"]!="NA" or q["resolved_incidences"]!="NA":
+                    raise ValueError("BFS has no informed-search counters")
+            elif int(q["expanded_nodes"])<0 or int(q["resolved_incidences"])<0:
+                raise ValueError("negative batch work")
+
+    @staticmethod
+    def verify_assisted(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        source=Evidence.one(records,"INPUT")
+        result=Evidence.one(records,"RESULT")
+        subject=cell["subject"]
+        first=subject.startswith("first_")
+        prep=subject=="prepare"
+        if source.get("pipeline")!="berge_bound_assist" or source.get("verified")!="true" or source.get("flow")!="undirected":
+            raise ValueError("missing assisted-search validation")
+        expected={"construction_timed":"false","index_timed":str(first).lower(),
+                  "caller_setup_timed":str(first).lower(),"goal_preparation_timed":str(prep or subject=="first_assisted").lower()}
+        scope=("resident_ir_to_index_caller_setup_search_and_drop" if first else
+               "prepared_index_to_goal_certificate_and_drop_reused_traversal_workspace" if prep else
+               "prepared_index_bounds_reused_search_workspace_query_result_drop")
+        if any(source.get(k)!=v for k,v in expected.items()) or source.get("metric_scope")!=scope:
+            raise ValueError("assisted-search timing boundary drift")
+        nodes=int(cell["nodes"])
+        if not all(0<=int(source[k])<nodes for k in ("start","goal")):
+            raise ValueError("assisted-search endpoint outside IR")
+        if prep:
+            if result.get("items")!=str(nodes) or cell["section"]!="heuristic_preparation":
+                raise ValueError("invalid prepared-goal result")
+        elif result.get("cost_micros")!=source.get("expected_cost_micros") or cell["section"]!="informed_search":
+            raise ValueError("assisted-search optimal cost mismatch")
+
+    @staticmethod
+    def one(records: dict[str, list[dict[str, str]]], kind: str) -> dict[str, str]:
+        values = records.get(kind, [])
+        if len(values) != 1:
+            raise ValueError(f"expected one {kind} record")
+        return values[0]
+
+    @staticmethod
+    def verify_query(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        inputs, queries = records.get("INPUT", []), records.get("QUERY", [])
+        if len(inputs) != 1 or inputs[0].get("construction_timed") != "false" or not inputs[0].get("metric_scope") or len(queries) != 1:
+            raise ValueError("missing query input/boundary/result")
+        query = queries[0]
+        kind = {"reachable": "nodes", "dual_reachable": "arcs", "berge_path": "path", "dijkstra": "path"}.get(cell["subject"])
+        if query.get("kind") != kind or kind is None or query.get("checksum") != cell["checksum"]:
+            raise ValueError("query kind/result mismatch")
+        if query.get("flow") != "undirected" or query.get("weights") != "unit":
+            raise ValueError("query semantic drift")
+        nodes, arcs = int(cell["nodes"]), int(cell["arcs"])
+        visited, hops, cost = int(query["visited"]), int(query["hops"]), float(query["cost"])
+        if not 0 <= visited <= (arcs if kind == "arcs" else nodes) or not math.isfinite(cost):
+            raise ValueError("query count/cost outside domain")
+        if query.get("reachable") != str(visited > 0).lower():
+            raise ValueError("query reachability mismatch")
+        if query.get("start") != "0" or query.get("start_kind") != ("arc" if kind == "arcs" else "node"):
+            raise ValueError("query start mismatch")
+        if kind == "path":
+            if not 0 <= int(query["goal_node"]) < nodes or not 0 <= hops < nodes or cost != hops or visited != (hops + 1 if visited else 0) or (visited == 0 and hops != 0):
+                raise ValueError("unit path cost/hop mismatch")
+        elif visited == 0 or hops != 0 or cost != 0 or query.get("goal_node") != "none":
+            raise ValueError("invalid reachable-set evidence")
+
+    @staticmethod
+    def verify_shape(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        shapes = records.get("SHAPE", [])
+        keys = {f"{kind}_{q}" for kind in ("arity", "degree") for q in ("min", "q1", "median", "q3", "max")}
+        if len(shapes) != 1 or not keys.union({"isolated_nodes", "degree_sum"}) <= shapes[0].keys():
+            raise ValueError("missing native shape statistics")
+        shape = shapes[0]
+        nodes, arcs, incidences = (int(cell[k]) for k in ("nodes", "arcs", "incidences"))
+        for kind, limit in (("arity", nodes), ("degree", arcs)):
+            values = [float(shape[f"{kind}_{q}"]) for q in ("min", "q1", "median", "q3", "max")]
+            if not all(math.isfinite(v) and v.is_integer() and 0 <= v <= limit for v in values) or values != sorted(values):
+                raise ValueError("invalid native shape distribution")
+        isolated = int(shape["isolated_nodes"])
+        if int(shape["degree_sum"]) != incidences or not 0 <= isolated <= nodes:
+            raise ValueError("native shape cardinality mismatch")
+        if nodes and ((isolated > 0) != (float(shape["degree_min"]) == 0)):
+            raise ValueError("native isolated-node statistics mismatch")
+
+    @staticmethod
+    def verify_native(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        source = Evidence.one(records, "INPUT")
+        result = Evidence.one(records, "NATIVE")
+        if source.get("construction_timed") != "false" or not source.get("metric_scope"):
+            raise ValueError("missing native measurement boundary")
+        if records.get("SHAPE") or source.get("shape_reported") == "true":
+            Evidence.verify_shape(records, cell)
+        if result.get("parity") != "true" or result.get("checksum") != cell["checksum"]:
+            raise ValueError("native result/cell mismatch")
+        if result["operation"] == "rank":
+            for key, limit in (("vector_l1", 2e-10), ("hymeko_bound", 1.01e-10), ("hypergraphz_bound", 1.01e-10)):
+                value = float(result[key])
+                if not math.isfinite(value) or not 0 <= value <= limit:
+                    raise ValueError("native PageRank parity/residual violation")
+            if result.get("personalization") != "uniform" or result.get("tolerance") != "1e-10":
+                raise ValueError("native PageRank semantic drift")
+            if cell["subject"] in {"rank_auto", "rank_auto_quotient"}:
+                Evidence.verify_auto(records, result)
+
+    @staticmethod
+    def verify_auto(records, result, *, selection_timed=True):
+        auto = Evidence.one(records, "AUTO")
+        if (auto.get("policy") != "periodic_power_probe" or auto.get("selection_timed") != str(selection_timed).lower()
+                or (auto.get("probe_interval"), auto.get("restart_limit"), auto.get("max_basis_bytes"),
+                    auto.get("iteration_limit")) != ("4", "20", "67108864", "200")):
+            raise ValueError("automatic PageRank policy/boundary drift")
+        probe, power, gmres, restart = (int(auto[k]) for k in
+                                       ("probe_updates", "power_updates", "gmres_updates", "restart"))
+        checks = int(auto['selection_checks'])
+        if (not 0 <= probe <= power or not 0 <= gmres <= restart + 1
+                or not 0 <= restart <= 20 or power + gmres != int(result["hymeko_iterations"])
+                or not 0 <= power + gmres <= 200 or checks != (probe + 3) // 4):
+            raise ValueError("automatic PageRank iteration accounting mismatch")
+        reason = auto.get("reason")
+        if reason not in {"Trivial", "ParallelPower", "PowerConverged", "IterationBudget",
+                          "BasisBudget", "PowerEstimate", "KrylovEstimate"}:
+            raise ValueError("unknown automatic PageRank decision")
+        if ((reason == "KrylovEstimate") != (gmres > 0)
+                or (restart > 0) != (gmres > 0)):
+            raise ValueError("automatic PageRank decision/execution mismatch")
+        cell = Evidence.one(records, "CELL")
+        nodes = int(cell["nodes"])
+        reduction = records.get("QUOTIENT", [])
+        reduced_subject = cell["subject"] == "rank_auto_quotient" or cell["subject"].startswith("hymeko-auto-quotient-")
+        if reduced_subject and len(reduction) != 1:
+            raise ValueError("missing quotient policy evidence")
+        if reduction:
+            if len(reduction) != 1:
+                raise ValueError("duplicate quotient evidence")
+            q = reduction[0]
+            if (q.get("policy") != ("Pendant" if reduced_subject else "Disabled")
+                    or q.get("canonical_validation") != "true" or q.get("pairwise_matrix") != "false"
+                    or q.get("iteration", "none") != auto.get("iteration", "none")):
+                raise ValueError("quotient semantics mismatch")
+            if q.get("selected_nodes") != "none":
+                reduced_nodes = int(q["selected_nodes"])
+                if not reduced_subject or not gmres or not 0 < reduced_nodes < nodes:
+                    raise ValueError("invalid quotient dimension")
+                nodes = reduced_nodes
+        if gmres and (auto.get("basis_bytes") == "none"
+                      or not 0 < int(auto["basis_bytes"]) <= int(auto["max_basis_bytes"])
+                      or int(auto["basis_bytes"]) != nodes * restart * 8):
+            raise ValueError("automatic PageRank basis admission mismatch")
+        if any(int(auto[k]) < 0 for k in ("predicted_power_updates", "power_work", "gmres_work")):
+            raise ValueError("negative automatic work estimate")
+
+    @staticmethod
+    def verify_algebra(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        source = Evidence.one(records, "INPUT")
+        if not source.get("metric_scope"):
+            raise ValueError("missing algorithm provenance")
+        subject = cell["subject"]
+        construction = subject in {"generate_ir", "incidence_index"}
+        proof = Evidence.one(records, "CONSTRUCTION" if construction else "ALGEBRA")
+        if proof.get("verified") != "true" or proof.get("checksum") != cell["checksum"]:
+            raise ValueError("missing verified algorithm result")
+        if source.get("construction_timed") != str(subject == "generate_ir").lower() or source.get("index_timed") != str(subject == "incidence_index").lower():
+            raise ValueError("algorithm measurement boundary mismatch")
+        if construction:
+            if cell["section"] != "construction" or proof.get("destruction_timed") != "false" or proof.get("full_validation") != "retained_result" or cell["checksum"] != source.get("fingerprint"):
+                raise ValueError("construction verification/boundary mismatch")
+        else:
+            if cell["section"] != "algebra" or subject not in {"levi", "s_components2"}:
+                raise ValueError("unknown algebra operation")
+            limit = int(cell["arcs"]) + (int(cell["nodes"]) if subject == "levi" else 0)
+            if not 0 <= int(proof["value"]) <= limit or not 0 <= int(proof["pair_work"]) <= 5_000_000 or proof.get("max_pair_work") != "5000000":
+                raise ValueError("algebra result/work exceeds its domain")
+
+    @staticmethod
+    def verify_external(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        source = Evidence.one(records, "INPUT")
+        external = Evidence.one(records, "EXTERNAL")
+        backend, operation, mode = cell["subject"].split("-")
+        if backend not in EXTERNAL_FRAMEWORKS or operation not in EXTERNAL_OPERATIONS or mode not in {"prepared", "cold", "first", "profile"}:
+            raise ValueError("unknown external query")
+        if mode == "profile" and operation != "pagerank":
+            raise ValueError("phase observations require the PageRank contract")
+        if external.get("backend") != backend or external.get("operation") != operation or external.get("mode") != mode:
+            raise ValueError("external query identity mismatch")
+        if external.get("full_result") != "true" or external.get("checksum") != cell["checksum"]:
+            raise ValueError("external result was not fully verified")
+        if source.get("construction_timed") != "false" or source.get("cache_policy") != mode or not source.get("metric_scope"):
+            raise ValueError("external measurement boundary drift")
+        if len(source.get("fixture_sha256", "")) != 64 or len(external.get("implementation_sha256", "")) != 64:
+            raise ValueError("missing external input/implementation hash")
+        if not external.get("version") or not external.get("python") or external.get("interface") != "python_api":
+            raise ValueError("missing external runtime identity")
+        if int(cell["threads"]) != 1 or int(cell["warmups"]) != 2 or (mode == "cold" and int(cell["repetitions"]) != 1):
+            raise ValueError("external sampling contract drift")
+        nodes = int(cell["nodes"])
+        completed = int(external["completed_isolates"])
+        if not 0 <= completed <= int(external["declared_isolates"]) <= nodes or int(external["native_nodes"]) + completed != nodes:
+            raise ValueError("external isolate/domain mismatch")
+        if operation == "pagerank":
+            rank = Evidence.one(records, "EXTERNAL_RANK")
+            if (mode not in {"first", "profile"} or rank.get("solver") != "scipy_gmres" or not rank.get("solver_version")
+                    or rank.get("flow") != "undirected" or rank.get("weights") != "unit"
+                    or rank.get("self_return") != "true" or rank.get("personalization") != "uniform"
+                    or rank.get("converged") != "true" or rank.get("score_hash") != cell["checksum"]
+                    or external.get("native_pagerank") != "composed_scipy_gmres"
+                    or rank.get("composition") != external.get("query_strategy")):
+                raise ValueError("external ranking attribution/semantics mismatch")
+            numbers = [float(rank[k]) for k in ("damping","tolerance","residual_bound","reference_l1","mass")]
+            if (not all(math.isfinite(v) for v in numbers) or numbers[0] != .85 or numbers[1] != 1e-10
+                    or not 0 <= numbers[2] <= 1.01e-10 or not 0 <= numbers[3] <= 2.01e-10
+                    or abs(numbers[4] - (1 if nodes else 0)) > 1e-10
+                    or int(rank["max_iterations"]) != 200 or not 0 <= int(rank["iterations"]) <= 200
+                    or int(rank["matvecs"]) < 0):
+                raise ValueError("external ranking error/convergence contract drift")
+
+    @staticmethod
+    def verify_stages(records: dict[str, list[dict[str, str]]], cell: dict[str, str]) -> None:
+        profiled = cell.get("subject") == "rank_phases" or cell.get("subject", "").endswith("-profile")
+        stages = records.get("STAGE_SAMPLE", [])
+        if not profiled:
+            if stages:
+                raise ValueError("phase observations attached to an uninstrumented control")
+            return
+        if len(stages) != 9 or {int(s["ordinal"]) for s in stages} != set(range(9)):
+            raise ValueError("missing or duplicate stage samples")
+        totals = {int(s["ordinal"]):s for s in records["SAMPLE"]}
+        for stage in stages:
+            total = totals[int(stage["ordinal"])]
+            values = [float(stage[name+"_us"]) for name in ("incidence", "preparation", "solve", "cleanup")]
+            inner = float(stage["inner_total_us"])
+            if (stage.get("boundary") != "same_call_partition"
+                    or int(stage["repetitions"]) <= 0
+                    or int(stage["repetitions"]) != int(cell["repetitions"])
+                    or int(stage["repetitions"]) != int(total["repetitions"])
+                    or not all(math.isfinite(v) and v >= 0 for v in [*values,inner])
+                    or abs(sum(values)-inner) > .00001
+                    or inner > float(total["wall_us"]) + .002):
+                raise ValueError("stage partition exceeds or differs from its same-call total")
+
+    @staticmethod
     def parse(output: str) -> dict[str, list[dict[str, str]]]:
         records: dict[str, list[dict[str, str]]] = {}
         for line in output.splitlines():
@@ -186,6 +630,10 @@ class Evidence:
         if len(cells) != 1:
             raise ValueError(f"expected one CELL, got {len(cells)}")
         cell = cells[0]
+        if cell.get("section") == "memory":
+            from memory import MemoryEvidence
+            MemoryEvidence.verify(records)
+            return records
         samples = records.get("SAMPLE", [])
         if cell["status"] == "NA":
             if samples or not cell.get("reason"):
@@ -214,6 +662,7 @@ class Evidence:
                 "berge_shortest",
                 "berge_enumeration",
                 "heuristic_preparation",
+                "informed_query_batch",
             }
             and len(results) != 1
         ):
@@ -222,6 +671,10 @@ class Evidence:
             len(results) != 1 or results[0]["path_hash"] != cell["checksum"]
         ):
             raise ValueError("result/cell mismatch")
+        if cell.get("section") in {"informed_search","heuristic_preparation"} and cell.get("subject") in ASSISTED_SUBJECTS:
+            Evidence.verify_assisted(records,cell)
+        if cell.get("section") == "informed_query_batch":
+            Evidence.verify_search_batch(records,cell)
         if cell.get("section") == "parsing":
             sources = records.get("SOURCE", [])
             if len(sources) != 1 or int(sources[0]["bytes"]) <= 0:
@@ -236,63 +689,189 @@ class Evidence:
                 or sources[0].get("file_cache") != "warm"
             ):
                 raise ValueError("missing file I/O measurement boundary")
+        if cell.get("section") == "pagerank":
+            inputs = records.get("INPUT", [])
+            if len(inputs) != 1 or inputs[0].get("construction_timed") != "false":
+                raise ValueError("missing ranking fixture/boundary provenance")
+            if cell["subject"] in {"prepare", "solve"}:
+                ranks = records.get("RANK", [])
+                if len(ranks) != 1:
+                    raise ValueError("missing PageRank convergence evidence")
+                rank = ranks[0]
+                if (
+                    rank["converged"] != "true"
+                    or not math.isfinite(float(rank["error_bound_l1"]))
+                    or not 0 <= float(rank["error_bound_l1"]) <= float(rank["tolerance"])
+                    or abs(float(rank["mass"]) - 1.0) > 1e-9
+                    or not math.isfinite(float(rank["mass"]))
+                ):
+                    raise ValueError("invalid PageRank convergence/mass")
+                expected = rank["score_hash"] if cell["subject"] == "solve" else inputs[0]["fingerprint"]
+                if expected != cell["checksum"]:
+                    raise ValueError("ranking result/cell identity mismatch")
+        Evidence.verify_stages(records, cell)
+        if cell.get("section") == "native":
+            Evidence.verify_native(records, cell)
+        if cell.get("section") == "traversal":
+            Evidence.verify_query(records, cell)
+        if cell.get("section") in {"construction", "algebra"}:
+            Evidence.verify_algebra(records, cell)
+        if cell.get("section") == "external_graph":
+            Evidence.verify_external(records, cell)
         return records
+
+
+class ApplicationCatalog:
+    """Immutable source inputs for the existing compiler-backed evidence clients."""
+    def __init__(self, path):
+        self.path = Path(path).resolve()
+        self.digest = hashlib.sha256(self.path.read_bytes()).hexdigest()
+        data = json.loads(self.path.read_text(encoding="utf-8"))
+        self.root = (self.path.parent / data["root"]).resolve()
+        self.cases, self.files = data["cases"], data["files"]
+        if (not self.cases or not self.files
+                or any(not re.fullmatch(r"app_[a-z0-9_]+", name) for name in self.cases)
+                or not set(self.cases.values()) <= set(self.files)):
+            raise ValueError("invalid application source catalog")
+        self.identity()
+
+    def source(self, workload):
+        return self.root / self.cases[workload]
+
+    def identity(self):
+        if hashlib.sha256(self.path.read_bytes()).hexdigest() != self.digest:
+            raise ValueError("application catalog changed")
+        for name, digest in self.files.items():
+            path = (self.root / name).resolve()
+            if not path.is_relative_to(self.root) or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                raise ValueError("application source changed or escapes its root: " + name)
+        return self.digest
 
 
 class ProcessRunner:
     def __init__(self, args: argparse.Namespace):
         self.args = args
-        self.binaries = {
-            "informed": Path(args.informed).resolve(),
-        }
-        if args.suite == "graph":
+        application = getattr(args, "application_input", None)
+        self.application = ApplicationCatalog(application) if application else None
+        self.binaries = {}
+        if args.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing_unit"}:
+            self.binaries["informed"] = Path(args.informed).resolve()
+        if args.suite in {"graph", "ranking", "comparison", "traversal"}:
             self.binaries["algorithm"] = Path(args.algorithm).resolve()
+        if args.suite in {"external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing", "routing_unit", "routing_scale"}:
+            # Preserve the venv symlink: resolving it selects system Python and
+            # silently discards the pinned framework environment on Linux.
+            self.binaries["external"] = Path(args.external_python).absolute()
+            if getattr(args, "algorithm", None):
+                self.binaries["algorithm"] = Path(args.algorithm).resolve()
+        self.external_files = {}
+        if args.suite in {"external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing", "routing_unit", "routing_scale"}:
+            self.external_files = {"external_input": Path(args.external_input).resolve(),
+                                   "external_client": Path(__file__).with_name("external.py"),
+                                   "external_tests": Path(__file__).with_name("test_external.py"),
+                                   "external_lock": Path(__file__).with_name("external-requirements.txt")}
+            self.external_files["routing_client"] = Path(__file__).with_name("routing.py")
+            self.external_files["ranking_client"] = Path(__file__).with_name("ranking.py")
+            self.external_files["ranking_tests"] = Path(__file__).with_name("test_ranking.py")
+        if args.suite == "memory":
+            self.external_files["memory_client"] = Path(__file__).with_name("memory.py")
+            self.external_files["memory_tests"] = Path(__file__).with_name("test_memory.py")
+            directory = Path(args.external_input).resolve().parent
+            for path in sorted(directory.glob("*")):
+                if path.is_file():
+                    self.external_files["memory_input_" + path.name] = path
+        self.external_hashes = {key: hashlib.sha256(path.read_bytes()).hexdigest() for key,path in self.external_files.items()}
+        self.native_library = Path(args.native_library).resolve() if getattr(args, "native_library", None) else None
+        self.native_sha = hashlib.sha256(self.native_library.read_bytes()).hexdigest() if self.native_library else None
+
+    def dependency_identity(self) -> dict[str, str | None]:
+        if self.native_library and hashlib.sha256(self.native_library.read_bytes()).hexdigest() != self.native_sha:
+            raise ValueError("native library changed during campaign")
+        if {key: hashlib.sha256(path.read_bytes()).hexdigest() for key,path in self.external_files.items()} != self.external_hashes:
+            raise ValueError("external input, client or dependency lock changed")
+        application = {"application_catalog_sha256": self.application.identity()} if self.application else {}
+        return {"path": str(self.native_library) if self.native_library else None, "sha256": self.native_sha, **self.external_hashes, **application}
+
+    def cpu_set(self) -> list[int] | None:
+        """Validate explicit processor sets while preserving the single-CPU CLI."""
+        values = getattr(self.args, "cpus", None)
+        if values is None:
+            cpu = getattr(self.args, "cpu", None)
+            values = None if cpu is None else [cpu]
+        if values is None:
+            return None
+        if (not isinstance(values, list) or not values
+                or any(type(cpu) is not int or cpu < 0 for cpu in values)
+                or len(set(values)) != len(values)):
+            raise ValueError("CPU set must contain unique nonnegative integer IDs")
+        if self.args.platform == "arm64":
+            raise ValueError("host CPU pinning is not an ARM64-emulation option")
+        if self.args.platform == "windows" and max(values) >= 8 * ctypes.sizeof(ctypes.c_void_p):
+            raise ValueError("CPU ID is outside the supported Windows processor-group mask")
+        return sorted(values)
 
     @staticmethod
-    def memory(pid: int, process: subprocess.Popen) -> int:
-        if os.name == "nt":
-
-            class Counters(ctypes.Structure):
-                _fields_ = [("cb", ctypes.c_ulong), ("faults", ctypes.c_ulong)] + [
-                    (name, ctypes.c_size_t)
-                    for name in (
-                        "peak",
-                        "working",
-                        "paged_peak",
-                        "paged",
-                        "nonpaged_peak",
-                        "nonpaged",
-                        "page",
-                        "page_peak",
-                    )
-                ]
-
-            counters = Counters()
-            counters.cb = ctypes.sizeof(counters)
-            ok = ctypes.windll.psapi.GetProcessMemoryInfo(
-                ctypes.c_void_p(int(process._handle)),
-                ctypes.byref(counters),
-                counters.cb,
-            )
-            return int(counters.peak) if ok else 0
+    def verify_thread_affinity(pid: int, cpus: list[int], previous_peak: int) -> int:
+        """Check every observed Linux thread whenever its population grows."""
         try:
-            fields = Path(f"/proc/{pid}/status").read_text().splitlines()
-            return max(
-                (
-                    int(x.split()[1]) * 1024
-                    for x in fields
-                    if x.startswith(("VmHWM:", "VmRSS:"))
-                ),
-                default=0,
-            )
-        except (FileNotFoundError, ProcessLookupError):
-            return 0
+            tasks = list(Path(f"/proc/{pid}/task").iterdir())
+        except FileNotFoundError:
+            return previous_peak
+        if len(tasks) <= previous_peak:
+            return previous_peak
+        getter = getattr(os, "sched_getaffinity", None)
+        if getter is None:
+            raise OSError("native thread affinity cannot be verified")
+        checked = 0
+        for task in tasks:
+            try:
+                actual = getter(int(task.name))
+            except ProcessLookupError:
+                continue
+            if actual != set(cpus):
+                raise RuntimeError(f"worker affinity escaped configured CPUs: {actual}")
+            checked += 1
+        return max(previous_peak, checked)
+
+    @staticmethod
+    def windows_handle(process: subprocess.Popen[bytes]) -> ctypes.c_void_p:
+        """Access the Windows-only Popen handle after checking its availability."""
+        handle = getattr(process, "_handle", None)
+        if handle is None:
+            raise OSError("Windows process handle is unavailable")
+        return ctypes.c_void_p(int(handle))
+
+    @staticmethod
+    def memory(pid: int, process: subprocess.Popen[bytes]) -> int:
+        snapshot=ProcessMemory.snapshot(pid,ProcessRunner.windows_handle(process) if os.name=='nt' else None)
+        return snapshot['self_peak_b'] if snapshot else 0
 
     def invoke(
         self, suite: str, arguments: list[str], environment: dict[str, str], log: Path
-    ) -> dict:
+    ) -> dict[str, Any]:
         binary = self.binaries[suite]
+        self.dependency_identity()
+        workload = environment.get("EVIDENCE_WORKLOAD")
+        if self.application and workload:
+            if suite != "algorithm":
+                raise ValueError("application source inputs require the canonical Rust client")
+            environment = environment | {"HYMEKO_APPLICATION_SOURCE": str(self.application.source(workload))}
+        if self.native_library:
+            environment = environment | {"HYMEKO_NATIVE_LIBRARY": str(self.native_library)}
         command = [str(binary), *arguments]
+        if suite == "external":
+            command = [str(binary), str(self.external_files["memory_client" if self.args.suite == "memory" else "external_client"]), *arguments]
+            environment = environment | {"HYMEKO_EXTERNAL_INPUT": str(self.external_files["external_input"]),
+                "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"}
+        if self.args.suite == "memory":
+            environment = environment | {
+                "HYMEKO_MEMORY_INPUT": str(Path(self.args.external_input).resolve().parent),
+                "HYMEKO_MEMORY_SCORES": str(log.with_suffix(".scores"))}
+        cpus = self.cpu_set()
+        if cpus is not None and self.args.platform == "native":
+            # Apply affinity before the Rust test harness or worker pool creates
+            # threads. The post-spawn set below also pins the short-lived wrapper.
+            command = ["taskset", "--cpu-list", ",".join(map(str, cpus)), *command]
         container = None
         if self.args.platform == "arm64":
             container = f"hymeko-graph-cell-{os.getpid()}"
@@ -316,19 +895,56 @@ class ProcessRunner:
                 command += ["-e", f"{key}={value}"]
             command += ["--entrypoint", "/qemu", self.args.image, "/bench", *arguments]
         env = os.environ | environment
+        windows_memory=(os.name=='nt' and self.args.suite=='memory' and environment.get('HYMEKO_MEMORY_BENCH')=='1')
+        if windows_memory:env['HYMEKO_MEMORY_HANDSHAKE']='1'
         start = time.monotonic()
         peak = 0
+        peak_threads = 0
+        verified_affinity = False
         next_update = 10
         with log.open("w", encoding="utf8") as stream:
             process = subprocess.Popen(
                 command,
-                stdout=stream,
+                stdout=subprocess.PIPE if windows_memory else stream,
+                stdin=subprocess.PIPE if windows_memory else None,
                 stderr=subprocess.STDOUT,
                 env=env,
                 creationflags=0x08000000 if os.name == "nt" else 0,
             )
             pid = process.pid
+            capture=None
+            measured_pid=pid
+            measured_handle=self.windows_handle(process) if windows_memory else None
+            owned_handle=False
+            finished_clean=False
+            def resolve_memory_pid(actual):
+                nonlocal measured_pid,measured_handle,owned_handle
+                if actual==measured_pid:return False
+                if owned_handle or suite!='external' or not ProcessMemory.is_descendant(actual,pid):
+                    raise ValueError('memory checkpoint did not come from our Python child')
+                measured_handle=ProcessMemory.open_windows_process(actual)
+                owned_handle=True;measured_pid=actual
+                if cpus is not None and not ctypes.windll.kernel32.SetProcessAffinityMask(
+                        measured_handle,ctypes.c_size_t(sum(1<<cpu for cpu in cpus))):
+                    raise OSError('cannot pin actual Python child')
+                return True
+            if windows_memory:
+                from memory import WindowsMemoryCapture
+                capture=WindowsMemoryCapture(process,stream,resolve_memory_pid)
             try:
+                if cpus is not None:
+                    if self.args.platform == "windows":
+                        if not ctypes.windll.kernel32.SetProcessAffinityMask(
+                            self.windows_handle(process), ctypes.c_size_t(sum(1 << cpu for cpu in cpus))
+                        ):
+                            raise OSError(f"could not pin child to CPUs {cpus}")
+                    elif self.args.platform == "native":
+                        affinity = getattr(os, "sched_setaffinity", None)
+                        if affinity is None:
+                            raise OSError("native CPU affinity is unavailable")
+                        affinity(pid, set(cpus))
+                    else:
+                        raise ValueError("host CPU pinning is not an ARM64-emulation option")
                 if container:
                     for _ in range(40):
                         probe = subprocess.run(
@@ -348,7 +964,15 @@ class ProcessRunner:
                             break
                         time.sleep(0.1)
                 while process.poll() is None:
-                    peak = max(peak, self.memory(pid, process))
+                    if capture:
+                        snapshot=ProcessMemory.snapshot(measured_pid,measured_handle)
+                        if snapshot:
+                            peak=max(peak,snapshot['self_peak_b']);capture.sample(snapshot)
+                        capture.drain()
+                    else:peak = max(peak, self.memory(pid, process))
+                    if cpus is not None and self.args.platform == "native":
+                        peak_threads = self.verify_thread_affinity(pid, cpus, peak_threads)
+                        verified_affinity |= peak_threads > 0
                     elapsed = time.monotonic() - start
                     if peak > 16 * 1024**3 or elapsed > self.args.timeout:
                         raise RuntimeError(
@@ -360,14 +984,23 @@ class ProcessRunner:
                             flush=True,
                         )
                         next_update += 10
-                    time.sleep(0.05)
+                    time.sleep(0.002 if capture else 0.05)
                 peak = max(peak, self.memory(pid, process))
                 if process.returncode:
                     raise RuntimeError(f"child exit {process.returncode}; see {log}")
+                finished_clean=True
             finally:
+                if owned_handle and not finished_clean:
+                    ctypes.windll.kernel32.TerminateProcess(measured_handle,1)
                 if process.poll() is None:
                     process.kill()
                     process.wait()
+                if capture:
+                    process.stdin.close()
+                    try:capture.close(process.returncode==0)
+                    finally:
+                        process.stdout.close()
+                        if owned_handle:ctypes.windll.kernel32.CloseHandle(measured_handle)
                 if container:
                     subprocess.run(
                         ["docker", "rm", "-f", container],
@@ -377,9 +1010,15 @@ class ProcessRunner:
         return {
             "wall_seconds": time.monotonic() - start,
             "peak_rss_bytes": peak,
-            "memory_scope": "whole process, sampled 50ms VmHWM/PeakWorkingSet",
+            "memory_scope": ("measured process OS lifetime HWM; phase working set sampled at 2ms with checkpoints"
+                             if windows_memory else "whole process, sampled 50ms VmHWM/PeakWorkingSet"),
             "command": command,
+            "requested_cpus": cpus,
+            "peak_thread_count": peak_threads,
+            "thread_affinity_verified": verified_affinity,
             "exit_code": process.returncode,
+            "launcher_pid": pid,
+            "measured_pid": measured_pid,
         }
 
 
@@ -389,9 +1028,65 @@ class Campaign:
         self.runner = ProcessRunner(args)
         self.output = Path(args.output).resolve()
         self.output.mkdir(parents=True, exist_ok=True)
+        quiet = getattr(args, "quiet_config", None)
+        self.guard_config = json.loads(Path(quiet).read_text(encoding="utf-8")) if quiet else None
+        self.guard = QuietHostGuard(self.guard_config) if self.guard_config else None
+
+    def admit(self, result: dict[str, Any]) -> dict[str, Any] | None:
+        if self.guard is None:
+            return None
+        try:
+            observation = self.guard.check()
+        except HostBusy as error:
+            result["blocked"] = {"time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                                 "reasons": error.reasons, "observation": error.observation}
+            self.save_checkpoint(result)
+            print("HOST_BUSY: no new workload started", error, flush=True)
+            raise SystemExit(75) from error
+        result.pop("blocked", None)
+        return observation
 
     @staticmethod
-    def resume_checkpoint(current: dict, saved: dict) -> dict:
+    def capture_sources(roots: dict[str, Path], *, inventory: str = "git") -> dict[str, Any]:
+        """Record source bytes for an explicitly unpublished local revision set.
+
+        Git supplies the inventory, including untracked sources but excluding
+        ignored build/report outputs. This records files, not a fabricated commit.
+        """
+        if inventory not in {"git", "snapshot"}:
+            raise ValueError("source inventory must be git or snapshot")
+        files = {}
+        for label, root in roots.items():
+            if inventory == "git":
+                paths = subprocess.check_output(
+                    ["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard", "-z"]
+                ).decode().split("\0")
+            else:
+                # Explicit unpacked source bundle: build/dependency/output directories
+                # live outside these roots. Added source files must fail verification.
+                paths = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
+            for relative in sorted(set(paths)):
+                path = root / relative
+                if path.is_file() and (path.suffix in {".rs", ".py", ".toml", ".zig"} or path.name == "Cargo.lock"):
+                    files[f"{label}/{relative}"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        result: dict[str, Any] = {"roots": {label: str(root.resolve()) for label, root in roots.items()}, "files": files}
+        if inventory != "git":
+            result["inventory"] = inventory
+        return result
+
+    @staticmethod
+    def verify_sources(repo: Path, manifest: Path) -> dict[str, Any]:
+        raw = manifest.read_bytes()
+        saved = json.loads(raw)
+        roots = {label: Path(path) for label, path in saved["roots"].items()}
+        if repo.resolve() not in {root.resolve() for root in roots.values()}:
+            raise ValueError("source manifest omits the measured repository")
+        if not saved["files"] or Campaign.capture_sources(roots, inventory=saved.get("inventory", "git")) != saved:
+            raise ValueError("source manifest is stale or incomplete")
+        return {"path": str(manifest.resolve()), "sha256": hashlib.sha256(raw).hexdigest(), "files": len(saved["files"]), "content_sha256": hashlib.sha256(json.dumps(saved["files"], sort_keys=True).encode()).hexdigest()}
+
+    @staticmethod
+    def resume_checkpoint(current: dict[str, Any], saved: dict[str, Any]) -> dict[str, Any]:
         for key in (
             "source_commit",
             "binaries",
@@ -401,6 +1096,12 @@ class Campaign:
             "runs",
             "smoke",
             "phases",
+            "subjects",
+            "workloads",
+            "source_manifest",
+            "cpu_affinity",
+            "native_dependency",
+            "quiet_guard",
         ):
             if current.get(key) != saved.get(key):
                 raise ValueError(f"checkpoint identity changed: {key}")
@@ -409,7 +1110,7 @@ class Campaign:
             raise ValueError("duplicate checkpoint cell")
         return saved
 
-    def save_checkpoint(self, result: dict) -> None:
+    def save_checkpoint(self, result: dict[str, Any]) -> None:
         temporary = self.output / "checkpoint.pending.json"
         temporary.write_text(json.dumps(result, indent=2) + "\n", encoding="utf8")
         temporary.replace(self.output / "checkpoint.json")
@@ -425,41 +1126,40 @@ class Campaign:
                 ["git", "-C", str(repo), *arguments], text=True
             ).strip()
 
-        source_ref = self.args.source_ref or git("rev-parse", "HEAD")
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(repo),
-                "diff",
-                "--exit-code",
-                source_ref,
-                "--",
-                "Cargo.toml",
-                "Cargo.lock",
-                "hymeko_graph/src",
-                "hymeko_graph/tests",
-            ],
-            check=True,
-            capture_output=True,
-        )
+        manifest = getattr(self.args, "source_manifest", None)
+        source_ref = self.args.source_ref or ("" if manifest else git("rev-parse", "HEAD"))
+        source_identity = self.verify_sources(repo, Path(manifest)) if manifest else None
+        if not manifest:
+            subprocess.run(
+                ["git", "-C", str(repo), "diff", "--exit-code", source_ref, "--",
+                 "Cargo.toml", "Cargo.lock", "hymeko_graph/src", "hymeko_graph/tests"],
+                check=True, capture_output=True,
+            )
         result = {
             "schema_version": 1,
             "suite": self.args.suite,
             "runs": self.args.runs,
             "smoke": self.args.smoke,
             "phases": self.args.phases,
+            "subjects": getattr(self.args, "subjects", None),
+            "workloads": getattr(self.args, "workloads", None),
             "platform": self.args.platform,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "source_commit": git("rev-parse", source_ref),
-            "driver_commit": git("rev-parse", "HEAD"),
+            "source_commit": None if manifest else git("rev-parse", source_ref),
+            "source_manifest": source_identity,
+            "cpu_affinity": getattr(self.args, "cpu", None),
+            "driver_commit": None if manifest else git("rev-parse", "HEAD"),
             "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-            "dirty_paths": git("status", "--porcelain"),
+            "dirty_paths": None if manifest else git("status", "--porcelain"),
+            "quiet_guard": self.guard_config,
             "host": platform.node(),
             "os": platform.platform(),
             "cpu_count": os.cpu_count(),
             "python": platform.python_version(),
-            "metric_scope": "iteration batch means, not request tails",
+            "metric_scope": (("phase working set sampled at 2ms; OS lifetime HWM; single framework; controller verification"
+                              if self.args.platform == "windows" else
+                              "phase resident RSS and reset VmHWM; single framework; controller verification")
+                             if self.args.suite == "memory" else "iteration batch means, not request tails"),
             "runtime": {
                 "image": self.args.image if self.args.platform == "arm64" else None,
                 "emulated": self.args.platform == "arm64",
@@ -471,6 +1171,8 @@ class Campaign:
                 }
                 for k, v in self.runner.binaries.items()
             },
+            "native_dependency": self.runner.dependency_identity(),
+            "application_inputs": self.runner.application.cases if self.runner.application else {},
             "cells": [],
             "correctness": [],
         }
@@ -495,30 +1197,23 @@ class Campaign:
         for suite in self.runner.binaries:
             if any(c["suite"] == suite for c in result["correctness"]):
                 continue
+            self.admit(result)
             print(f"correctness {suite}", flush=True)
             log = self.output / f"correctness-{suite}.log"
             observation = self.runner.invoke(
-                suite, ["--test-threads=1"], {"RAYON_NUM_THREADS": "4"}, log
+                suite, (["native::memory::single_input_roundtrip_rejects_corruption_and_uses_canonical_builder", "--exact", "--test-threads=1"]
+                        if self.args.suite == "memory" and suite == "algorithm" else ["--test-threads=1"]),
+                {"RAYON_NUM_THREADS": "4"}, log
             )
             result["correctness"].append(
                 {"suite": suite, "log": log.name, **observation}
             )
             self.save_checkpoint(result)
-        cells = Cell.matrix(self.args.suite, self.args.phases)
-        if self.args.smoke:
-            cells = (
-                [
-                    c
-                    for c in cells
-                    if (
-                        c.workload in {"map512", "random1e6"}
-                        and c.subject in (self.args.phases or ["compile"])
-                    )
-                    or (c.workload, c.subject) == ("grid5", "parse_ast")
-                ]
-                if self.args.suite == "parsing"
-                else [cells[0], cells[-1]]
-            )
+        cells = Cell.select(
+            self.args.suite, self.args.phases, getattr(self.args, "subjects", None), self.args.smoke,
+            getattr(self.args, "workloads", None),
+            tuple(self.runner.application.cases) if self.runner.application else (),
+        )
         previous = {
             c["id"]: c["records"]["CELL"][0]["checksum"] for c in result["cells"]
         }
@@ -528,10 +1223,13 @@ class Campaign:
             for ordinal, cell in enumerate(order, 1):
                 if (run, cell.key) in completed:
                     continue
+                if manifest and self.verify_sources(repo, Path(manifest)) != source_identity:
+                    raise ValueError("source identity changed during campaign")
                 print(
                     f"{self.args.platform} run {run}/{self.args.runs} {ordinal}/{len(cells)} {cell.key}",
                     flush=True,
                 )
+                quiet = self.admit(result)
                 log = self.output / f"run{run}-{cell.key}.log"
                 observation = self.runner.invoke(
                     cell.suite,
@@ -548,6 +1246,11 @@ class Campaign:
                 observation["peak_rss_bytes"] = max(
                     [observation["peak_rss_bytes"], *observed_peaks]
                 )
+                if self.args.suite == "memory":
+                    from memory import MemoryEvidence
+                    observation["memory_verification"] = MemoryEvidence.verify_scores(
+                        Path(self.args.external_input).resolve().parent, cell.workload,
+                        log.with_suffix(".scores"), records["MEMORY"][0]["fingerprint"])
                 checksum = records["CELL"][0]["checksum"]
                 if cell.key in previous and previous[cell.key] != checksum:
                     raise ValueError(f"cross-run checksum drift: {cell.key}")
@@ -559,6 +1262,7 @@ class Campaign:
                         "log": log.name,
                         "records": records,
                         "resources": observation,
+                        "quiet_preflight": quiet,
                     }
                 )
                 self.save_checkpoint(result)
@@ -572,6 +1276,8 @@ class Campaign:
                     ),
                     encoding="utf8",
                 )
+        if manifest:
+            self.verify_sources(repo, Path(manifest))
         result["complete"] = True
         result["smoke"] = self.args.smoke
         target.write_text(json.dumps(result, indent=2) + "\n", encoding="utf8")
@@ -583,40 +1289,80 @@ class CampaignSummary:
 
     def __init__(self, root: Path):
         self.root = root
-        self.rows = []
-        self.reference = {}
-        self.resources = []
-        self.source_commits = set()
+        self.rows: list[dict[str, Any]] = []
+        self.reference: dict[str, dict[str, Any]] = {}
+        self.resources: list[dict[str, Any]] = []
+        self.source_commits: set[str] = set()
+        self.source_manifests: set[str | None] = set()
+        self.selected_cells: set[str] | None = None
+        self.stage_rows: list[dict[str, Any]] = []
 
-    def accept(self, campaign: dict) -> None:
+    @staticmethod
+    def phase_rows(platform_name: str, observation: dict[str, Any]) -> list[dict[str, Any]]:
+        records = observation["records"]
+        cell = records["CELL"][0]
+        Evidence.verify_stages(records, cell)
+        samples = {int(row["ordinal"]):row for row in records.get("SAMPLE", [])}
+        return [dict(platform=platform_name, benchmark=observation["id"],
+                     workload=cell["workload"], algorithm=cell["subject"], run=observation["run"],
+                     ordinal=int(stage["ordinal"]), repetitions=int(stage["repetitions"]),
+                     total_us=float(samples[int(stage["ordinal"])]["wall_us"]),
+                     **{key:float(stage[key]) for key in ("incidence_us", "preparation_us", "solve_us", "cleanup_us", "inner_total_us")})
+                for stage in records.get("STAGE_SAMPLE", [])]
+
+    def accept(self, campaign: dict[str, Any]) -> None:
         if not campaign.get("complete") or campaign.get("smoke"):
             raise ValueError("only complete full campaigns may be summarized")
         self.source_commits.add(campaign["source_commit"])
-        if len(self.source_commits) != 1:
+        source_manifest = campaign.get("source_manifest")
+        self.source_manifests.add(source_manifest.get("content_sha256", source_manifest["sha256"]) if source_manifest else None)
+        if len(self.source_commits) != 1 or len(self.source_manifests) != 1:
             raise ValueError("platforms measured different source revisions")
         expected = {
             cell.key
-            for cell in Cell.matrix(
-                campaign.get("suite", "graph"), campaign.get("phases")
+            for cell in Cell.select(
+                campaign.get("suite", "graph"), campaign.get("phases"), campaign.get("subjects"),
+                workloads=campaign.get("workloads"),
+                application_workloads=tuple(campaign.get("application_inputs", {})),
             )
         }
-        if len(campaign["cells"]) != 3 * len(expected):
+        if self.selected_cells is not None and self.selected_cells != expected:
+            raise ValueError("platforms measured different selected matrices")
+        self.selected_cells = expected
+        runs = int(campaign.get("runs", 3))
+        if runs < 1 or len(campaign["cells"]) != runs * len(expected):
             raise ValueError("campaign process count does not match declared matrix")
-        groups = {}
-        results = {}
+        groups: dict[str, list[dict[str, Any]]] = {}
+        results: dict[tuple[int, str, str], list[dict[str, str]]] = {}
+        batch_queries = {}
         for observation in campaign["cells"]:
             key = observation["id"]
             records = observation["records"]
             cell = records["CELL"][0]
+            if cell.get("section")=="informed_query_batch":
+                batch=Evidence.one(records,"BATCH")
+                Evidence.verify_search_batch(records,cell)
+                batch_key=(observation["run"],cell["workload"],batch["queries"])
+                query_contract=(batch["query_hash"],tuple(
+                    (q["start"],q["goal"],q["reachable"],q["expected_cost_micros"])
+                    for q in records["BATCH_QUERY"]))
+                if batch_queries.setdefault(batch_key,query_contract)!=query_contract:
+                    raise ValueError(f"different query batch or optimum across search methods: {batch_key}")
+            if cell["status"] == "OK":
+                self.stage_rows.extend(self.phase_rows(campaign["platform"], observation))
             identity = {
                 k: cell[k]
                 for k in ("status", "nodes", "arcs", "incidences", "checksum")
             }
-            for kind in ("RESULT", "WORK", "SOURCE"):
+            for kind in ("RESULT", "WORK", "SOURCE", "INPUT", "SHAPE", "RANK", "REACHABLE", "NATIVE", "QUERY", "LAYOUT", "CONSTRUCTION", "ALGEBRA"):
                 identity[kind] = [
                     {k: v for k, v in r.items() if k != "run"}
                     for r in records.get(kind, [])
                 ]
+            identity["EXTERNAL"] = [
+                {k: v for k, v in r.items() if k not in {"construction_us", "first_query_us"}}
+                for r in records.get("EXTERNAL", [])
+            ]
             if key in self.reference and identity != self.reference[key]:
                 raise ValueError(
                     f"semantic/work-counter drift: {campaign['platform']} {key}"
@@ -647,9 +1393,20 @@ class CampaignSummary:
                 if int(weighted["cost_micros"]) != int(weighted["hops"]) * 1_000_000:
                     raise ValueError(f"unit-cost/hop mismatch: {workload}")
         for key, observations in groups.items():
-            if sorted(o["run"] for o in observations) != [1, 2, 3]:
+            if sorted(o["run"] for o in observations) != list(range(1, runs + 1)):
                 raise ValueError(f"missing/duplicate independent process run: {key}")
             cell = observations[0]["records"]["CELL"][0]
+            if cell.get("section") == "informed_query_batch" and any(
+                o["records"].get("BATCH") != observations[0]["records"].get("BATCH")
+                or o["records"].get("BATCH_QUERY") != observations[0]["records"].get("BATCH_QUERY")
+                for o in observations[1:]):
+                raise ValueError(f"batch inputs or witnesses changed across identical-input processes: {key}")
+            if cell.get("subject") in {"rank_auto", "rank_auto_quotient"} and any(
+                observation["records"].get("AUTO") != observations[0]["records"].get("AUTO")
+                or observation["records"].get("QUOTIENT") != observations[0]["records"].get("QUOTIENT")
+                for observation in observations[1:]
+            ):
+                raise ValueError(f"automatic decision changed across identical-input processes: {key}")
             if cell["status"] != "OK":
                 continue
             samples = sorted(
@@ -657,7 +1414,7 @@ class CampaignSummary:
                 for o in observations
                 for s in o["records"]["SAMPLE"]
             )
-            if len(samples) != 27 or not all(
+            if len(samples) != 9 * runs or not all(
                 math.isfinite(s) and s > 0 for s in samples
             ):
                 raise ValueError(f"invalid pooled samples: {key}")
@@ -668,27 +1425,66 @@ class CampaignSummary:
                 raise ValueError(
                     f"missing process memory or unsuccessful process: {key}"
                 )
+            process_medians = sorted(float(o["records"]["CELL"][0]["wall_median_us"]) for o in observations)
+            rank = observations[0]["records"].get("RANK", [{}])[0]
+            native = observations[0]["records"].get("NATIVE", [{}])[0]
+            if native.get("operation") == "rank":
+                backend = "hypergraphz" if cell["subject"].endswith("_hypergraphz") else "hymeko"
+                rank = {"iterations": native[f"{backend}_iterations"],
+                        "error_bound_l1": native[f"{backend}_bound"]}
+            ranking = cell.get("section") == "pagerank"
+            shape = observations[0]["records"].get("SHAPE", [{}])[0]
+            query = observations[0]["records"].get("QUERY", [{}])[0]
             self.rows.append(
                 {
                     "platform": campaign["platform"],
                     "benchmark": key,
                     "workload": cell["workload"],
                     "algorithm": cell["subject"],
+                    **{key: observations[0]["records"].get("EXTERNAL", [{}])[0].get(key, "")
+                       for key in ("backend", "version", "mode", "operation", "query_strategy", "interface", "completed_isolates")},
                     "phase": next(
                         (p[1] for p in PHASES if p[0] == cell["subject"]),
                         "preparation"
-                        if cell.get("section") == "heuristic_preparation"
+                        if cell.get("section") == "heuristic_preparation" or (ranking and cell["subject"] == "prepare")
                         else "execution",
                     ),
-                    "measurement_scope": next(
+                    "measurement_scope": observations[0]["records"].get("INPUT", [{}])[0].get("metric_scope") or next(
                         (p[2] for p in PHASES if p[0] == cell["subject"]),
-                        "See original graph benchmark contract",
+                        ("Prepared incidence walk; IR construction excluded" if cell["subject"] == "prepare"
+                         else "Warm operation including output/workspace reset; graph construction and preparation excluded")
+                        if ranking else observations[0]["records"].get("INPUT", [{}])[0].get("metric_scope", "See original graph benchmark contract"),
                     ),
                     "threads": cell.get("threads", "1"),
-                    "samples": 27,
-                    "median_ns": samples[13] * 1000,
-                    "q1_ns": samples[6] * 1000,
-                    "q3_ns": samples[20] * 1000,
+                    "samples": len(samples),
+                    "processes": runs,
+                    "process_median_ns": process_medians[runs // 2] * 1000,
+                    "process_q1_ns": process_medians[runs // 4] * 1000,
+                    "process_q3_ns": process_medians[3 * runs // 4] * 1000,
+                    "median_ns": samples[len(samples) // 2] * 1000,
+                    "q1_ns": samples[len(samples) // 4] * 1000,
+                    "q3_ns": samples[3 * len(samples) // 4] * 1000,
+                    "nodes": cell["nodes"], "arcs": cell["arcs"], "incidences": cell["incidences"],
+                    **{"batch_"+field: observations[0]["records"].get("BATCH",[{}])[0].get(field, "")
+                       for field in ("queries", "goal", "seed", "query_hash", "unit", "metric_scope")},
+                    **{key: shape.get(key, "") for key in ("arity_min", "arity_median", "arity_max", "degree_min", "degree_median", "degree_max", "isolated_nodes")},
+                    "components": native.get("components", ""),
+                    **{"auto_" + field: observations[0]["records"].get("AUTO", [{}])[0].get(field, "")
+                       for field in ("reason", "probe_updates", "selection_checks", "power_updates", "gmres_updates",
+                                     "restart", "basis_bytes", "predicted_power_updates", "power_work", "gmres_work")},
+                    **{"quotient_" + field: observations[0]["records"].get("QUOTIENT", [{}])[0].get(field, "")
+                       for field in ("policy", "selected_nodes")},
+                    **{column: observations[0]["records"].get(record, [{}])[0].get(field, "")
+                       for column, record, field in (
+                           ("algebra_value", "ALGEBRA", "value"),
+                           ("overlap_pair_work", "ALGEBRA", "pair_work"),
+                           ("hymeko_prepared_bytes", "LAYOUT", "hymeko_prepared_bytes"),
+                           ("visited_nodes", "REACHABLE", "visited_nodes"))},
+                    **{"query_"+field: query.get(field, "")
+                       for field in ("kind", "visited", "hops", "cost", "reachable")},
+                    **{column: rank.get(field, "") for column, field in (
+                        ("iterations", "iterations"), ("error_bound_l1", "error_bound_l1"),
+                        ("rank_mass", "mass"))},
                     "worst_batch_mean_ns": samples[-1] * 1000,
                     "checksum": cell["checksum"],
                     "peak_rss_bytes": max(peaks),
@@ -726,10 +1522,13 @@ class CampaignSummary:
                 raise ValueError("campaign platform/path mismatch")
             campaigns.append(campaign)
             self.accept(campaign)
-        for filename, rows in (
+        tables = [
             ("platform-summary.csv", self.rows),
             ("process-resources.csv", self.resources),
-        ):
+        ]
+        if self.stage_rows:
+            tables.append(("phase-samples.csv", self.stage_rows))
+        for filename, rows in tables:
             with (self.root / filename).open(
                 "w", encoding="utf8", newline=""
             ) as stream:
@@ -762,7 +1561,14 @@ class CampaignSummary:
             ("map128", "search_cell-map128-astar_combined-t1"),
             ("transport", "search_cell-transport128-astar_discrete-t1"),
         ]
-        if self.rows[0]["source_bytes"]:
+        if all(c.get("suite") == "ranking" for c in campaigns):
+            selections = [(w, f"ranking_ranking_cell-{w}-solve-t1")
+                          for w in ("rank2_1m", "rank32_1m", "rank1000_1m", "disjoint_1m")]
+        elif all(c.get("suite") == "comparison" for c in campaigns):
+            selections = [(f"{w} {s}", f"native_native_cell-{w}-{s}-t1")
+                          for w in (campaigns[0].get("workloads") or COMPARISON_WORKLOADS[:3])
+                          for s in ("rank_hymeko", "rank_hypergraphz")]
+        elif self.rows[0]["source_bytes"]:
             common = set.intersection(
                 *(
                     {r["algorithm"] for r in self.rows if r["platform"] == p}
@@ -778,14 +1584,25 @@ class CampaignSummary:
                 for w in ("map32", "map128", "map512")
             ]
         indexed = {(row["platform"], row["benchmark"]): row for row in self.rows}
+        selections = [(label, key) for label, key in selections
+                      if all((platform_name, key) in indexed for platform_name in platforms)]
+        if not selections:
+            selections = [(row["benchmark"], row["benchmark"]) for row in self.rows
+                          if row["platform"] == platforms[0]
+                          and all((p, row["benchmark"]) in indexed for p in platforms)]
         plotted = [
             (label, [indexed[p, key]["median_ns"] / 1000 for p in platforms])
             for label, key in selections
         ]
         bar_svg(
-            "Selected pipeline medians (ARM64, where present, is QEMU)"
-            if self.rows[0]["source_bytes"]
-            else "Selected graph search medians (ARM64 is QEMU)",
+            "PageRank solver strategies on the same canonical incidence walk"
+            if campaigns[0].get("suite") == "ranking_solvers" else
+            "PageRank observed and unobserved whole-call controls"
+            if campaigns[0].get("suite") == "ranking_phases" else "PageRank to convergence: one million incidences"
+            if campaigns[0].get("suite") == "ranking" else (
+                "Selected pipeline medians (ARM64, where present, is QEMU)"
+                if self.rows[0]["source_bytes"] else "Matched native PageRank API medians"
+                if campaigns[0].get("suite") == "comparison" else "Selected graph search medians (ARM64 is QEMU)"),
             plotted,
             [],
             platforms,
@@ -795,7 +1612,16 @@ class CampaignSummary:
         )
         provenance = {
             "source_commit": next(iter(self.source_commits)),
-            "measurement_contract": "Separate measured phases; totals measured directly, never summed. Generation constructs fixture IR. File phases use warm OS cache. Final returned-object destruction excluded. RSS includes fixture construction and validation.",
+            "measurement_contract": (
+                "Complete fixed-goal batch: one index and caller setup, fresh workspace reused within the batch, every complete path and disposal. Reported time is per batch, not per query; IR construction and query-list generation excluded."
+                if campaigns[0].get("suite") == "search_reuse" else
+                "Resident graph to prepared operator, fresh solve workspace and complete rank result. HyMeKo compares structural power, ordered power, matrix-free GMRES and bounded Auto selection; Auto includes its probe and decision in the timed call. HyperNetX uses SciPy. Graph construction is excluded. Native process RSS includes both parity graphs; this is not isolated solver memory."
+                if campaigns[0].get("suite") == "ranking_solvers" else
+                "Same-call phase attribution with separate uninstrumented whole-call controls. Phase sums are checked per sample, never reconstructed by summing independent medians. Solve includes workspace, convergence and output handling; source loading and graph construction excluded."
+                if campaigns[0].get("suite") == "ranking_phases" else "Matched native API calls include normalized output copying and temporary-result destruction. Rank preparation/workspace allocation is included except in the separately labeled rank_prepared cell. Component reverse indexes and graph construction are excluded. Whole-process RSS includes both resident graphs and parity verification."
+                if campaigns[0].get("suite") == "comparison" else
+                "Separate measured phases; totals measured directly, never summed. Generation constructs fixture IR. File phases use warm OS cache. Final returned-object destruction excluded. RSS includes fixture construction and validation."
+            ),
             "external_map_import": "not measured; current inputs are deterministic graph fixtures",
             "phases": [{"algorithm": a, "phase": p, "scope": s} for a, p, s in PHASES],
             "platforms": [
@@ -844,9 +1670,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--platform", choices=("windows", "native", "arm64"), required=True
     )
-    parser.add_argument("--informed", required=True)
+    parser.add_argument("--informed")
     parser.add_argument("--algorithm")
-    parser.add_argument("--suite", choices=("graph", "parsing"), default="graph")
+    parser.add_argument("--suite", choices=("graph", "parsing", "ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "assisted", "search_reuse", "routing", "routing_unit", "routing_scale"), default="graph")
+    parser.add_argument("--external-python", help="isolated Python interpreter for external framework cells")
+    parser.add_argument("--external-input", help="immutable canonical-IR fixture export")
+    parser.add_argument("--subjects", nargs="+", help="explicit operations from the selected suite's existing matrix")
+    parser.add_argument("--application-input", help="explicit immutable source catalog for application-derived inputs")
+    parser.add_argument("--workloads", nargs="+",
+                        help="explicit comparison/traversal fixtures; omitted keeps each suite's default matrix")
+    parser.add_argument("--native-library", help="explicit pinned Windows native comparison adapter")
+    parser.add_argument("--source-manifest", help="explicit source-byte snapshot for unpublished local source and dependency roots")
     parser.add_argument(
         "--phases",
         nargs="+",
@@ -864,6 +1698,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=180)
+    parser.add_argument("--cpu", type=int, help="pin each measurement process to this logical CPU")
+    parser.add_argument("--quiet-config", help="explicit Windows/Linux quiet-host thresholds; blocks before each workload")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--resume", action="store_true")
     arguments = parser.parse_args()
@@ -872,8 +1708,35 @@ if __name__ == "__main__":
         or len(set(arguments.phases)) != len(arguments.phases)
     ):
         parser.error("unique --phases are supported only for the parsing suite")
-    if arguments.suite == "graph" and not arguments.algorithm:
-        parser.error("--algorithm is required for the graph suite")
+    if arguments.suite in {"graph", "ranking", "comparison", "traversal"} and not arguments.algorithm:
+        parser.error("--algorithm is required for graph/ranking/comparison/traversal suites")
+    if arguments.suite == "comparison" and (arguments.platform not in {"windows", "native"} or not arguments.native_library):
+        parser.error("comparison requires native Windows/Linux and an explicit --native-library")
+    if arguments.suite in {"external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing", "routing_unit", "routing_scale"} and (arguments.platform not in {"windows", "native"} or not arguments.external_python or not arguments.external_input):
+        parser.error("external requires Windows/Linux, --external-python and --external-input")
+    if arguments.suite not in {"ranking", "comparison", "traversal", "external", "external_ranking", "ranking_phases", "ranking_solvers", "memory", "routing_unit"} and not arguments.informed:
+        parser.error("--informed is required for graph/parsing suites")
+    if arguments.suite == "memory" and arguments.platform not in {"native", "windows"}:
+        parser.error("isolated phase memory requires native Linux or Windows")
+    if arguments.source_manifest and arguments.source_ref:
+        parser.error("choose an exact source ref or an unpublished source manifest")
+    if arguments.cpu is not None and not 0 <= arguments.cpu < (os.cpu_count() or 1):
+        parser.error("--cpu is outside this host's logical CPU range")
     if arguments.runs < 1 or (arguments.platform == "arm64" and not arguments.qemu):
         parser.error("positive --runs and an ARM64 --qemu path are required")
+    try:
+        application = ApplicationCatalog(arguments.application_input) if arguments.application_input else None
+        if application and (not arguments.workloads or not set(arguments.workloads) <= set(application.cases)):
+            raise ValueError("select explicit workloads from the application catalog")
+        selected = Cell.select(arguments.suite, arguments.phases, arguments.subjects, arguments.smoke, arguments.workloads,
+                               tuple(application.cases) if application else ())
+        if application and any(cell.suite != "algorithm" for cell in selected):
+            raise ValueError("select canonical Rust strategies for application source inputs")
+        if arguments.suite in {"external", "external_ranking", "ranking_phases", "ranking_solvers", "memory"}:
+            if any(c.suite == "algorithm" for c in selected) and not arguments.algorithm:
+                parser.error("selected native baselines require --algorithm")
+            if any(c.test in {"native::native_cell", "native::memory::memory_cell"} for c in selected) and not arguments.native_library:
+                parser.error("selected Hypergraphz/native parity cells require --native-library")
+    except ValueError as error:
+        parser.error(str(error))
     Campaign(arguments).run()

@@ -351,15 +351,10 @@ pub(crate) fn reaches_any(schema: &PGraphSchema, from: DeclId, targets: &BTreeSe
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{PGraphSchema, PNodeKind};
-    use hymeko::common::ids::EdgeId;
-    use std::collections::BTreeMap;
+    use crate::schema::SchemaCase;
 
     fn d(i: usize) -> DeclId {
         DeclId::new(i)
-    }
-    fn e(i: usize) -> EdgeId {
-        EdgeId::new(i)
     }
 
     // ─── A1 ─────────────────────────────────────────────────────
@@ -367,13 +362,9 @@ mod tests {
     /// A1 caught: a required product is not in the schema.
     #[test]
     fn a1_catches_missing_product() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material),
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1))), (e(1), (d(1), d(2)))]);
-        let schema = PGraphSchema::try_new(kinds, edges).expect("bipartite OK");
+        let schema = SchemaCase::new(&[0, 2], &[1], &[(0, 0, 1), (1, 1, 2)])
+            .build()
+            .expect("bipartite OK");
         let bundle = AxiomBundle::new([d(0)], []);
         let products = BTreeSet::from([d(99)]); // not in the schema
         let v = bundle.validate(&schema, &products).expect_err("must err");
@@ -391,20 +382,16 @@ mod tests {
     fn a2_forward_catches_non_raw_with_no_producer() {
         // d(0) is raw, d(1) is U, d(2) is product, d(3) is a non-raw
         // material with no producer at all.
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material),
-            (d(3), PNodeKind::Material),      // dangling, non-raw
-            (d(4), PNodeKind::OperatingUnit), // touches d(3) so A5 is silent
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(1))),
-            (e(1), (d(1), d(2))),
-            (e(2), (d(3), d(4))), // d(3) is consumed by U2 but never produced
-            (e(3), (d(4), d(2))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).expect("bipartite OK");
+        // dangling, non-raw
+        // touches d(3) so A5 is silent
+        // d(3) is consumed by U2 but never produced
+        let schema = SchemaCase::new(
+            &[0, 2, 3],
+            &[1, 4],
+            &[(0, 0, 1), (1, 1, 2), (2, 3, 4), (3, 4, 2)],
+        )
+        .build()
+        .expect("bipartite OK");
         let bundle = AxiomBundle::new([d(0)], []); // only d(0) is raw
         let products = BTreeSet::from([d(2)]);
         let v = bundle.validate(&schema, &products).expect_err("must err");
@@ -424,20 +411,19 @@ mod tests {
         // d(0) is declared raw BUT a unit produces it inside the
         // schema — Friedler's S2 says that's a violation: raws must
         // be an interface to the outside.
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),      // declared raw
-            (d(1), PNodeKind::OperatingUnit), // U1 produces d(0)
-            (d(2), PNodeKind::Material),      // some intermediate
-            (d(3), PNodeKind::OperatingUnit), // U2 consumes d(0), produces product
-            (d(4), PNodeKind::Material),      // product
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(2), d(1))),
-            (e(1), (d(1), d(0))), // U1 → d(0): d(0) has an ancestor!
-            (e(2), (d(0), d(3))),
-            (e(3), (d(3), d(4))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).expect("bipartite OK");
+        // declared raw
+        // U1 produces d(0)
+        // some intermediate
+        // U2 consumes d(0), produces product
+        // product
+        // U1 → d(0): d(0) has an ancestor!
+        let schema = SchemaCase::new(
+            &[0, 2, 4],
+            &[1, 3],
+            &[(0, 2, 1), (1, 1, 0), (2, 0, 3), (3, 3, 4)],
+        )
+        .build()
+        .expect("bipartite OK");
         let bundle = AxiomBundle::new([d(0), d(2)], []); // d(0) AND d(2) raw
         let products = BTreeSet::from([d(4)]);
         let v = bundle.validate(&schema, &products).expect_err("must err");
@@ -453,18 +439,12 @@ mod tests {
     /// have producers AND all raws have no producer.
     #[test]
     fn a2_passes_on_well_formed_pgraph() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material), // raw
-            (d(1), PNodeKind::Material), // raw
-            (d(2), PNodeKind::OperatingUnit),
-            (d(3), PNodeKind::Material), // product (produced)
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(2))),
-            (e(1), (d(1), d(2))),
-            (e(2), (d(2), d(3))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // raw
+        // raw
+        // product (produced)
+        let schema = SchemaCase::new(&[0, 1, 3], &[2], &[(0, 0, 2), (1, 1, 2), (2, 2, 3)])
+            .build()
+            .unwrap();
         let bundle = AxiomBundle::new([d(0), d(1)], []);
         let products = BTreeSet::from([d(3)]);
         bundle.validate(&schema, &products).unwrap();
@@ -475,19 +455,15 @@ mod tests {
     /// A3 caught: an O-node not in the master catalogue.
     #[test]
     fn a3_catches_unwhitelisted_unit() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit), // in catalogue
-            (d(2), PNodeKind::Material),
-            (d(3), PNodeKind::OperatingUnit), // NOT in catalogue
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(1))),
-            (e(1), (d(1), d(2))),
-            (e(2), (d(0), d(3))),
-            (e(3), (d(3), d(2))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // in catalogue
+        // NOT in catalogue
+        let schema = SchemaCase::new(
+            &[0, 2],
+            &[1, 3],
+            &[(0, 0, 1), (1, 1, 2), (2, 0, 3), (3, 3, 2)],
+        )
+        .build()
+        .unwrap();
         let bundle = AxiomBundle::new([d(0)], [d(1)]);
         let products = BTreeSet::from([d(2)]);
         let v = bundle.validate(&schema, &products).expect_err("must err");
@@ -508,21 +484,20 @@ mod tests {
         // product and NOT consumed downstream). U2 has ≥ 1 input
         // (d(3)) and ≥ 1 output (d(4)) — the OLD A4 passes; canonical
         // S4 fails.
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),      // raw
-            (d(1), PNodeKind::OperatingUnit), // U1, live
-            (d(2), PNodeKind::Material),      // product
-            (d(3), PNodeKind::Material),      // raw of dead branch
-            (d(4), PNodeKind::Material),      // dead intermediate
-            (d(5), PNodeKind::OperatingUnit), // U2, dead
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(1))),
-            (e(1), (d(1), d(2))),
-            (e(2), (d(3), d(5))),
-            (e(3), (d(5), d(4))), // U2 outputs to d(4), which never reaches d(2)
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // raw
+        // U1, live
+        // product
+        // raw of dead branch
+        // dead intermediate
+        // U2, dead
+        // U2 outputs to d(4), which never reaches d(2)
+        let schema = SchemaCase::new(
+            &[0, 2, 3, 4],
+            &[1, 5],
+            &[(0, 0, 1), (1, 1, 2), (2, 3, 5), (3, 5, 4)],
+        )
+        .build()
+        .unwrap();
         let bundle = AxiomBundle::new([d(0), d(3)], []);
         let products = BTreeSet::from([d(2)]);
         let v = bundle.validate(&schema, &products).expect_err("must err");
@@ -536,13 +511,9 @@ mod tests {
     /// A4 silent when every O-node reaches a product.
     #[test]
     fn a4_passes_when_every_o_reaches_product() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material),
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1))), (e(1), (d(1), d(2)))]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        let schema = SchemaCase::new(&[0, 2], &[1], &[(0, 0, 1), (1, 1, 2)])
+            .build()
+            .unwrap();
         let bundle = AxiomBundle::new([d(0)], []);
         let products = BTreeSet::from([d(2)]);
         bundle.validate(&schema, &products).unwrap();
@@ -555,14 +526,12 @@ mod tests {
     /// *consumed* and not produced.
     #[test]
     fn a5_catches_isolated_material() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material), // raw
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material), // product
-            (d(3), PNodeKind::Material), // ISOLATED — no edges at all
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1))), (e(1), (d(1), d(2)))]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // raw
+        // product
+        // ISOLATED — no edges at all
+        let schema = SchemaCase::new(&[0, 2, 3], &[1], &[(0, 0, 1), (1, 1, 2)])
+            .build()
+            .unwrap();
         let bundle = AxiomBundle::new([d(0), d(3)], []); // d(3) declared raw
         let products = BTreeSet::from([d(2)]);
         let v = bundle.validate(&schema, &products).expect_err("must err");
@@ -575,13 +544,11 @@ mod tests {
     /// ≥ 1 incident edge).
     #[test]
     fn a5_silent_on_unit_output_only_material() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material), // raw, consumed
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material), // produced only
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1))), (e(1), (d(1), d(2)))]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // raw, consumed
+        // produced only
+        let schema = SchemaCase::new(&[0, 2], &[1], &[(0, 0, 1), (1, 1, 2)])
+            .build()
+            .unwrap();
         let bundle = AxiomBundle::new([d(0)], []);
         let products = BTreeSet::from([d(2)]);
         bundle.validate(&schema, &products).unwrap();
@@ -592,18 +559,9 @@ mod tests {
     /// Two raws → one unit → one product. Should satisfy A1..A5.
     #[test]
     fn worked_example_passes_all_axioms() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::Material),
-            (d(2), PNodeKind::OperatingUnit),
-            (d(3), PNodeKind::Material),
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(2))),
-            (e(1), (d(1), d(2))),
-            (e(2), (d(2), d(3))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).expect("bipartite OK");
+        let schema = SchemaCase::new(&[0, 1, 3], &[2], &[(0, 0, 2), (1, 1, 2), (2, 2, 3)])
+            .build()
+            .expect("bipartite OK");
         let bundle = AxiomBundle::new([d(0), d(1)], []);
         let products = BTreeSet::from([d(3)]);
         bundle
@@ -618,22 +576,20 @@ mod tests {
     /// finding.
     #[test]
     fn multi_axiom_failure_surfaces_each_violation() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),      // raw
-            (d(1), PNodeKind::OperatingUnit), // live U1
-            (d(2), PNodeKind::Material),      // product
-            (d(3), PNodeKind::Material),      // ISOLATED, not raw → A5 + A2 forward
-            (d(4), PNodeKind::OperatingUnit), // dead U2 → A4
-            (d(5), PNodeKind::Material),      // dead branch output
-            (d(6), PNodeKind::Material),      // raw of dead branch
-        ]);
-        let edges = BTreeMap::from([
-            (e(0), (d(0), d(1))),
-            (e(1), (d(1), d(2))),
-            (e(2), (d(6), d(4))),
-            (e(3), (d(4), d(5))),
-        ]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        // raw
+        // live U1
+        // product
+        // ISOLATED, not raw → A5 + A2 forward
+        // dead U2 → A4
+        // dead branch output
+        // raw of dead branch
+        let schema = SchemaCase::new(
+            &[0, 2, 3, 5, 6],
+            &[1, 4],
+            &[(0, 0, 1), (1, 1, 2), (2, 6, 4), (3, 4, 5)],
+        )
+        .build()
+        .unwrap();
         let bundle = AxiomBundle::new([d(0), d(6)], []); // d(3) NOT raw
         let products = BTreeSet::from([d(2)]);
         let v = bundle.validate(&schema, &products).expect_err("must err");
@@ -663,13 +619,9 @@ mod tests {
 
     #[test]
     fn validate_timed_returns_five_traces_in_order() {
-        let kinds = BTreeMap::from([
-            (d(0), PNodeKind::Material),
-            (d(1), PNodeKind::OperatingUnit),
-            (d(2), PNodeKind::Material),
-        ]);
-        let edges = BTreeMap::from([(e(0), (d(0), d(1))), (e(1), (d(1), d(2)))]);
-        let schema = PGraphSchema::try_new(kinds, edges).unwrap();
+        let schema = SchemaCase::new(&[0, 2], &[1], &[(0, 0, 1), (1, 1, 2)])
+            .build()
+            .unwrap();
         let bundle = AxiomBundle::new([d(0)], []);
         let products = BTreeSet::from([d(2)]);
         let traces = bundle.validate_timed(&schema, &products);

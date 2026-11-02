@@ -26,11 +26,15 @@
 //!
 //! Several pre-built scorers live in [`scorers`]; pass any
 //! `Fn(&[u32], &[i8]) -> f64` to [`enumerate_top_k_cycles`].
+//!
+//! The public variants share one private execution engine. Scoring, threshold
+//! selection and stateful admission are typed policies; output formatting does
+//! not duplicate the walk, scratch allocation or parallel heap reduction.
 
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
 
-use rayon::prelude::*;
+mod execution;
+use execution::{Bounded, CycleSearch, Heuristic, Plain, RootBound, SharedBound};
 
 use crate::pruner::{CyclePruner, NoOpPruner, PrunerDecision};
 use crate::signed_graph::SignedGraph;
@@ -109,7 +113,7 @@ fn bfs_distances_capped(
 /// `k_len <= MAX_INLINE_K`.
 const MAX_INLINE_K: usize = 8;
 
-/// Safe [`BinaryHeap::with_capacity`] hint for top-$K$ cycle storage.
+/// Safe [`std::collections::BinaryHeap::with_capacity`] hint for top-$K$ cycle storage.
 ///
 /// Tests pass [`usize::MAX`] to mean "unbounded" enumeration; `k_keep + 1`
 /// overflows in debug builds. The heap may grow beyond this hint when
@@ -131,110 +135,7 @@ fn heap_capacity_hint(k_keep: usize) -> usize {
 ///
 /// We use the `Reverse`-of-score trick to turn `BinaryHeap`
 /// (a max-heap) into a min-heap on score.
-#[derive(Clone, Debug)]
-struct HeapEntry {
-    score: f64,
-    /// Length of valid prefix in `cycle` / `signs`.  Always
-    /// $\le$ `MAX_INLINE_K`.
-    len: u8,
-    cycle: [u32; MAX_INLINE_K],
-    signs: [i8; MAX_INLINE_K],
-}
-
-impl HeapEntry {
-    /// Build a `HeapEntry` from slices.  Caller guarantees
-    /// `cycle.len() == signs.len() <= MAX_INLINE_K`.
-    #[inline]
-    fn from_slices(score: f64, cycle: &[u32], signs: &[i8]) -> HeapEntry {
-        debug_assert_eq!(cycle.len(), signs.len());
-        debug_assert!(cycle.len() <= MAX_INLINE_K);
-        let mut c = [0u32; MAX_INLINE_K];
-        let mut s = [0i8; MAX_INLINE_K];
-        c[..cycle.len()].copy_from_slice(cycle);
-        s[..signs.len()].copy_from_slice(signs);
-        HeapEntry {
-            score,
-            len: cycle.len() as u8,
-            cycle: c,
-            signs: s,
-        }
-    }
-
-    #[inline]
-    fn cycle_slice(&self) -> &[u32] {
-        &self.cycle[..self.len as usize]
-    }
-
-    #[inline]
-    fn signs_slice(&self) -> &[i8] {
-        &self.signs[..self.len as usize]
-    }
-
-    /// Total preference order: higher score is more preferred; on
-    /// score ties, lex-larger cycle slice is more preferred.  Used
-    /// at heap-boundary "should this displace the min?" checks and
-    /// as the basis of [`Ord`] (reversed) so the heap top is the
-    /// least-preferred entry / next eviction candidate.
-    ///
-    /// The tiebreaker is what makes parallel reduce deterministic:
-    /// without it, equal-score cycles never displace each other and
-    /// "which one survives" depends on rayon's non-deterministic
-    /// merge order.
-    fn cmp_preference(&self, other: &Self) -> Ordering {
-        let a = if self.score.is_nan() {
-            f64::NEG_INFINITY
-        } else {
-            self.score
-        };
-        let b = if other.score.is_nan() {
-            f64::NEG_INFINITY
-        } else {
-            other.score
-        };
-        a.partial_cmp(&b)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| self.cycle_slice().cmp(other.cycle_slice()))
-    }
-
-    /// Same total order as [`cmp_preference`] but the right-hand side
-    /// is a raw `(score, cycle_slice)` pair, avoiding a `HeapEntry`
-    /// construction in the dfs boundary-check hot loop.
-    fn cmp_preference_vs_slice(&self, other_score: f64, other_slice: &[u32]) -> Ordering {
-        let a = if self.score.is_nan() {
-            f64::NEG_INFINITY
-        } else {
-            self.score
-        };
-        let b = if other_score.is_nan() {
-            f64::NEG_INFINITY
-        } else {
-            other_score
-        };
-        a.partial_cmp(&b)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| self.cycle_slice().cmp(other_slice))
-    }
-}
-
-impl Eq for HeapEntry {}
-impl PartialEq for HeapEntry {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp_preference(other) == Ordering::Equal
-    }
-}
-impl PartialOrd for HeapEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for HeapEntry {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // BinaryHeap pops the *largest by Ord*, so reverse the
-        // preference order: least-preferred sits at top and is the
-        // next eviction candidate.
-        other.cmp_preference(self)
-    }
-}
+type HeapEntry = crate::ranked_path::RankedPath<MAX_INLINE_K, MAX_INLINE_K>;
 
 /// Output of [`enumerate_top_k_cycles`]: the $k$ best cycles in
 /// descending score order, each as `(score, vertices, edge-signs)`.
@@ -384,151 +285,7 @@ where
     if k_len < 3 || k_keep == 0 {
         return Vec::new();
     }
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-    let mut visited = vec![false; n];
-    let mut path: Vec<u32> = Vec::with_capacity(k_len);
-    let mut heap: BinaryHeap<HeapEntry> = BinaryHeap::with_capacity(heap_capacity_hint(k_keep));
-    let mut dist: Vec<u8> = vec![DIST_INF; n];
-    let mut bfs_a: Vec<u32> = Vec::new();
-    let mut bfs_b: Vec<u32> = Vec::new();
-
-    for start in 0..(n as u32) {
-        bfs_distances_capped(
-            &row_ptr, &col_idx, start, k_len, &mut dist, &mut bfs_a, &mut bfs_b,
-        );
-        path.clear();
-        path.push(start);
-        visited[start as usize] = true;
-        dfs(
-            start,
-            &row_ptr,
-            &col_idx,
-            &signs_csr,
-            k_len,
-            pruner,
-            k_keep,
-            &score,
-            &mut path,
-            &mut visited,
-            &mut heap,
-            &dist,
-        );
-        visited[start as usize] = false;
-    }
-
-    let mut out: Vec<TopKCycle> = heap
-        .into_iter()
-        .map(|e| (e.score, e.cycle_slice().to_vec(), e.signs_slice().to_vec()))
-        .collect();
-    // Heap iteration order isn't sorted; sort descending by score.
-    out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-    out
-}
-
-#[allow(clippy::too_many_arguments)]
-fn dfs<P, S>(
-    start: u32,
-    row_ptr: &[u32],
-    col_idx: &[u32],
-    signs_csr: &[i8],
-    k_len: usize,
-    pruner: &P,
-    k_keep: usize,
-    score: &S,
-    path: &mut Vec<u32>,
-    visited: &mut [bool],
-    heap: &mut BinaryHeap<HeapEntry>,
-    dist: &[u8],
-) where
-    P: CyclePruner,
-    S: Fn(&[u32], &[i8]) -> f64,
-{
-    if path.len() == k_len {
-        // Closing-edge check via CSR scan; bail if (last, start) isn't
-        // an edge.  Materialises the closing edge's sign in the same
-        // pass — reused below to fill `signs[k_len - 1]`.
-        let last = *path.last().unwrap();
-        let closing_sign = match csr_sign_of(row_ptr, col_idx, signs_csr, last, start) {
-            Some(s) => s,
-            None => return,
-        };
-        // Same canonicalisation rule as the full enumerator.
-        if path.len() >= 3 && path[1] >= path[k_len - 1] {
-            return;
-        }
-        // Materialise the edge-sign sequence via CSR scans into a
-        // stack-allocated buffer — `Vec::with_capacity(k_len)` here
-        // was 3.7M small allocations on Epinions k=4.
-        debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-        let mut signs_buf = [0i8; MAX_INLINE_K];
-        for j in 0..(k_len - 1) {
-            let u = path[j];
-            let v = path[j + 1];
-            // Invariant: every consecutive pair in `path` is an edge
-            // because `dfs` only extends along `col_idx` neighbours.
-            signs_buf[j] =
-                csr_sign_of(row_ptr, col_idx, signs_csr, u, v).expect("interior edge present");
-        }
-        signs_buf[k_len - 1] = closing_sign;
-        let signs: &[i8] = &signs_buf[..k_len];
-        if pruner.emit_ok(path, signs) != PrunerDecision::Accept {
-            return;
-        }
-        // Score and push if competitive.
-        let s = score(path, signs);
-        if heap.len() < k_keep {
-            heap.push(HeapEntry::from_slices(s, path, signs));
-        } else {
-            // Heap min — under our Ord, peek() returns the smallest
-            // score (because we inverted the comparator).
-            let beat = heap
-                .peek()
-                .map(|min| min.cmp_preference_vs_slice(s, path).is_lt())
-                .unwrap_or(true);
-            if beat {
-                heap.pop();
-                heap.push(HeapEntry::from_slices(s, path, signs));
-            }
-        }
-        return;
-    }
-    let tail = *path.last().unwrap();
-    let st = row_ptr[tail as usize] as usize;
-    let en = row_ptr[tail as usize + 1] as usize;
-    // Remaining edges from `nxt` back to `start` (closing inclusive).
-    // After pushing nxt at current path.len()=d, depth becomes d+1.
-    // We still owe (k_len - d) edges: (k_len - d - 1) interior +
-    // 1 closing.  BFS distance from start to nxt is a lower bound
-    // on those edges, so reject if dist[nxt] > k_len - d.
-    let remaining_after = (k_len - path.len()) as u8;
-    for &nxt in &col_idx[st..en] {
-        if nxt < start {
-            continue;
-        }
-        if visited[nxt as usize] {
-            continue;
-        }
-        // BFS-distance pruning: nxt must be ≤ remaining_after hops
-        // away from start, otherwise no possible close.
-        if !dist.is_empty() {
-            let d = dist[nxt as usize];
-            if d == DIST_INF || d > remaining_after {
-                continue;
-            }
-        }
-        if pruner.extend_ok(path, nxt) == PrunerDecision::Reject {
-            continue;
-        }
-        path.push(nxt);
-        visited[nxt as usize] = true;
-        dfs(
-            start, row_ptr, col_idx, signs_csr, k_len, pruner, k_keep, score, path, visited, heap,
-            dist,
-        );
-        path.pop();
-        visited[nxt as usize] = false;
-    }
+    CycleSearch::new(graph, k_len, pruner).global_serial(k_keep, Plain(&score))
 }
 
 /// Convenience: top-$k$ with no pruner.
@@ -606,67 +363,7 @@ where
         graph.n_nodes as usize,
         "m_v.len() must equal graph.n_nodes",
     );
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-    let mut visited = vec![false; n];
-    let mut path: Vec<u32> = Vec::with_capacity(k_len);
-    // Per-vertex heaps sized by `m_v[v]`.  Capacity hint = m_v[v]+1
-    // (the +1 absorbs the brief overflow during pop+push replacement).
-    let mut per_vertex: Vec<BinaryHeap<HeapEntry>> = m_v
-        .iter()
-        .map(|&cap| BinaryHeap::with_capacity((cap as usize).saturating_add(1)))
-        .collect();
-    let mut dist: Vec<u8> = vec![DIST_INF; n];
-    let mut bfs_a: Vec<u32> = Vec::new();
-    let mut bfs_b: Vec<u32> = Vec::new();
-
-    for start in 0..(n as u32) {
-        bfs_distances_capped(
-            &row_ptr, &col_idx, start, k_len, &mut dist, &mut bfs_a, &mut bfs_b,
-        );
-        path.clear();
-        path.push(start);
-        visited[start as usize] = true;
-        dfs_per_vertex(
-            start,
-            &row_ptr,
-            &col_idx,
-            &signs_csr,
-            k_len,
-            pruner,
-            m_v,
-            &score,
-            &mut path,
-            &mut visited,
-            &mut per_vertex,
-            &dist,
-        );
-        visited[start as usize] = false;
-    }
-
-    // Union the per-vertex heaps and deduplicate by canonical cycle
-    // representation (sorted tuple of vertices).  Uses stack-allocated
-    // [u32; MAX_INLINE_K] for the dedup key to avoid one Vec<u32>
-    // allocation per cycle (3.7M+ on Epinions c4).
-    let mut seen: std::collections::HashSet<[u32; MAX_INLINE_K]> = std::collections::HashSet::new();
-    let mut out: Vec<TopKCycle> = Vec::new();
-    for heap in per_vertex {
-        for entry in heap {
-            let slice = entry.cycle_slice();
-            let mut canon = [0u32; MAX_INLINE_K];
-            canon[..slice.len()].copy_from_slice(slice);
-            canon[..slice.len()].sort_unstable();
-            if seen.insert(canon) {
-                out.push((
-                    entry.score,
-                    entry.cycle_slice().to_vec(),
-                    entry.signs_slice().to_vec(),
-                ));
-            }
-        }
-    }
-    out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-    out
+    CycleSearch::new(graph, k_len, pruner).vertices_serial(m_v, Plain(&score))
 }
 
 /// Construct a degree-adaptive `m_v` vector:
@@ -798,114 +495,6 @@ pub fn tiered_m_v_by_degree(graph: &SignedGraph, tiers: &[(f32, u32)]) -> Vec<u3
             tiers.last().map(|t| t.1).unwrap_or(0)
         })
         .collect()
-}
-
-#[allow(clippy::too_many_arguments)]
-fn dfs_per_vertex<P, S>(
-    start: u32,
-    row_ptr: &[u32],
-    col_idx: &[u32],
-    signs_csr: &[i8],
-    k_len: usize,
-    pruner: &P,
-    m_v: &[u32],
-    score: &S,
-    path: &mut Vec<u32>,
-    visited: &mut [bool],
-    per_vertex: &mut [BinaryHeap<HeapEntry>],
-    dist: &[u8],
-) where
-    P: CyclePruner,
-    S: Fn(&[u32], &[i8]) -> f64,
-{
-    if path.len() == k_len {
-        let last = *path.last().unwrap();
-        // Closing-edge check via CSR scan; bail if (last, start) isn't
-        // an edge.  Keep the resolved sign for use below.
-        let closing_sign = match csr_sign_of(row_ptr, col_idx, signs_csr, last, start) {
-            Some(s) => s,
-            None => return,
-        };
-        if path.len() >= 3 && path[1] >= path[k_len - 1] {
-            return;
-        }
-        // Stack-allocated edge-sign buffer; same rationale as in
-        // `dfs` above (this hot path was the dominant allocator
-        // pressure source pre-fix).
-        debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-        let mut signs_buf = [0i8; MAX_INLINE_K];
-        for j in 0..(k_len - 1) {
-            let u = path[j];
-            let v = path[j + 1];
-            // Invariant: every consecutive pair in `path` is an edge
-            // because the DFS only extends along `col_idx` neighbours.
-            signs_buf[j] =
-                csr_sign_of(row_ptr, col_idx, signs_csr, u, v).expect("interior edge present");
-        }
-        signs_buf[k_len - 1] = closing_sign;
-        let signs: &[i8] = &signs_buf[..k_len];
-        if pruner.emit_ok(path, signs) != PrunerDecision::Accept {
-            return;
-        }
-        let s = score(path, signs);
-        // Push into every vertex's heap; HeapEntry stores its cycle /
-        // signs inline so each push is a fixed-size memcpy, no Vec
-        // allocations and no per-entry heap chunks.
-        //
-        // Cap is per-vertex (`m_v[v]`) so that low-degree vertices
-        // can have small heaps that fill quickly — see plan
-        // `docs/plans/2026-05-10-degree-adaptive-mv/`.
-        for &v in path.iter() {
-            let cap = m_v[v as usize] as usize;
-            if cap == 0 {
-                // Vertex configured to keep zero cycles — skip.
-                continue;
-            }
-            let heap = &mut per_vertex[v as usize];
-            if heap.len() < cap {
-                heap.push(HeapEntry::from_slices(s, path, signs));
-            } else {
-                let beat = heap
-                    .peek()
-                    .map(|min| min.cmp_preference_vs_slice(s, path).is_lt())
-                    .unwrap_or(true);
-                if beat {
-                    heap.pop();
-                    heap.push(HeapEntry::from_slices(s, path, signs));
-                }
-            }
-        }
-        return;
-    }
-    let tail = *path.last().unwrap();
-    let st = row_ptr[tail as usize] as usize;
-    let en = row_ptr[tail as usize + 1] as usize;
-    let remaining_after = (k_len - path.len()) as u8;
-    for &nxt in &col_idx[st..en] {
-        if nxt < start {
-            continue;
-        }
-        if visited[nxt as usize] {
-            continue;
-        }
-        if !dist.is_empty() {
-            let d = dist[nxt as usize];
-            if d == DIST_INF || d > remaining_after {
-                continue;
-            }
-        }
-        if pruner.extend_ok(path, nxt) == PrunerDecision::Reject {
-            continue;
-        }
-        path.push(nxt);
-        visited[nxt as usize] = true;
-        dfs_per_vertex(
-            start, row_ptr, col_idx, signs_csr, k_len, pruner, m_v, score, path, visited,
-            per_vertex, dist,
-        );
-        path.pop();
-        visited[nxt as usize] = false;
-    }
 }
 
 /// Convenience: vertex-stratified top-$m$ with no pruner.
@@ -1044,123 +633,12 @@ where
         graph.n_nodes as usize,
         "m_v.len() must equal graph.n_nodes",
     );
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    // Per-fold-task scratch.  Allocated once when rayon kicks off a
-    // task (typically num_threads × O(splits) ≈ a few hundred for any
-    // realistic graph), reused across the thousands of starting
-    // vertices the task processes.  The previous version allocated
-    // `visited` and `dist` (~262 KB at Epinions scale) on every
-    // single iteration → 131 828 × 262 KB ≈ 34 GB of allocator churn.
-    struct Scratch {
-        per_vertex: Vec<BinaryHeap<HeapEntry>>,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-    impl Scratch {
-        fn new(n: usize, k_len: usize) -> Scratch {
-            Scratch {
-                per_vertex: vec![BinaryHeap::<HeapEntry>::new(); n],
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            }
-        }
-    }
-
-    let final_heaps = starting_vertices
-        .par_iter()
-        .copied()
-        .fold(
-            || Scratch::new(n, k_len),
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs_per_vertex(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    m_v,
-                    &score,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.per_vertex,
-                    &s.dist,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        // Reduce: only the per-vertex heaps need merging; the rest of
-        // each task's scratch is dropped here.
-        .map(|s| s.per_vertex)
-        .reduce(
-            || vec![BinaryHeap::<HeapEntry>::new(); n],
-            |mut a, b| {
-                for (idx, (av, bv)) in a.iter_mut().zip(b).enumerate() {
-                    let cap = m_v[idx] as usize;
-                    if cap == 0 {
-                        continue;
-                    }
-                    for entry in bv {
-                        if av.len() < cap {
-                            av.push(entry);
-                        } else {
-                            let beat = av
-                                .peek()
-                                .map(|min| entry.cmp_preference(min) == Ordering::Greater)
-                                .unwrap_or(true);
-                            if beat {
-                                av.pop();
-                                av.push(entry);
-                            }
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    // Dedup union by canonical vertex tuple.  Stack-allocated
-    // [u32; MAX_INLINE_K] key avoids one Vec<u32> alloc per cycle.
-    let mut seen: std::collections::HashSet<[u32; MAX_INLINE_K]> = std::collections::HashSet::new();
-    let mut out: Vec<TopKCycle> = Vec::new();
-    for heap in final_heaps {
-        for entry in heap {
-            let slice = entry.cycle_slice();
-            let mut canon = [0u32; MAX_INLINE_K];
-            canon[..slice.len()].copy_from_slice(slice);
-            canon[..slice.len()].sort_unstable();
-            if seen.insert(canon) {
-                out.push((
-                    entry.score,
-                    entry.cycle_slice().to_vec(),
-                    entry.signs_slice().to_vec(),
-                ));
-            }
-        }
-    }
-    out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-    out
+    CycleSearch::new(graph, k_len, pruner).vertices(
+        m_v,
+        starting_vertices,
+        || Plain(&score),
+        RootBound,
+    )
 }
 
 /// Struct-of-Arrays variant of
@@ -1195,261 +673,21 @@ where
         graph.n_nodes as usize,
         "m_v.len() must equal graph.n_nodes",
     );
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    struct Scratch {
-        per_vertex: Vec<BinaryHeap<HeapEntry>>,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-    impl Scratch {
-        fn new(n: usize, k_len: usize) -> Scratch {
-            Scratch {
-                per_vertex: vec![BinaryHeap::<HeapEntry>::new(); n],
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            }
-        }
-    }
-
-    let final_heaps = starting_vertices
-        .par_iter()
-        .copied()
-        .fold(
-            || Scratch::new(n, k_len),
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs_per_vertex(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    m_v,
-                    &score,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.per_vertex,
-                    &s.dist,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        .map(|s| s.per_vertex)
-        .reduce(
-            || vec![BinaryHeap::<HeapEntry>::new(); n],
-            |mut a, b| {
-                for (idx, (av, bv)) in a.iter_mut().zip(b).enumerate() {
-                    let cap = m_v[idx] as usize;
-                    if cap == 0 {
-                        continue;
-                    }
-                    for entry in bv {
-                        if av.len() < cap {
-                            av.push(entry);
-                        } else {
-                            let beat = av
-                                .peek()
-                                .map(|min| entry.cmp_preference(min) == Ordering::Greater)
-                                .unwrap_or(true);
-                            if beat {
-                                av.pop();
-                                av.push(entry);
-                            }
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    // Dedup directly into SoA batch — no per-cycle Vec<u32>/Vec<i8>
-    // allocations.  Capacity estimate: sum of all heaps' lens
-    // (upper bound on output N before dedup).
-    let cap_estimate: usize = final_heaps.iter().map(|h| h.len()).sum();
-    let mut batch = TopKCyclesBatch::with_capacity(k_len, cap_estimate);
-    let mut seen: std::collections::HashSet<[u32; MAX_INLINE_K]> = std::collections::HashSet::new();
-    for heap in final_heaps {
-        for entry in heap {
-            let slice = entry.cycle_slice();
-            let mut canon = [0u32; MAX_INLINE_K];
-            canon[..slice.len()].copy_from_slice(slice);
-            canon[..slice.len()].sort_unstable();
-            if seen.insert(canon) {
-                batch.push(entry.score, slice, entry.signs_slice());
-            }
-        }
-    }
-    batch.sort_by_score_desc();
-    batch
-}
-
-/// Per-vertex DFS with **score upper-bound branch-and-bound (ABB)**.
-///
-/// Trade-off vs [`dfs_per_vertex`]:
-///   - ABB is checked at the **start vertex's heap threshold** only.
-///   - If start's heap is full and UB ≤ start.peek().score, the
-///     branch is pruned --- even though the cycle MIGHT have been
-///     useful for some other cycle-vertex's heap.
-///   - In exchange, ABB-fired branches save the recursive DFS work
-///     into the subtree.
-///
-/// Net effect: the ABB variant emits a SUBSET of the cycles that
-/// the non-ABB variant would.  For paired comparisons across
-/// configs (e.g. v2 tiered × baseline) the bias is consistent so
-/// paired statistics remain valid; absolute cycle counts may
-/// differ from the non-ABB output.
-///
-/// Most effective when per-vertex heaps fill quickly (small `m_v`,
-/// tiered configurations, dense graphs).  When heaps don't fill,
-/// the threshold is `-∞` and ABB is a no-op (correct, just slower
-/// by the cost of the UB check).
-#[allow(clippy::too_many_arguments)]
-fn dfs_per_vertex_bb<P, S>(
-    start: u32,
-    row_ptr: &[u32],
-    col_idx: &[u32],
-    signs_csr: &[i8],
-    k_len: usize,
-    pruner: &P,
-    m_v: &[u32],
-    scorer: &S,
-    path: &mut Vec<u32>,
-    visited: &mut [bool],
-    per_vertex: &mut [BinaryHeap<HeapEntry>],
-    dist: &[u8],
-    n_neg_in_path: usize,
-) where
-    P: CyclePruner,
-    S: BoundedScorer,
-{
-    if path.len() == k_len {
-        let last = *path.last().unwrap();
-        let closing_sign = match csr_sign_of(row_ptr, col_idx, signs_csr, last, start) {
-            Some(s) => s,
-            None => return,
-        };
-        if path.len() >= 3 && path[1] >= path[k_len - 1] {
-            return;
-        }
-        debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-        let mut signs_buf = [0i8; MAX_INLINE_K];
-        for j in 0..(k_len - 1) {
-            let u = path[j];
-            let v = path[j + 1];
-            signs_buf[j] =
-                csr_sign_of(row_ptr, col_idx, signs_csr, u, v).expect("interior edge present");
-        }
-        signs_buf[k_len - 1] = closing_sign;
-        let signs: &[i8] = &signs_buf[..k_len];
-        if pruner.emit_ok(path, signs) != PrunerDecision::Accept {
-            return;
-        }
-        let s = scorer.score(path, signs);
-        // Push to every cycle vertex's heap as in dfs_per_vertex.
-        for &v in path.iter() {
-            let cap = m_v[v as usize] as usize;
-            if cap == 0 {
-                continue;
-            }
-            let heap = &mut per_vertex[v as usize];
-            if heap.len() < cap {
-                heap.push(HeapEntry::from_slices(s, path, signs));
-            } else {
-                let beat = heap
-                    .peek()
-                    .map(|min| min.cmp_preference_vs_slice(s, path).is_lt())
-                    .unwrap_or(true);
-                if beat {
-                    heap.pop();
-                    heap.push(HeapEntry::from_slices(s, path, signs));
-                }
-            }
-        }
-        return;
-    }
-
-    // Hoist start's heap threshold out of the inner loop (single
-    // peek per DFS recursion level instead of per neighbour).
-    let start_cap = m_v[start as usize] as usize;
-    let start_threshold = if start_cap > 0 && per_vertex[start as usize].len() == start_cap {
-        per_vertex[start as usize]
-            .peek()
-            .map(|e| e.score)
-            .unwrap_or(f64::NEG_INFINITY)
-    } else {
-        f64::NEG_INFINITY
-    };
-
-    let tail = *path.last().unwrap();
-    let st = row_ptr[tail as usize] as usize;
-    let en = row_ptr[tail as usize + 1] as usize;
-    let remaining_after = (k_len - path.len()) as u8;
-    for (slot, &nxt) in col_idx[st..en].iter().enumerate() {
-        if nxt < start {
-            continue;
-        }
-        if visited[nxt as usize] {
-            continue;
-        }
-        if !dist.is_empty() {
-            let d = dist[nxt as usize];
-            if d == DIST_INF || d > remaining_after {
-                continue;
-            }
-        }
-        if pruner.extend_ok(path, nxt) == PrunerDecision::Reject {
-            continue;
-        }
-
-        // ABB: extension's sign + UB on best possible cycle.
-        let nxt_sign = signs_csr[st + slot];
-        let new_n_neg = n_neg_in_path + (nxt_sign < 0) as usize;
-        let k_remaining = k_len - (path.len() + 1);
-        let ub = scorer.upper_bound(new_n_neg, k_remaining, k_len);
-        if ub <= start_threshold {
-            continue;
-        }
-
-        path.push(nxt);
-        visited[nxt as usize] = true;
-        dfs_per_vertex_bb(
-            start, row_ptr, col_idx, signs_csr, k_len, pruner, m_v, scorer, path, visited,
-            per_vertex, dist, new_n_neg,
-        );
-        path.pop();
-        visited[nxt as usize] = false;
-    }
+    CycleSearch::new(graph, k_len, pruner).vertices(
+        m_v,
+        starting_vertices,
+        || Plain(&score),
+        RootBound,
+    )
 }
 
 /// Parallel per-vertex top-$m_v$ enumeration with **ABB** (score
 /// upper-bound branch-and-bound).  SoA output.
 ///
-/// See [`dfs_per_vertex_bb`] for the ABB-prune semantics
-/// (start-vertex-threshold conservative).  Combines naturally with
-/// v2 tiered caps from
-/// [`tiered_m_v_by_degree`] where heaps fill quickly and ABB
-/// fires aggressively.
+/// The threshold comes from the starting vertex's full heap and is captured
+/// once per recursion level. This can discard a branch that would still help
+/// another vertex's heap: its output can be a subset of the unbounded-search
+/// variant. Combines with [`tiered_m_v_by_degree`] to fill selected heaps early.
 ///
 /// Same param surface as
 /// [`enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched`]
@@ -1476,321 +714,12 @@ where
         "m_v.len() must equal graph.n_nodes",
     );
     debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    struct ScratchBb {
-        per_vertex: Vec<BinaryHeap<HeapEntry>>,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-    impl ScratchBb {
-        fn new(n: usize, k_len: usize) -> ScratchBb {
-            ScratchBb {
-                per_vertex: vec![BinaryHeap::<HeapEntry>::new(); n],
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            }
-        }
-    }
-
-    let final_heaps = starting_vertices
-        .par_iter()
-        .copied()
-        .fold(
-            || ScratchBb::new(n, k_len),
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs_per_vertex_bb(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    m_v,
-                    scorer,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.per_vertex,
-                    &s.dist,
-                    0,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        .map(|s| s.per_vertex)
-        .reduce(
-            || vec![BinaryHeap::<HeapEntry>::new(); n],
-            |mut a, b| {
-                for (idx, (av, bv)) in a.iter_mut().zip(b).enumerate() {
-                    let cap = m_v[idx] as usize;
-                    if cap == 0 {
-                        continue;
-                    }
-                    for entry in bv {
-                        if av.len() < cap {
-                            av.push(entry);
-                        } else {
-                            let beat = av
-                                .peek()
-                                .map(|min| entry.cmp_preference(min) == Ordering::Greater)
-                                .unwrap_or(true);
-                            if beat {
-                                av.pop();
-                                av.push(entry);
-                            }
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    // SoA collection with stack-array dedup keys (same as the
-    // non-ABB batched variant).
-    let cap_estimate: usize = final_heaps.iter().map(|h| h.len()).sum();
-    let mut batch = TopKCyclesBatch::with_capacity(k_len, cap_estimate);
-    let mut seen: std::collections::HashSet<[u32; MAX_INLINE_K]> = std::collections::HashSet::new();
-    for heap in final_heaps {
-        for entry in heap {
-            let slice = entry.cycle_slice();
-            let mut canon = [0u32; MAX_INLINE_K];
-            canon[..slice.len()].copy_from_slice(slice);
-            canon[..slice.len()].sort_unstable();
-            if seen.insert(canon) {
-                batch.push(entry.score, slice, entry.signs_slice());
-            }
-        }
-    }
-    batch.sort_by_score_desc();
-    batch
-}
-
-/// Global-min ABB: the threshold is the MIN heap-min across all
-/// FULL heaps, shared via `AtomicU64` (encoding f64 bits) across
-/// rayon tasks.  Monotonically non-increasing for conservative
-/// correctness: once any task observes a tighter min, global goes
-/// down; we never raise it (raising could let us prune a cycle that
-/// was already in some heap, but we don't need to — the heap will
-/// reject it on its own).
-///
-/// Adaptive gating (Approach 5): ABB fires only once the fraction
-/// of full heaps reaches `abb_fullness_gate` (0.0 = always fire,
-/// 1.0 = never fire).  Default 0.25 means ABB doesn't kick in until
-/// at least 25% of vertex heaps are at capacity.  Cheap heuristic:
-/// fewer wasted UB-checks early when threshold is loose.
-#[allow(clippy::too_many_arguments)]
-fn dfs_per_vertex_bb_global<P, S>(
-    start: u32,
-    row_ptr: &[u32],
-    col_idx: &[u32],
-    signs_csr: &[i8],
-    k_len: usize,
-    pruner: &P,
-    m_v: &[u32],
-    scorer: &S,
-    path: &mut Vec<u32>,
-    visited: &mut [bool],
-    per_vertex: &mut [BinaryHeap<HeapEntry>],
-    dist: &[u8],
-    n_neg_in_path: usize,
-    global_min: &std::sync::atomic::AtomicU64,
-    n_full_heaps: &std::sync::atomic::AtomicUsize,
-    vertex_seen_full: &[std::sync::atomic::AtomicBool],
-    fullness_gate_count: usize,
-) where
-    P: CyclePruner,
-    S: BoundedScorer,
-{
-    if path.len() == k_len {
-        let last = *path.last().unwrap();
-        let closing_sign = match csr_sign_of(row_ptr, col_idx, signs_csr, last, start) {
-            Some(s) => s,
-            None => return,
-        };
-        if path.len() >= 3 && path[1] >= path[k_len - 1] {
-            return;
-        }
-        debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-        let mut signs_buf = [0i8; MAX_INLINE_K];
-        for j in 0..(k_len - 1) {
-            let u = path[j];
-            let v = path[j + 1];
-            signs_buf[j] =
-                csr_sign_of(row_ptr, col_idx, signs_csr, u, v).expect("interior edge present");
-        }
-        signs_buf[k_len - 1] = closing_sign;
-        let signs: &[i8] = &signs_buf[..k_len];
-        if pruner.emit_ok(path, signs) != PrunerDecision::Accept {
-            return;
-        }
-        let s = scorer.score(path, signs);
-        // Push to every cycle vertex's heap.  Track when a heap
-        // newly fills (n_full_heaps++) and when its min changes
-        // (global_min decreases).
-        for &v in path.iter() {
-            let cap = m_v[v as usize] as usize;
-            if cap == 0 {
-                continue;
-            }
-            let heap = &mut per_vertex[v as usize];
-            let was_full = heap.len() == cap;
-            if heap.len() < cap {
-                heap.push(HeapEntry::from_slices(s, path, signs));
-                if heap.len() == cap {
-                    // This task's heap[v] just newly filled.  Use the
-                    // shared `vertex_seen_full[v]` flag to make sure
-                    // we increment n_full_heaps AT MOST ONCE per
-                    // distinct vertex (regardless of how many rayon
-                    // tasks see their local heap[v] fill).  Without
-                    // this dedup the counter inflates by ~W× where
-                    // W is the rayon worker count, and the fullness
-                    // gate fires far earlier than intended.
-                    let already_seen = vertex_seen_full[v as usize]
-                        .swap(true, std::sync::atomic::Ordering::Relaxed);
-                    if !already_seen {
-                        n_full_heaps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    if let Some(min_entry) = heap.peek() {
-                        atomic_min_f64(global_min, min_entry.score);
-                    }
-                }
-            } else {
-                let beat = heap
-                    .peek()
-                    .map(|min| min.cmp_preference_vs_slice(s, path).is_lt())
-                    .unwrap_or(true);
-                if beat {
-                    heap.pop();
-                    heap.push(HeapEntry::from_slices(s, path, signs));
-                    if was_full {
-                        // Heap min may have changed; conservatively
-                        // refresh global_min if new peek is smaller.
-                        if let Some(min_entry) = heap.peek() {
-                            atomic_min_f64(global_min, min_entry.score);
-                        }
-                    }
-                }
-            }
-        }
-        return;
-    }
-
-    // Read fullness + global_min ONCE per recursion level (hoist out
-    // of inner neighbour loop).  ABB requires BOTH (a) the fullness
-    // gate satisfied AND (b) at least one heap full, otherwise
-    // global_min is still +INFINITY and we would prune everything.
-    let nfull = n_full_heaps.load(std::sync::atomic::Ordering::Relaxed);
-    let gate_satisfied = nfull >= fullness_gate_count;
-    let any_full = nfull > 0;
-    let abb_on = gate_satisfied && any_full;
-    let threshold = if abb_on {
-        f64::from_bits(global_min.load(std::sync::atomic::Ordering::Relaxed))
-    } else {
-        f64::NEG_INFINITY
-    };
-
-    let tail = *path.last().unwrap();
-    let st = row_ptr[tail as usize] as usize;
-    let en = row_ptr[tail as usize + 1] as usize;
-    let remaining_after = (k_len - path.len()) as u8;
-    for (slot, &nxt) in col_idx[st..en].iter().enumerate() {
-        if nxt < start {
-            continue;
-        }
-        if visited[nxt as usize] {
-            continue;
-        }
-        if !dist.is_empty() {
-            let d = dist[nxt as usize];
-            if d == DIST_INF || d > remaining_after {
-                continue;
-            }
-        }
-        if pruner.extend_ok(path, nxt) == PrunerDecision::Reject {
-            continue;
-        }
-
-        if abb_on {
-            let nxt_sign = signs_csr[st + slot];
-            let new_n_neg = n_neg_in_path + (nxt_sign < 0) as usize;
-            let k_remaining = k_len - (path.len() + 1);
-            let ub = scorer.upper_bound(new_n_neg, k_remaining, k_len);
-            if ub <= threshold {
-                continue;
-            }
-            path.push(nxt);
-            visited[nxt as usize] = true;
-            dfs_per_vertex_bb_global(
-                start,
-                row_ptr,
-                col_idx,
-                signs_csr,
-                k_len,
-                pruner,
-                m_v,
-                scorer,
-                path,
-                visited,
-                per_vertex,
-                dist,
-                new_n_neg,
-                global_min,
-                n_full_heaps,
-                vertex_seen_full,
-                fullness_gate_count,
-            );
-            path.pop();
-            visited[nxt as usize] = false;
-        } else {
-            // ABB not yet active; descend with the running n_neg
-            // accumulator but skip the UB check.
-            let nxt_sign = signs_csr[st + slot];
-            let new_n_neg = n_neg_in_path + (nxt_sign < 0) as usize;
-            path.push(nxt);
-            visited[nxt as usize] = true;
-            dfs_per_vertex_bb_global(
-                start,
-                row_ptr,
-                col_idx,
-                signs_csr,
-                k_len,
-                pruner,
-                m_v,
-                scorer,
-                path,
-                visited,
-                per_vertex,
-                dist,
-                new_n_neg,
-                global_min,
-                n_full_heaps,
-                vertex_seen_full,
-                fullness_gate_count,
-            );
-            path.pop();
-            visited[nxt as usize] = false;
-        }
-    }
+    CycleSearch::new(graph, k_len, pruner).vertices(
+        m_v,
+        starting_vertices,
+        || Bounded(scorer),
+        RootBound,
+    )
 }
 
 /// Atomic compare-and-swap loop: `target = min(target, candidate)`.
@@ -1854,135 +783,13 @@ where
         "m_v.len() must equal graph.n_nodes",
     );
     debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-    let gate = fullness_gate.clamp(0.0, 1.0);
-    // Count vertices with *non-zero* cap as the gate denominator.
-    // CPG ladders zero out leaves (bottom-80% gets cap=0); those
-    // vertices never increment `n_full_heaps`, so a naive
-    // `gate * n_nodes` denominator means ABB at gate=1.0 NEVER fires
-    // on CPG configs (the 80% zero-cap vertices can never count
-    // toward the threshold). Using `n_active` lets gate=1.0 mean
-    // "all non-zero-cap heaps full" --- the natural CPG semantics.
-    let n_active = m_v.iter().filter(|&&c| c > 0).count();
-    let fullness_gate_count = (gate * n_active as f64).ceil() as usize;
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize};
-    let global_min = AtomicU64::new(f64::INFINITY.to_bits());
-    let n_full_heaps = AtomicUsize::new(0);
-    // De-dup fullness counting: a vertex only contributes once to
-    // n_full_heaps the first time ANY rayon worker's local heap[v]
-    // hits cap.  Without this, n_full_heaps is inflated by ~W× and
-    // gate=1.0 fires too eagerly (~8% spurious pruning on Slashdot k=4
-    // m=128, measured 2026-05-11).
-    let vertex_seen_full: Vec<AtomicBool> = (0..n).map(|_| AtomicBool::new(false)).collect();
-
-    struct ScratchBbG {
-        per_vertex: Vec<BinaryHeap<HeapEntry>>,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-    impl ScratchBbG {
-        fn new(n: usize, k_len: usize) -> ScratchBbG {
-            ScratchBbG {
-                per_vertex: vec![BinaryHeap::<HeapEntry>::new(); n],
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            }
-        }
-    }
-
-    let final_heaps = starting_vertices
-        .par_iter()
-        .copied()
-        .fold(
-            || ScratchBbG::new(n, k_len),
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs_per_vertex_bb_global(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    m_v,
-                    scorer,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.per_vertex,
-                    &s.dist,
-                    0,
-                    &global_min,
-                    &n_full_heaps,
-                    &vertex_seen_full,
-                    fullness_gate_count,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        .map(|s| s.per_vertex)
-        .reduce(
-            || vec![BinaryHeap::<HeapEntry>::new(); n],
-            |mut a, b| {
-                for (idx, (av, bv)) in a.iter_mut().zip(b).enumerate() {
-                    let cap = m_v[idx] as usize;
-                    if cap == 0 {
-                        continue;
-                    }
-                    for entry in bv {
-                        if av.len() < cap {
-                            av.push(entry);
-                        } else {
-                            let beat = av
-                                .peek()
-                                .map(|min| entry.cmp_preference(min) == Ordering::Greater)
-                                .unwrap_or(true);
-                            if beat {
-                                av.pop();
-                                av.push(entry);
-                            }
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    let cap_estimate: usize = final_heaps.iter().map(|h| h.len()).sum();
-    let mut batch = TopKCyclesBatch::with_capacity(k_len, cap_estimate);
-    let mut seen: std::collections::HashSet<[u32; MAX_INLINE_K]> = std::collections::HashSet::new();
-    for heap in final_heaps {
-        for entry in heap {
-            let slice = entry.cycle_slice();
-            let mut canon = [0u32; MAX_INLINE_K];
-            canon[..slice.len()].copy_from_slice(slice);
-            canon[..slice.len()].sort_unstable();
-            if seen.insert(canon) {
-                batch.push(entry.score, slice, entry.signs_slice());
-            }
-        }
-    }
-    batch.sort_by_score_desc();
-    batch
+    let bound = SharedBound::new(m_v, fullness_gate);
+    CycleSearch::new(graph, k_len, pruner).vertices(
+        m_v,
+        starting_vertices,
+        || Bounded(scorer),
+        &bound,
+    )
 }
 
 /// Convenience: parallel vertex-stratified top-$m$ with no pruner.
@@ -2014,90 +821,7 @@ where
     if k_len < 3 || k_keep == 0 {
         return Vec::new();
     }
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    // Per-fold-task scratch — same hoist rationale as
-    // `enumerate_top_k_per_vertex_cycles_par`.
-    struct ScratchGlobal {
-        heap: BinaryHeap<HeapEntry>,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-
-    let final_heap = (0..n as u32)
-        .into_par_iter()
-        .fold(
-            || ScratchGlobal {
-                heap: BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            },
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    k_keep,
-                    &score,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.heap,
-                    &s.dist,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        .map(|s| s.heap)
-        .reduce(
-            || BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-            |mut a, b| {
-                for entry in b {
-                    if a.len() < k_keep {
-                        a.push(entry);
-                    } else {
-                        let beat = a
-                            .peek()
-                            .map(|min| entry.cmp_preference(min) == Ordering::Greater)
-                            .unwrap_or(true);
-                        if beat {
-                            a.pop();
-                            a.push(entry);
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    let mut out: Vec<TopKCycle> = final_heap
-        .into_iter()
-        .map(|e| (e.score, e.cycle_slice().to_vec(), e.signs_slice().to_vec()))
-        .collect();
-    out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-    out
+    CycleSearch::new(graph, k_len, pruner).global(k_keep, || Plain(&score))
 }
 
 /// SoA variant of [`enumerate_top_k_cycles_par`].  Returns
@@ -2116,90 +840,7 @@ where
     if k_len < 3 || k_keep == 0 {
         return TopKCyclesBatch::new(k_len);
     }
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    struct ScratchGlobal {
-        heap: BinaryHeap<HeapEntry>,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-
-    let final_heap = (0..n as u32)
-        .into_par_iter()
-        .fold(
-            || ScratchGlobal {
-                heap: BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            },
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    k_keep,
-                    &score,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.heap,
-                    &s.dist,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        .map(|s| s.heap)
-        .reduce(
-            || BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-            |mut a, b| {
-                for entry in b {
-                    if a.len() < k_keep {
-                        a.push(entry);
-                    } else {
-                        let beat = a
-                            .peek()
-                            .map(|min| entry.cmp_preference(min) == Ordering::Greater)
-                            .unwrap_or(true);
-                        if beat {
-                            a.pop();
-                            a.push(entry);
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    // SoA collection — no per-cycle Vec<u32>/Vec<i8> allocations.
-    let n_out = final_heap.len();
-    let mut batch = TopKCyclesBatch::with_capacity(k_len, n_out);
-    for entry in final_heap {
-        batch.push(entry.score, entry.cycle_slice(), entry.signs_slice());
-    }
-    batch.sort_by_score_desc();
-    batch
+    CycleSearch::new(graph, k_len, pruner).global(k_keep, || Plain(&score))
 }
 
 /// Convenience: parallel global top-$K$ with no pruner.
@@ -2461,46 +1102,7 @@ where
         return Vec::new();
     }
     debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-    let mut visited = vec![false; n];
-    let mut path: Vec<u32> = Vec::with_capacity(k_len);
-    let mut heap: BinaryHeap<HeapEntry> = BinaryHeap::with_capacity(heap_capacity_hint(k_keep));
-    let mut dist: Vec<u8> = vec![DIST_INF; n];
-    let mut bfs_a: Vec<u32> = Vec::new();
-    let mut bfs_b: Vec<u32> = Vec::new();
-
-    for start in 0..(n as u32) {
-        bfs_distances_capped(
-            &row_ptr, &col_idx, start, k_len, &mut dist, &mut bfs_a, &mut bfs_b,
-        );
-        path.clear();
-        path.push(start);
-        visited[start as usize] = true;
-        dfs_bb(
-            start,
-            &row_ptr,
-            &col_idx,
-            &signs_csr,
-            k_len,
-            pruner,
-            k_keep,
-            scorer,
-            &mut path,
-            &mut visited,
-            &mut heap,
-            &dist,
-            0,
-        );
-        visited[start as usize] = false;
-    }
-
-    let mut out: Vec<TopKCycle> = heap
-        .into_iter()
-        .map(|e| (e.score, e.cycle_slice().to_vec(), e.signs_slice().to_vec()))
-        .collect();
-    out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-    out
+    CycleSearch::new(graph, k_len, pruner).global_serial(k_keep, Bounded(scorer))
 }
 
 /// Parallel global top-$K$ with ABB descent.  Per-rayon-fold-task
@@ -2524,91 +1126,7 @@ where
         return Vec::new();
     }
     debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    // Per-fold-task scratch (rationale identical to the non-ABB
-    // parallel variant).
-    struct ScratchBb {
-        heap: BinaryHeap<HeapEntry>,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-
-    let final_heap = (0..n as u32)
-        .into_par_iter()
-        .fold(
-            || ScratchBb {
-                heap: BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            },
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs_bb(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    k_keep,
-                    scorer,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.heap,
-                    &s.dist,
-                    0,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        .map(|s| s.heap)
-        .reduce(
-            || BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-            |mut a, b| {
-                for entry in b {
-                    if a.len() < k_keep {
-                        a.push(entry);
-                    } else {
-                        let beat = a
-                            .peek()
-                            .map(|min| entry.cmp_preference(min) == Ordering::Greater)
-                            .unwrap_or(true);
-                        if beat {
-                            a.pop();
-                            a.push(entry);
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    let mut out: Vec<TopKCycle> = final_heap
-        .into_iter()
-        .map(|e| (e.score, e.cycle_slice().to_vec(), e.signs_slice().to_vec()))
-        .collect();
-    out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-    out
+    CycleSearch::new(graph, k_len, pruner).global(k_keep, || Bounded(scorer))
 }
 
 /// SoA variant of [`enumerate_top_k_cycles_par_bb`].  ABB DFS with
@@ -2628,196 +1146,7 @@ where
         return TopKCyclesBatch::new(k_len);
     }
     debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    struct ScratchBb {
-        heap: BinaryHeap<HeapEntry>,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-
-    let final_heap = (0..n as u32)
-        .into_par_iter()
-        .fold(
-            || ScratchBb {
-                heap: BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            },
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs_bb(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    k_keep,
-                    scorer,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.heap,
-                    &s.dist,
-                    0,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        .map(|s| s.heap)
-        .reduce(
-            || BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-            |mut a, b| {
-                for entry in b {
-                    if a.len() < k_keep {
-                        a.push(entry);
-                    } else {
-                        let beat = a
-                            .peek()
-                            .map(|min| entry.cmp_preference(min) == Ordering::Greater)
-                            .unwrap_or(true);
-                        if beat {
-                            a.pop();
-                            a.push(entry);
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    let n_out = final_heap.len();
-    let mut batch = TopKCyclesBatch::with_capacity(k_len, n_out);
-    for entry in final_heap {
-        batch.push(entry.score, entry.cycle_slice(), entry.signs_slice());
-    }
-    batch.sort_by_score_desc();
-    batch
-}
-
-#[allow(clippy::too_many_arguments)]
-fn dfs_bb<P, S>(
-    start: u32,
-    row_ptr: &[u32],
-    col_idx: &[u32],
-    signs_csr: &[i8],
-    k_len: usize,
-    pruner: &P,
-    k_keep: usize,
-    scorer: &S,
-    path: &mut Vec<u32>,
-    visited: &mut [bool],
-    heap: &mut BinaryHeap<HeapEntry>,
-    dist: &[u8],
-    n_neg_in_path: usize,
-) where
-    P: CyclePruner,
-    S: BoundedScorer,
-{
-    if path.len() == k_len {
-        let last = *path.last().unwrap();
-        let closing_sign = match csr_sign_of(row_ptr, col_idx, signs_csr, last, start) {
-            Some(s) => s,
-            None => return,
-        };
-        if path.len() >= 3 && path[1] >= path[k_len - 1] {
-            return;
-        }
-        let mut signs_buf = [0i8; MAX_INLINE_K];
-        for j in 0..(k_len - 1) {
-            let u = path[j];
-            let v = path[j + 1];
-            signs_buf[j] =
-                csr_sign_of(row_ptr, col_idx, signs_csr, u, v).expect("interior edge present");
-        }
-        signs_buf[k_len - 1] = closing_sign;
-        let signs: &[i8] = &signs_buf[..k_len];
-        if pruner.emit_ok(path, signs) != PrunerDecision::Accept {
-            return;
-        }
-        let s = scorer.score(path, signs);
-        if heap.len() < k_keep {
-            heap.push(HeapEntry::from_slices(s, path, signs));
-        } else {
-            let beat = heap
-                .peek()
-                .map(|min| min.cmp_preference_vs_slice(s, path).is_lt())
-                .unwrap_or(true);
-            if beat {
-                heap.pop();
-                heap.push(HeapEntry::from_slices(s, path, signs));
-            }
-        }
-        return;
-    }
-    let tail = *path.last().unwrap();
-    let st = row_ptr[tail as usize] as usize;
-    let en = row_ptr[tail as usize + 1] as usize;
-    let remaining_after = (k_len - path.len()) as u8;
-    // Heap threshold is meaningful only once the heap is full;
-    // before that, ABB is a no-op (every cycle is provisionally
-    // accepted).  Hoisting the read out of the inner loop avoids
-    // a heap.peek() per candidate neighbour.
-    let threshold = if heap.len() == k_keep {
-        heap.peek().map(|e| e.score).unwrap_or(f64::NEG_INFINITY)
-    } else {
-        f64::NEG_INFINITY
-    };
-    for (slot, &nxt) in col_idx[st..en].iter().enumerate() {
-        if nxt < start {
-            continue;
-        }
-        if visited[nxt as usize] {
-            continue;
-        }
-        if !dist.is_empty() {
-            let d = dist[nxt as usize];
-            if d == DIST_INF || d > remaining_after {
-                continue;
-            }
-        }
-        if pruner.extend_ok(path, nxt) == PrunerDecision::Reject {
-            continue;
-        }
-        // ABB: look up the prospective edge's sign and check whether
-        // any continuation can possibly beat the heap threshold.
-        // The CSR slot index of `nxt` in `tail`'s neighbour list is
-        // `st + slot`; the sign is co-located in `signs_csr`.
-        let nxt_sign = signs_csr[st + slot];
-        let new_n_neg = n_neg_in_path + (nxt_sign < 0) as usize;
-        let k_remaining = k_len - (path.len() + 1);
-        let ub = scorer.upper_bound(new_n_neg, k_remaining, k_len);
-        if ub <= threshold {
-            continue; // provably dominated by the heap minimum
-        }
-        path.push(nxt);
-        visited[nxt as usize] = true;
-        dfs_bb(
-            start, row_ptr, col_idx, signs_csr, k_len, pruner, k_keep, scorer, path, visited, heap,
-            dist, new_n_neg,
-        );
-        path.pop();
-        visited[nxt as usize] = false;
-    }
+    CycleSearch::new(graph, k_len, pruner).global(k_keep, || Bounded(scorer))
 }
 
 // ─── Entropy-heuristic top-K (vertex-uniform cycle selection) ─────
@@ -3114,95 +1443,8 @@ where
         return Vec::new();
     }
     debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    struct ScratchEntropy {
-        heap: BinaryHeap<HeapEntry>,
-        state: UniformityState,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-
-    let final_heap = (0..n as u32)
-        .into_par_iter()
-        .fold(
-            || ScratchEntropy {
-                heap: BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-                state: UniformityState::new(n),
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            },
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs_entropy(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    k_keep,
-                    heuristic,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.heap,
-                    &mut s.state,
-                    &s.dist,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        .map(|s| s.heap)
-        .reduce(
-            || BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-            |mut a, b| {
-                // Cross-task merge: take the top-K by stored score.
-                // The state inconsistency across tasks is intentional
-                // (the heuristic was greedy per-task; merging trades
-                // exactness for parallelism).
-                for entry in b {
-                    if a.len() < k_keep {
-                        a.push(entry);
-                    } else {
-                        let beat = a
-                            .peek()
-                            .map(|m| entry.cmp_preference(m) == Ordering::Greater)
-                            .unwrap_or(true);
-                        if beat {
-                            a.pop();
-                            a.push(entry);
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    let mut out: Vec<TopKCycle> = final_heap
-        .into_iter()
-        .map(|e| (e.score, e.cycle_slice().to_vec(), e.signs_slice().to_vec()))
-        .collect();
-    out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-    out
+    CycleSearch::new(graph, k_len, pruner)
+        .global(k_keep, || Heuristic::new(heuristic, graph.n_nodes as usize))
 }
 
 /// SoA variant of [`enumerate_top_k_cycles_par_entropy`].  Same
@@ -3222,205 +1464,8 @@ where
         return TopKCyclesBatch::new(k_len);
     }
     debug_assert!(k_len <= MAX_INLINE_K, "k_len exceeds MAX_INLINE_K");
-    let (row_ptr, col_idx, signs_csr) = graph.build_csr_with_signs();
-    let n = graph.n_nodes as usize;
-
-    struct ScratchEntropy {
-        heap: BinaryHeap<HeapEntry>,
-        state: UniformityState,
-        visited: Vec<bool>,
-        path: Vec<u32>,
-        dist: Vec<u8>,
-        bfs_a: Vec<u32>,
-        bfs_b: Vec<u32>,
-    }
-
-    let final_heap = (0..n as u32)
-        .into_par_iter()
-        .fold(
-            || ScratchEntropy {
-                heap: BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-                state: UniformityState::new(n),
-                visited: vec![false; n],
-                path: Vec::with_capacity(k_len),
-                dist: vec![DIST_INF; n],
-                bfs_a: Vec::new(),
-                bfs_b: Vec::new(),
-            },
-            |mut s, start| {
-                bfs_distances_capped(
-                    &row_ptr,
-                    &col_idx,
-                    start,
-                    k_len,
-                    &mut s.dist,
-                    &mut s.bfs_a,
-                    &mut s.bfs_b,
-                );
-                s.path.clear();
-                s.path.push(start);
-                s.visited[start as usize] = true;
-                dfs_entropy(
-                    start,
-                    &row_ptr,
-                    &col_idx,
-                    &signs_csr,
-                    k_len,
-                    pruner,
-                    k_keep,
-                    heuristic,
-                    &mut s.path,
-                    &mut s.visited,
-                    &mut s.heap,
-                    &mut s.state,
-                    &s.dist,
-                );
-                s.visited[start as usize] = false;
-                s
-            },
-        )
-        .map(|s| s.heap)
-        .reduce(
-            || BinaryHeap::<HeapEntry>::with_capacity(heap_capacity_hint(k_keep)),
-            |mut a, b| {
-                for entry in b {
-                    if a.len() < k_keep {
-                        a.push(entry);
-                    } else {
-                        let beat = a
-                            .peek()
-                            .map(|m| entry.cmp_preference(m) == Ordering::Greater)
-                            .unwrap_or(true);
-                        if beat {
-                            a.pop();
-                            a.push(entry);
-                        }
-                    }
-                }
-                a
-            },
-        );
-
-    let n_out = final_heap.len();
-    let mut batch = TopKCyclesBatch::with_capacity(k_len, n_out);
-    for entry in final_heap {
-        batch.push(entry.score, entry.cycle_slice(), entry.signs_slice());
-    }
-    batch.sort_by_score_desc();
-    batch
-}
-
-#[allow(clippy::too_many_arguments)]
-fn dfs_entropy<P, H>(
-    start: u32,
-    row_ptr: &[u32],
-    col_idx: &[u32],
-    signs_csr: &[i8],
-    k_len: usize,
-    pruner: &P,
-    k_keep: usize,
-    heuristic: &H,
-    path: &mut Vec<u32>,
-    visited: &mut [bool],
-    heap: &mut BinaryHeap<HeapEntry>,
-    state: &mut UniformityState,
-    dist: &[u8],
-) where
-    P: CyclePruner,
-    H: UniformityHeuristic,
-{
-    if path.len() == k_len {
-        let last = *path.last().unwrap();
-        let closing_sign = match csr_sign_of(row_ptr, col_idx, signs_csr, last, start) {
-            Some(s) => s,
-            None => return,
-        };
-        if path.len() >= 3 && path[1] >= path[k_len - 1] {
-            return;
-        }
-        let mut signs_buf = [0i8; MAX_INLINE_K];
-        for j in 0..(k_len - 1) {
-            signs_buf[j] = csr_sign_of(row_ptr, col_idx, signs_csr, path[j], path[j + 1])
-                .expect("interior edge present");
-        }
-        signs_buf[k_len - 1] = closing_sign;
-        let signs: &[i8] = &signs_buf[..k_len];
-        if pruner.emit_ok(path, signs) != PrunerDecision::Accept {
-            return;
-        }
-        let s = heuristic.score(path, signs, state);
-        let mut accepted = false;
-        if heap.len() < k_keep {
-            heap.push(HeapEntry::from_slices(s, path, signs));
-            accepted = true;
-        } else {
-            let beat = heap
-                .peek()
-                .map(|m| m.cmp_preference_vs_slice(s, path).is_lt())
-                .unwrap_or(true);
-            if beat {
-                let popped = heap.pop().expect("heap non-empty");
-                // Roll back the evicted cycle's state contribution
-                // before applying the new one — keeps state in sync
-                // with heap membership.
-                heuristic.rollback(popped.cycle_slice(), popped.signs_slice(), state);
-                heap.push(HeapEntry::from_slices(s, path, signs));
-                accepted = true;
-            }
-        }
-        if accepted {
-            heuristic.update(path, signs, state);
-        }
-        return;
-    }
-    let tail = *path.last().unwrap();
-    let st = row_ptr[tail as usize] as usize;
-    let en = row_ptr[tail as usize + 1] as usize;
-    let remaining_after = (k_len - path.len()) as u8;
-    let threshold = if heap.len() == k_keep {
-        heap.peek().map(|e| e.score).unwrap_or(f64::NEG_INFINITY)
-    } else {
-        f64::NEG_INFINITY
-    };
-    for &nxt in &col_idx[st..en] {
-        if nxt < start {
-            continue;
-        }
-        if visited[nxt as usize] {
-            continue;
-        }
-        if !dist.is_empty() {
-            let d = dist[nxt as usize];
-            if d == DIST_INF || d > remaining_after {
-                continue;
-            }
-        }
-        if pruner.extend_ok(path, nxt) == PrunerDecision::Reject {
-            continue;
-        }
-        // ABB on the entropy / inverse-degree UB.  Build the
-        // hypothetical new prefix vertex set (path + nxt) and ask
-        // the heuristic for its bound.  `path` does not yet contain
-        // `nxt` — pass them as the partial-prefix slice.
-        let mut prefix_buf = [0u32; MAX_INLINE_K];
-        let prefix_len = path.len() + 1;
-        prefix_buf[..path.len()].copy_from_slice(path);
-        prefix_buf[path.len()] = nxt;
-        let prefix = &prefix_buf[..prefix_len];
-        let k_remaining = k_len - prefix_len;
-        let ub = heuristic.upper_bound(prefix, k_remaining, k_len, state);
-        if ub <= threshold {
-            continue;
-        }
-        path.push(nxt);
-        visited[nxt as usize] = true;
-        dfs_entropy(
-            start, row_ptr, col_idx, signs_csr, k_len, pruner, k_keep, heuristic, path, visited,
-            heap, state, dist,
-        );
-        path.pop();
-        visited[nxt as usize] = false;
-    }
+    CycleSearch::new(graph, k_len, pruner)
+        .global(k_keep, || Heuristic::new(heuristic, graph.n_nodes as usize))
 }
 
 // ─── Hybrid α-blended scorer (signal × diversity Pareto frontier) ─
@@ -3457,7 +1502,7 @@ fn dfs_entropy<P, H>(
 /// worst-case number of negative edges committed so far (every
 /// prefix edge is negative).  This gives the **loosest** admissible
 /// signal UB; a follow-up plan can thread the actual running n_neg
-/// through `dfs_entropy` for a tighter bound.
+/// through the stateful scoring policy for a tighter bound.
 pub struct HybridScorer<B, H>
 where
     B: BoundedScorer,
@@ -3632,6 +1677,248 @@ mod tests {
     use crate::pruner::NoOpPruner;
     use crate::signed_graph::SignedGraph;
 
+    // Observations captured before the shared-execution refactor from source
+    // SHA256 1e94d76c89e6d0a866a6122ccdabbe2b98a955066f335b7ef6d1e1180a01474c.
+    // One Rayon worker fixes the fold schedule for the stateful heuristic.
+    // Fingerprints include output order, exact score bits, vertices and signs.
+    fn fingerprint_output(mut hash: u64, rows: Vec<TopKCycle>) -> u64 {
+        let mut feed = |word: u64| {
+            for byte in word.to_le_bytes() {
+                hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+            }
+        };
+        feed(rows.len() as u64);
+        for (score, vertices, signs) in rows {
+            feed(score.to_bits());
+            feed(vertices.len() as u64);
+            for vertex in vertices {
+                feed(u64::from(vertex));
+            }
+            for sign in signs {
+                feed(sign as u8 as u64);
+            }
+        }
+        hash
+    }
+
+    #[test]
+    fn serial_scorers_keep_non_sync_captures_and_cap_errors_keep_their_order() {
+        let g = build_three_triangles();
+        let calls = std::cell::Cell::new(0);
+        let score = |_: &[u32], _: &[i8]| {
+            calls.set(calls.get() + 1);
+            1.0
+        };
+        assert_eq!(
+            enumerate_top_k_cycles(&g, 3, &NoOpPruner, 2, score).len(),
+            2
+        );
+        assert!(
+            !enumerate_top_k_per_vertex_cycles_adaptive(
+                &g,
+                3,
+                &NoOpPruner,
+                &vec![1; g.n_nodes as usize],
+                score,
+            )
+            .is_empty()
+        );
+        assert!(calls.get() > 0);
+        let malformed = [1];
+        assert!(
+            std::panic::catch_unwind(|| {
+                enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
+                    &g,
+                    3,
+                    &NoOpPruner,
+                    &malformed,
+                    &[],
+                    scorers::balance,
+                )
+            })
+            .is_err()
+        );
+        // Existing early returns precede length validation.
+        assert!(
+            enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
+                &g,
+                2,
+                &NoOpPruner,
+                &malformed,
+                &[],
+                scorers::balance,
+            )
+            .is_empty()
+        );
+        assert!(
+            enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
+                &g,
+                3,
+                &NoOpPruner,
+                &[0],
+                &[],
+                scorers::balance,
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn parallel_global_outputs_match_the_independent_full_cycle_oracle() {
+        let g = fixture_for_builder();
+        let signs = g.build_sign_lookup();
+        let mut expected: Vec<_> = crate::cycle_enum::enumerate_simple_cycles(&g, 3, &NoOpPruner)
+            .into_iter()
+            .map(|vertices| {
+                let signs: Vec<_> = (0..vertices.len())
+                    .map(|i| {
+                        let a = vertices[i];
+                        let b = vertices[(i + 1) % vertices.len()];
+                        signs[&(a.min(b), a.max(b))]
+                    })
+                    .collect();
+                (
+                    scorers::fraction_negative(&vertices, &signs),
+                    vertices,
+                    signs,
+                )
+            })
+            .collect();
+        expected.sort_by(|a, b| b.0.total_cmp(&a.0).then(b.1.cmp(&a.1)));
+        for threads in [1, 2, 4] {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap();
+            for cap in [1, 2, usize::MAX] {
+                let (mut rows, batch) = pool.install(|| {
+                    (
+                        enumerate_top_k_cycles_par(
+                            &g,
+                            3,
+                            &NoOpPruner,
+                            cap,
+                            scorers::fraction_negative,
+                        ),
+                        enumerate_top_k_cycles_par_batched(
+                            &g,
+                            3,
+                            &NoOpPruner,
+                            cap,
+                            scorers::fraction_negative,
+                        ),
+                    )
+                });
+                let mut batched = batch.into_vec_topkcycle();
+                rows.sort_by(|a, b| b.0.total_cmp(&a.0).then(b.1.cmp(&a.1)));
+                batched.sort_by(|a, b| b.0.total_cmp(&a.0).then(b.1.cmp(&a.1)));
+                assert_eq!(rows, expected[..cap.min(expected.len())]);
+                assert_eq!(batched, rows);
+            }
+        }
+    }
+
+    fn observe_topk_variants<P: CyclePruner + Sync>(pruner: &P) -> [u64; 15] {
+        let mut observed = [0xcbf29ce484222325; 15];
+        for n in [0, 1, 6, 8] {
+            for seed in [3u32, 17] {
+                let mut g = SignedGraph {
+                    n_nodes: n,
+                    edges: Vec::new(),
+                    signs: Vec::new(),
+                };
+                for u in 0..n {
+                    for v in u + 1..n {
+                        if (u * 17 + v * 31 + seed) % 5 != 0 {
+                            g.edges.push((u, v));
+                            g.signs.push(if (u + v + seed) % 3 == 0 { -1 } else { 1 });
+                        }
+                    }
+                }
+                let caps: Vec<_> = (0..n).map(|v| (v + seed) % 4).collect();
+                let roots: Vec<_> = (0..n).filter(|v| (v + seed) % 2 == 0).collect();
+                for k in [2, 3, 4] {
+                    for cap in [0, 1, 5] {
+                        let outputs = [
+                        enumerate_top_k_cycles(&g,k,pruner,cap,scorers::fraction_negative),
+                        enumerate_top_k_cycles_bb(&g,k,pruner,cap,&FractionNegativeScorer),
+                        enumerate_top_k_cycles_par(&g,k,pruner,cap,scorers::fraction_negative),
+                        enumerate_top_k_cycles_par_batched(&g,k,pruner,cap,scorers::fraction_negative).into_vec_topkcycle(),
+                        enumerate_top_k_cycles_par_bb(&g,k,pruner,cap,&FractionNegativeScorer),
+                        enumerate_top_k_cycles_par_bb_batched(&g,k,pruner,cap,&FractionNegativeScorer).into_vec_topkcycle(),
+                        enumerate_top_k_cycles_par_entropy(&g,k,pruner,cap,&EntropyGainScorer),
+                        enumerate_top_k_cycles_par_entropy_batched(&g,k,pruner,cap,&EntropyGainScorer).into_vec_topkcycle(),
+                        enumerate_top_k_cycles_par_entropy(&g,k,pruner,cap,&InverseDegreeScorer),
+                        enumerate_top_k_per_vertex_cycles_adaptive(&g,k,pruner,&caps,scorers::fraction_negative),
+                        enumerate_top_k_per_vertex_cycles_par_adaptive_starting(&g,k,pruner,&caps,&roots,scorers::fraction_negative),
+                        enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(&g,k,pruner,&caps,&roots,scorers::fraction_negative).into_vec_topkcycle(),
+                        enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_batched(&g,k,pruner,&caps,&roots,&FractionNegativeScorer).into_vec_topkcycle(),
+                        enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_global_batched(&g,k,pruner,&caps,&roots,&FractionNegativeScorer,0.0).into_vec_topkcycle(),
+                        enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_global_batched(&g,k,pruner,&caps,&roots,&FractionNegativeScorer,1.0).into_vec_topkcycle(),
+                    ];
+                        for (hash, rows) in observed.iter_mut().zip(outputs) {
+                            *hash = fingerprint_output(*hash, rows);
+                        }
+                    }
+                }
+            }
+        }
+        observed
+    }
+
+    #[test]
+    fn frozen_topk_observations() {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap();
+        let observations = pool.install(|| {
+            [
+                observe_topk_variants(&NoOpPruner),
+                observe_topk_variants(&crate::balance::CartwrightHararyPruner {
+                    mode: crate::balance::BalanceMode::OnlyBalanced,
+                }),
+            ]
+        });
+        let expected: [[u64; 15]; 2] = [
+            [
+                8606709654475299749,
+                1461602104145825950,
+                8606709654475299749,
+                8606709654475299749,
+                6363135104127326137,
+                6363135104127326137,
+                2806921040923171419,
+                2806921040923171419,
+                1184405907472381834,
+                16584761971592445940,
+                8681940557442702506,
+                8681940557442702506,
+                14406114284948701618,
+                13516017638263909110,
+                8681940557442702506,
+            ],
+            [
+                18249193004083176450,
+                14489253100495959929,
+                18249193004083176450,
+                18249193004083176450,
+                8179498218816041746,
+                8179498218816041746,
+                16669587446816067510,
+                16669587446816067510,
+                1047525626245576326,
+                16396494396874636641,
+                6184569005415132422,
+                6184569005415132422,
+                1700064778966841179,
+                12472828401039075120,
+                6184569005415132422,
+            ],
+        ];
+        assert_eq!(observations, expected);
+    }
+
     #[test]
     fn tiered_m_v_by_degree_assigns_hub_to_top_tier() {
         // Star graph: vertex 0 connected to 1..9.  deg(0)=9; rest deg=1.
@@ -3764,6 +2051,66 @@ mod tests {
         }
     }
 
+    /// A borrowed fixture, not an enumeration implementation. Keeping inputs
+    /// together prevents parallel variants from silently receiving different caps.
+    struct PerVertexCase<'a> {
+        graph: &'a SignedGraph,
+        caps: &'a [u32],
+        roots: Vec<u32>,
+    }
+    impl<'a> PerVertexCase<'a> {
+        fn new(graph: &'a SignedGraph, caps: &'a [u32]) -> Self {
+            assert_eq!(caps.len(), graph.n_nodes as usize);
+            Self {
+                graph,
+                caps,
+                roots: (0..graph.n_nodes).collect(),
+            }
+        }
+        fn unpruned(&self) -> TopKCyclesBatch {
+            enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
+                self.graph,
+                3,
+                &NoOpPruner,
+                self.caps,
+                &self.roots,
+                |c: &[u32], s: &[i8]| s.iter().filter(|&&x| x < 0).count() as f64 / c.len() as f64,
+            )
+        }
+        fn global(&self, fullness_gate: f64) -> TopKCyclesBatch {
+            enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_global_batched(
+                self.graph,
+                3,
+                &NoOpPruner,
+                self.caps,
+                &self.roots,
+                &FractionNegativeScorer,
+                fullness_gate,
+            )
+        }
+        fn root_bounded(&self) -> TopKCyclesBatch {
+            enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_batched(
+                self.graph,
+                3,
+                &NoOpPruner,
+                self.caps,
+                &self.roots,
+                &FractionNegativeScorer,
+            )
+        }
+        fn canonical(batch: &TopKCyclesBatch) -> std::collections::HashSet<Vec<u32>> {
+            batch
+                .cycles
+                .chunks_exact(batch.k)
+                .map(|vertices| {
+                    let mut key = vertices.to_vec();
+                    key.sort_unstable();
+                    key
+                })
+                .collect()
+        }
+    }
+
     #[test]
     fn per_vertex_bb_global_huge_caps_matches_non_bb() {
         // With huge caps, no heap ever fills → global_min stays at
@@ -3774,27 +2121,9 @@ mod tests {
             signs: vec![1, -1, 1, 1, 1, -1, 1],
         };
         let huge = vec![10_000u32; g.n_nodes as usize];
-        let starting: Vec<u32> = (0..g.n_nodes).collect();
-        let non_bb = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &huge,
-            &starting,
-            |c: &[u32], s: &[i8]| {
-                let nn = s.iter().filter(|&&x| x < 0).count() as f64;
-                nn / c.len() as f64
-            },
-        );
-        let bb_g = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_global_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &huge,
-            &starting,
-            &FractionNegativeScorer,
-            0.0,
-        );
+        let case = PerVertexCase::new(&g, &huge);
+        let non_bb = case.unpruned();
+        let bb_g = case.global(0.0);
         assert_eq!(non_bb.len(), bb_g.len());
     }
 
@@ -3819,41 +2148,12 @@ mod tests {
             signs: vec![1, 1, -1, 1, -1, 1, -1, 1, 1, 1],
         };
         let m_v = vec![2u32; g.n_nodes as usize]; // tiny caps
-        let starting: Vec<u32> = (0..g.n_nodes).collect();
-        let non_bb = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &m_v,
-            &starting,
-            |c: &[u32], s: &[i8]| {
-                let nn = s.iter().filter(|&&x| x < 0).count() as f64;
-                nn / c.len() as f64
-            },
-        );
-        let bb_g = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_global_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &m_v,
-            &starting,
-            &FractionNegativeScorer,
-            0.0, // gate=0 → always on
-        );
-        use std::collections::HashSet;
-        let canon = |b: &TopKCyclesBatch| -> HashSet<Vec<u32>> {
-            (0..b.len())
-                .map(|i| {
-                    let s = i * b.k;
-                    let e = s + b.k;
-                    let mut k = b.cycles[s..e].to_vec();
-                    k.sort_unstable();
-                    k
-                })
-                .collect()
-        };
-        let non_bb_set = canon(&non_bb);
-        let bb_g_set = canon(&bb_g);
+        let case = PerVertexCase::new(&g, &m_v);
+        let non_bb = case.unpruned();
+        let bb_g = case.global(0.0);
+
+        let non_bb_set = PerVertexCase::canonical(&non_bb);
+        let bb_g_set = PerVertexCase::canonical(&bb_g);
         assert!(
             bb_g_set.is_subset(&non_bb_set),
             "global-min ABB output ({}) must be a subset of non-ABB ({})",
@@ -3886,43 +2186,14 @@ mod tests {
         };
         // Top 6 vertices: cap=2.  Bottom 2 (cap-0 vertices 6,7).
         let m_v = vec![2u32, 2, 2, 2, 2, 2, 0, 0];
-        let starting: Vec<u32> = (0..g.n_nodes).collect();
-        let non_bb = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &m_v,
-            &starting,
-            |c: &[u32], s: &[i8]| {
-                let nn = s.iter().filter(|&&x| x < 0).count() as f64;
-                nn / c.len() as f64
-            },
-        );
+        let case = PerVertexCase::new(&g, &m_v);
+        let non_bb = case.unpruned();
         // gate=1.0 with the fix: threshold = 6 (n_active), not 8.
         // ABB should still produce a SUBSET of non-ABB output.
-        let bb_g = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_global_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &m_v,
-            &starting,
-            &FractionNegativeScorer,
-            1.0,
-        );
-        use std::collections::HashSet;
-        let canon = |b: &TopKCyclesBatch| -> HashSet<Vec<u32>> {
-            (0..b.len())
-                .map(|i| {
-                    let s = i * b.k;
-                    let e = s + b.k;
-                    let mut k = b.cycles[s..e].to_vec();
-                    k.sort_unstable();
-                    k
-                })
-                .collect()
-        };
+        let bb_g = case.global(1.0);
+
         assert!(
-            canon(&bb_g).is_subset(&canon(&non_bb)),
+            PerVertexCase::canonical(&bb_g).is_subset(&PerVertexCase::canonical(&non_bb)),
             "ABB output ({}) must be subset of non-ABB ({})",
             bb_g.len(),
             non_bb.len(),
@@ -3940,27 +2211,9 @@ mod tests {
             signs: vec![1, -1, 1, 1, 1, -1, 1],
         };
         let m_v = vec![2u32; g.n_nodes as usize];
-        let starting: Vec<u32> = (0..g.n_nodes).collect();
-        let non_bb = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &m_v,
-            &starting,
-            |c: &[u32], s: &[i8]| {
-                let nn = s.iter().filter(|&&x| x < 0).count() as f64;
-                nn / c.len() as f64
-            },
-        );
-        let bb_g = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_global_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &m_v,
-            &starting,
-            &FractionNegativeScorer,
-            1.0, // gate=1.0 → effectively off
-        );
+        let case = PerVertexCase::new(&g, &m_v);
+        let non_bb = case.unpruned();
+        let bb_g = case.global(1.0);
         // With gate=1.0, ABB never activates in typical fixtures.
         // The output should match non-ABB.
         assert_eq!(non_bb.len(), bb_g.len());
@@ -3988,41 +2241,13 @@ mod tests {
             signs: vec![1, 1, -1, 1, -1, 1, -1, 1, 1, 1],
         };
         let m_v = vec![4u32; g.n_nodes as usize];
-        let starting: Vec<u32> = (0..g.n_nodes).collect();
-        let non_bb = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &m_v,
-            &starting,
-            |c: &[u32], s: &[i8]| {
-                let nn = s.iter().filter(|&&x| x < 0).count() as f64;
-                nn / c.len() as f64
-            },
-        );
-        let bb = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &m_v,
-            &starting,
-            &FractionNegativeScorer,
-        );
-        use std::collections::HashSet;
-        let canon = |b: &TopKCyclesBatch| -> HashSet<Vec<u32>> {
-            (0..b.len())
-                .map(|i| {
-                    let s = i * b.k;
-                    let e = s + b.k;
-                    let mut k = b.cycles[s..e].to_vec();
-                    k.sort_unstable();
-                    k
-                })
-                .collect()
-        };
+        let case = PerVertexCase::new(&g, &m_v);
+        let non_bb = case.unpruned();
+        let bb = case.root_bounded();
+
         // non_bb is already a TopKCyclesBatch (SoA path).
-        let non_bb_set = canon(&non_bb);
-        let bb_set = canon(&bb);
+        let non_bb_set = PerVertexCase::canonical(&non_bb);
+        let bb_set = PerVertexCase::canonical(&bb);
         assert!(
             bb_set.is_subset(&non_bb_set),
             "ABB output ({}) must be a subset of non-ABB ({})",
@@ -4062,26 +2287,9 @@ mod tests {
             signs: vec![1, -1, 1, 1, 1, -1, 1],
         };
         let huge = vec![10_000u32; g.n_nodes as usize];
-        let starting: Vec<u32> = (0..g.n_nodes).collect();
-        let non_bb = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &huge,
-            &starting,
-            |c: &[u32], s: &[i8]| {
-                let nn = s.iter().filter(|&&x| x < 0).count() as f64;
-                nn / c.len() as f64
-            },
-        );
-        let bb = enumerate_top_k_per_vertex_cycles_par_adaptive_starting_bb_batched(
-            &g,
-            3,
-            &NoOpPruner,
-            &huge,
-            &starting,
-            &FractionNegativeScorer,
-        );
+        let case = PerVertexCase::new(&g, &huge);
+        let non_bb = case.unpruned();
+        let bb = case.root_bounded();
         // At huge caps, heaps never fill → ABB threshold = -∞ → no pruning.
         assert_eq!(
             non_bb.len(),
@@ -4266,7 +2474,7 @@ mod tests {
     ///   Δ_pos:  signs (+, +, +) ⇒ balanced.
     ///   Δ_mix1: signs (+, +, -) ⇒ unbalanced.
     ///   Δ_mix2: signs (+, -, -) ⇒ balanced.
-    fn build_three_triangles() -> SignedGraph {
+    pub(super) fn build_three_triangles() -> SignedGraph {
         // Triangles: 0-1-2, 3-4-5, 6-7-8.
         SignedGraph::from_parts(
             9,

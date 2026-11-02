@@ -6,8 +6,10 @@
 //! row orientation of the sparse operator `B`, and the borrowed
 //! [`hymeko::ir::incidence::IncidenceIndex`] is its `Bᵀ` access permutation
 //! (`node → (HyperArcId, ref_slot)`). This module walks that structure **in place** —
-//! no dense view, no `Ir → SignedGraph` adapter, no pairwise flattening, no materialised
+//! no `Ir → SignedGraph` adapter, no pairwise flattening, no materialised
 //! star or clique, no second hypergraph model. It is the standard HyMeKo graph path.
+//! Repeated numerical operators such as PageRank consume Core's shared compact
+//! incidence projection; it preserves canonical IDs and contains no record payloads.
 //!
 //! Contrast with the rest of the crate: [`crate::signed_graph::SignedGraph`] and
 //! [`crate::traversal::Csr`] are *pairwise* (a hypergraph reaches them only by star
@@ -42,7 +44,9 @@ pub mod berge_enum;
 pub mod components;
 pub mod dual;
 pub mod informed;
+pub mod pagerank;
 pub mod s_connect;
+pub mod tour;
 pub mod traversal;
 pub mod workspace;
 
@@ -56,13 +60,19 @@ pub use berge_enum::{
 pub use components::{ComponentLabeling, connected_components};
 pub use dual::{DualReach, dual_reachability};
 pub use informed::{
-    BergeCost, BergeHeuristic, DirectedConsumerProducer, DirectedProducerConsumer,
-    IncidenceWeightCost, InformedSearchError, InformedSearchWorkspace, MetricHeuristic,
-    MetricStepCost, OrientedMaterialisationDigest, PathHash, PositionProvider, SearchStats,
-    SignCompatible, TransitionPolicy, Undirected, UnitCost, WeightedBergePath, ZeroHeuristic,
-    astar_berge_path, dijkstra_berge_path,
+    BergeCost, BergeHeuristic, DirectedConsumerProducer, DirectedProducerConsumer, HopHeuristic,
+    IncidenceWeightCost, InformedSearchError, InformedSearchWorkspace, MaxHeuristic,
+    MetricHeuristic, MetricStepCost, OrientedMaterialisationDigest, PathHash, PositionProvider,
+    PreparedBergeSearch, SearchStats, SignCompatible, TransitionPolicy, Undirected, UnitCost,
+    WeightedBergePath, ZeroHeuristic, astar_berge_path, dijkstra_berge_path,
+};
+pub use pagerank::{
+    PageRank, PageRankAutoConfig, PageRankAutoReason, PageRankAutoSelection, PageRankConfig,
+    PageRankError, PageRankModel, PageRankOptions, PageRankQuotient, PageRankResult,
+    PageRankSolver, PageRankWorkspace, RankFlow, RankOrdering, RankWeights,
 };
 pub use s_connect::{SComponentLabeling, s_connected_components};
+pub use tour::{BergeTour, Christofides, TourError, TourLimits};
 pub use traversal::{BergeIncidence, BergePath, BergeStep, HyperTraversal, NodeSet};
 pub use workspace::TraversalWorkspace;
 

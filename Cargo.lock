@@ -328,9 +328,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "hymeko-graph-dev"
+version = "0.1.0"
+dependencies = [
+ "hymeko-graph-dylib",
+ "hymeko_core",
+ "rayon",
+]
+
+[[package]]
+name = "hymeko-graph-dylib"
+version = "0.1.0"
+dependencies = [
+ "hymeko_graph",
+]
+
+[[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+ssh://git@192.168.1.228:2222/hymeko/core.git?rev=c4715f3a0bb78133db88d41cfdfe991e5a184419#c4715f3a0bb78133db88d41cfdfe991e5a184419"
+source = "git+ssh://git@192.168.1.228:2222/hymeko/core.git?rev=7664d55458120030fe451321f63ff48975a982c4#7664d55458120030fe451321f63ff48975a982c4"
 dependencies = [
  "blake3",
  "ciborium",
@@ -348,8 +364,14 @@ version = "0.1.0"
 dependencies = [
  "dashmap",
  "hymeko_core",
+ "hymeko_numerics",
  "rayon",
 ]
+
+[[package]]
+name = "hymeko_numerics"
+version = "0.1.0"
+source = "git+ssh://git@192.168.1.228:2222/hymeko/tensor.git?rev=1929e4d3902a8b51f45b5366460314783c1ec9e6#1929e4d3902a8b51f45b5366460314783c1ec9e6"
 
 [[package]]
 name = "hymeko_pgraph"
@@ -375,7 +397,7 @@ dependencies = [
 [[package]]
 name = "hymeko_tensor"
 version = "0.1.0"
-source = "git+ssh://git@192.168.1.228:2222/hymeko/tensor.git?rev=091f4f139e4759fc0c800fe98a5d15a8d5fd6e32#091f4f139e4759fc0c800fe98a5d15a8d5fd6e32"
+source = "git+ssh://git@192.168.1.228:2222/hymeko/tensor.git?rev=9317ecf773d55a0e7968273a63bc2f4e8dbcc7c7#9317ecf773d55a0e7968273a63bc2f4e8dbcc7c7"
 
 [[package]]
 name = "indexmap"

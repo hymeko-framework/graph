@@ -1,9 +1,12 @@
 //! P3.1 — map/routing on the direct canonical-Ir path: coordinates + weights live in the `Ir`
 //! (`DeclNode.anno.value`, incidence weights); a test-side `PositionProvider` reads them back. The
-//! discrete and combined admissible heuristics are test-side `BergeHeuristic` adapters (no engine/core
-//! edit). Optimality is anchored on the frozen linear-scan Dijkstra oracle; admissibility and
+//! discrete and combined bounds use the library's `HopHeuristic` and `MaxHeuristic`.
+//! Optimality is anchored on the frozen linear-scan Dijkstra oracle; admissibility and
 //! consistency are checked exhaustively on a small map. No parallel map object; no second engine.
 
+use hymeko_graph::direct_ir::{HopHeuristic, MaxHeuristic};
+use ic::MapPositions;
+use ic::search::{AStar, Dijkstra, SearchCase};
 use std::collections::{HashMap, HashSet};
 
 use hymeko::common::ids::{DeclId, NodeId};
@@ -11,7 +14,7 @@ use hymeko::ir::incidence::{IncidenceIndex, build_incidence_index};
 use hymeko::ir::ir::Ir;
 use hymeko_graph::direct_ir::{
     BergeHeuristic, HyperTraversal, IncidenceWeightCost, InformedSearchWorkspace, MetricHeuristic,
-    PositionProvider, Undirected, astar_berge_path, dijkstra_berge_path,
+    Undirected,
 };
 
 #[path = "informed_common/mod.rs"]
@@ -21,56 +24,9 @@ use ic::OracleCost;
 
 // ---- coordinates read straight from the canonical Ir -----------------------------------------------
 
-struct IrPositions {
-    pos: Vec<Option<[f64; 2]>>,
-}
-impl IrPositions {
-    fn new(ir: &Ir) -> Self {
-        let pos = (0..ir.decl_nodes.len())
-            .map(|d| ic::ir_position(ir, DeclId::new(d)))
-            .collect();
-        Self { pos }
-    }
-}
-impl PositionProvider for IrPositions {
-    fn position(&self, node: DeclId) -> Option<&[f64]> {
-        self.pos
-            .get(node.raw())
-            .and_then(|o| o.as_ref())
-            .map(|a| a.as_slice())
-    }
-}
-
 // ---- discrete Berge-hop admissible heuristic (min remaining hops * global min transition cost) ------
 
-struct DiscreteHeuristic {
-    hops: Vec<u32>,
-    min_cost: f64,
-}
-impl BergeHeuristic for DiscreteHeuristic {
-    const ADMISSIBLE: bool = true;
-    const CONSISTENT: bool = true;
-    fn h(&self, _ir: &Ir, node: DeclId) -> f64 {
-        match self.hops.get(node.raw()).copied() {
-            Some(u32::MAX) | None => 0.0,
-            Some(hd) => hd as f64 * self.min_cost,
-        }
-    }
-}
-
 // ---- combined admissible heuristic: max(metric, discrete) ------------------------------------------
-
-struct CombinedHeuristic<'a> {
-    metric: MetricHeuristic<'a, IrPositions>,
-    discrete: &'a DiscreteHeuristic,
-}
-impl BergeHeuristic for CombinedHeuristic<'_> {
-    const ADMISSIBLE: bool = true;
-    const CONSISTENT: bool = true;
-    fn h(&self, ir: &Ir, node: DeclId) -> f64 {
-        self.metric.h(ir, node).max(self.discrete.h(ir, node))
-    }
-}
 
 fn small_map() -> (Ir, usize, usize) {
     let (w, h) = (16usize, 16usize);
@@ -82,6 +38,63 @@ fn cost() -> IncidenceWeightCost {
     IncidenceWeightCost { base: 0.0 }
 }
 
+#[test]
+fn hop_heuristic_handles_zero_missing_disconnected_and_invalid_bounds() {
+    let ir = ic::multi_component_ir(2, 3, 2);
+    let index = build_incidence_index(&ir).unwrap();
+    let hops = ic::hop_distances_from(&ir, &index, NodeId::new(0));
+    let heuristic = HopHeuristic::new(&hops, 0.5);
+    for (raw, expected) in [(0, 0.0), (1, 0.5), (2, 1.0), (3, 0.0), (99, 0.0)] {
+        assert_eq!(heuristic.h(&ir, DeclId::new(raw)), expected);
+    }
+    assert_eq!(HopHeuristic::new(&hops, 0.0).h(&ir, DeclId::new(2)), 0.0);
+    assert_eq!(HopHeuristic::new(&[], 1.0).h(&ir, DeclId::new(0)), 0.0);
+    for invalid in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert!(std::panic::catch_unwind(|| HopHeuristic::new(&hops, invalid)).is_err());
+    }
+    assert!(std::panic::catch_unwind(|| HopHeuristic::new(&[2], f64::MAX)).is_err());
+}
+
+#[test]
+fn max_heuristic_propagates_both_guarantees_and_keeps_zero_tiebreak() {
+    struct Bound<const A: bool, const C: bool>(f64);
+    impl<const A: bool, const C: bool> BergeHeuristic for Bound<A, C> {
+        const ADMISSIBLE: bool = A;
+        const CONSISTENT: bool = C;
+        fn h(&self, _: &Ir, _: DeclId) -> f64 {
+            self.0
+        }
+        fn tiebreak(&self, _: &Ir, _: DeclId) -> u32 {
+            7
+        }
+    }
+    fn guarantees<H: BergeHeuristic>(_: &H) -> (bool, bool) {
+        (H::ADMISSIBLE, H::CONSISTENT)
+    }
+    let a = Bound::<true, true>(2.0);
+    let b = Bound::<true, true>(3.0);
+    let inconsistent = Bound::<true, false>(4.0);
+    let inadmissible = Bound::<false, true>(5.0);
+    let max = MaxHeuristic::new(&a, &b);
+    assert_eq!(guarantees(&max), (true, true));
+    assert_eq!(
+        guarantees(&MaxHeuristic::new(&a, &inconsistent)),
+        (true, false)
+    );
+    assert_eq!(
+        guarantees(&MaxHeuristic::new(&inconsistent, &a)),
+        (true, false)
+    );
+    assert_eq!(
+        guarantees(&MaxHeuristic::new(&a, &inadmissible)),
+        (false, true)
+    );
+    let ir = Ir::default();
+    assert_eq!(max.h(&ir, DeclId::new(0)), 3.0);
+    assert_eq!(MaxHeuristic::new(&b, &a).h(&ir, DeclId::new(0)), 3.0);
+    assert_eq!(max.tiebreak(&ir, DeclId::new(0)), 0);
+}
+
 // ---- admissibility + consistency, checked exhaustively on the small map (§5, §12) ------------------
 
 #[test]
@@ -89,16 +102,15 @@ fn metric_and_discrete_admissible_and_consistent() {
     let (ir, w, h) = small_map();
     let idx = build_incidence_index(&ir).unwrap();
     let goal = NodeId::new(w * h - 1);
-    let provider = IrPositions::new(&ir);
+    let provider = MapPositions::from_ir(&ir);
     let metric = MetricHeuristic::new(&provider, ir.nodes[goal.raw()].decl);
     let hops = ic::hop_distances_from(&ir, &idx, goal);
-    let discrete = DiscreteHeuristic {
-        hops: hops.clone(),
-        min_cost: ic::map_min_edge_cost(&ir),
-    };
+    let discrete = HopHeuristic::new(&hops, ic::map_min_edge_cost(&ir));
+    let combined = MaxHeuristic::new(&metric, &discrete);
     // h(goal) == 0, h >= 0, and admissibility h(n) <= oracle_dist(n, goal) for every reachable n.
     assert_eq!(metric.h(&ir, ir.nodes[goal.raw()].decl), 0.0);
     assert_eq!(discrete.h(&ir, ir.nodes[goal.raw()].decl), 0.0);
+    assert_eq!(combined.h(&ir, ir.nodes[goal.raw()].decl), 0.0);
     for n in 0..(w * h) {
         let start = NodeId::new(n);
         let od = ic::oracle_dijkstra_cost(&ir, &idx, start, goal, OracleCost::Weight { base: 0.0 });
@@ -106,6 +118,10 @@ fn metric_and_discrete_admissible_and_consistent() {
         let (hm, hd) = (metric.h(&ir, d), discrete.h(&ir, d));
         assert!(hm >= 0.0 && hd >= 0.0, "non-negative");
         if let Some(dist) = od {
+            assert!(
+                combined.h(&ir, d) <= dist + 1e-9,
+                "combined admissible at {n}"
+            );
             assert!(
                 hm <= dist + 1e-9,
                 "metric admissible at {n}: {hm} <= {dist}"
@@ -124,10 +140,11 @@ fn metric_and_discrete_admissible_and_consistent() {
                     continue;
                 }
                 let (u, v) = (a.refs[i].target(), a.refs[j].target());
-                let c = ic::first_num_weight_pub(&a.refs[j]);
+                let c = ic::first_num_weight_pub(&ir, &a.refs[j]);
                 for hh in [
                     metric.h(&ir, u) - metric.h(&ir, v),
                     discrete.h(&ir, u) - discrete.h(&ir, v),
+                    combined.h(&ir, u) - combined.h(&ir, v),
                 ] {
                     assert!(
                         hh <= c + 1e-9,
@@ -153,29 +170,26 @@ fn astar_metric_discrete_combined_all_optimal() {
     let idx = build_incidence_index(&ir).unwrap();
     let trav = HyperTraversal::new(&idx);
     let mut ws = InformedSearchWorkspace::new();
-    let provider = IrPositions::new(&ir);
+    let provider = MapPositions::from_ir(&ir);
     for &g in &[w * h - 1, w * h - 2, (h / 2) * w + w / 2] {
         let goal = NodeId::new(g);
         let metric = MetricHeuristic::new(&provider, ir.nodes[goal.raw()].decl);
         let hops = ic::hop_distances_from(&ir, &idx, goal);
-        let discrete = DiscreteHeuristic {
-            hops,
-            min_cost: ic::map_min_edge_cost(&ir),
-        };
-        let combined = CombinedHeuristic {
-            metric: MetricHeuristic::new(&provider, ir.nodes[goal.raw()].decl),
-            discrete: &discrete,
-        };
+        let discrete = HopHeuristic::new(&hops, ic::map_min_edge_cost(&ir));
+        let combined = MaxHeuristic::new(&metric, &discrete);
         for s in [0usize, 5, w + 3, (h - 1) * w, w * h / 2] {
             let start = NodeId::new(s);
             let oracle = dijkstra_oracle(&ir, &idx, start, goal);
-            let dij =
-                dijkstra_berge_path(&trav, start, goal, &cost(), &Undirected, &mut ws).unwrap();
-            let am = astar_berge_path(&trav, start, goal, &cost(), &metric, &Undirected, &mut ws)
+            let mut case = SearchCase::new(&trav, start, goal, &mut ws);
+            let dij = case.run(&Dijkstra::new(&cost(), &Undirected)).unwrap();
+            let am = case
+                .run(&AStar::new(&cost(), &metric, &Undirected))
                 .unwrap();
-            let ad = astar_berge_path(&trav, start, goal, &cost(), &discrete, &Undirected, &mut ws)
+            let ad = case
+                .run(&AStar::new(&cost(), &discrete, &Undirected))
                 .unwrap();
-            let ac = astar_berge_path(&trav, start, goal, &cost(), &combined, &Undirected, &mut ws)
+            let ac = case
+                .run(&AStar::new(&cost(), &combined, &Undirected))
                 .unwrap();
             let q = |p: &Option<hymeko_graph::direct_ir::WeightedBergePath>| {
                 p.as_ref().map(|x| (x.total_cost * 1e6) as i64)
@@ -218,15 +232,9 @@ fn blocked_region_is_unreachable() {
     let idx = build_incidence_index(&ir).unwrap();
     let trav = HyperTraversal::new(&idx);
     let mut ws = InformedSearchWorkspace::new();
-    let p = dijkstra_berge_path(
-        &trav,
-        NodeId::new(0),
-        NodeId::new(corner),
-        &cost(),
-        &Undirected,
-        &mut ws,
-    )
-    .unwrap();
+    let p = SearchCase::new(&trav, NodeId::new(0), NodeId::new(corner), &mut ws)
+        .run(&Dijkstra::new(&cost(), &Undirected))
+        .unwrap();
     assert!(p.is_none(), "walled-off corner is unreachable (typed None)");
 }
 
@@ -242,15 +250,13 @@ fn transport_multiway_discrete_optimal() {
     let mut ws = InformedSearchWorkspace::new();
     let goal = NodeId::new(w * h - 1);
     let hops = ic::hop_distances_from(&ir, &idx, goal);
-    let discrete = DiscreteHeuristic {
-        hops,
-        min_cost: ic::map_min_edge_cost(&ir),
-    };
+    let discrete = HopHeuristic::new(&hops, ic::map_min_edge_cost(&ir));
     for s in [0usize, 5, w * h / 2] {
         let start = NodeId::new(s);
         let oracle = dijkstra_oracle(&ir, &idx, start, goal);
-        let ad =
-            astar_berge_path(&trav, start, goal, &cost(), &discrete, &Undirected, &mut ws).unwrap();
+        let ad = SearchCase::new(&trav, start, goal, &mut ws)
+            .run(&AStar::new(&cost(), &discrete, &Undirected))
+            .unwrap();
         let q = ad.as_ref().map(|x| (x.total_cost * 1e6) as i64);
         assert_eq!(
             q,
@@ -279,35 +285,34 @@ fn measure_map_routing() {
         let e = ir.arcs.len();
         let nnz: usize = ir.arcs.iter().map(|a| a.refs.len()).sum();
         let (start, goal) = (NodeId::new(0), NodeId::new(v - 1));
-        let provider = IrPositions::new(&ir);
+        let provider = MapPositions::from_ir(&ir);
         let metric = MetricHeuristic::new(&provider, ir.nodes[goal.raw()].decl);
         let (prep_us, _, _) = ic::median_us(9, || {
             let _ = ic::hop_distances_from(&ir, &idx, goal);
         });
         let hops = ic::hop_distances_from(&ir, &idx, goal);
-        let discrete = DiscreteHeuristic {
-            hops,
-            min_cost: ic::map_min_edge_cost(&ir),
-        };
-        let combined = CombinedHeuristic {
-            metric: MetricHeuristic::new(&provider, ir.nodes[goal.raw()].decl),
-            discrete: &discrete,
-        };
+        let discrete = HopHeuristic::new(&hops, ic::map_min_edge_cost(&ir));
+        let combined = MaxHeuristic::new(&metric, &discrete);
         // ONE reused workspace across all timed queries (zero-alloc warm target)
         let mut ws = InformedSearchWorkspace::new();
         let (dij, _, _) = ic::median_us(20, || {
-            let _ = dijkstra_berge_path(&trav, start, goal, &cost(), &Undirected, &mut ws).unwrap();
+            let _ = SearchCase::new(&trav, start, goal, &mut ws)
+                .run(&Dijkstra::new(&cost(), &Undirected))
+                .unwrap();
         });
         let (mtr, _, _) = ic::median_us(20, || {
-            let _ = astar_berge_path(&trav, start, goal, &cost(), &metric, &Undirected, &mut ws)
+            let _ = SearchCase::new(&trav, start, goal, &mut ws)
+                .run(&AStar::new(&cost(), &metric, &Undirected))
                 .unwrap();
         });
         let (dsc, _, _) = ic::median_us(20, || {
-            let _ = astar_berge_path(&trav, start, goal, &cost(), &discrete, &Undirected, &mut ws)
+            let _ = SearchCase::new(&trav, start, goal, &mut ws)
+                .run(&AStar::new(&cost(), &discrete, &Undirected))
                 .unwrap();
         });
         let (cmb, _, _) = ic::median_us(20, || {
-            let _ = astar_berge_path(&trav, start, goal, &cost(), &combined, &Undirected, &mut ws)
+            let _ = SearchCase::new(&trav, start, goal, &mut ws)
+                .run(&AStar::new(&cost(), &combined, &Undirected))
                 .unwrap();
         });
         println!(

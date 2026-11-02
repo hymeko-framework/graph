@@ -1,0 +1,9 @@
+application_description {}
+application {
+    actuator { mass 2.0; }
+    sensor {}
+    controller {}
+    isolated {}
+    @feedback { (- actuator, + sensor, + controller); }
+    @drive { (- controller, + actuator); }
+}

@@ -4,10 +4,9 @@
 //! independent (non-generation-stamped) DSU oracles, at least seven measured repetitions after warm-up,
 //! quartiles, worst values, alternating A/B order, and A/A null controls.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
+use hymeko::util::measurement::{AllocationSnapshot, CountingAllocator};
+use hymeko::util::measurement::{MeasurementRunner, Runner};
 use std::hint::black_box;
-use std::time::Instant;
 
 use hymeko::common::ids::NodeId;
 use hymeko::ir::incidence::build_incidence_index;
@@ -21,30 +20,32 @@ use hymeko_graph::{
 #[path = "informed_common/mod.rs"]
 mod ic;
 
-thread_local! {
-    static ALLOCS: Cell<u64> = const { Cell::new(0) };
-    static BYTES: Cell<u64> = const { Cell::new(0) };
-}
-
-struct Counting;
-
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let _ = ALLOCS.try_with(|c| c.set(c.get() + 1));
-        let _ = BYTES.try_with(|c| c.set(c.get() + layout.size() as u64));
-        unsafe { System.alloc(layout) }
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
 #[global_allocator]
-static GLOBAL: Counting = Counting;
+static GLOBAL: CountingAllocator = CountingAllocator;
+
+#[test]
+fn shared_runner_reuses_storage_without_allocating() {
+    struct DeterministicClock;
+    impl hymeko::util::measurement::Clock for DeterministicClock {
+        type Start = ();
+        fn start(&mut self) {}
+        fn elapsed_us(&mut self, (): ()) -> f64 {
+            1.0
+        }
+    }
+    let mut runner = MeasurementRunner::with_clock(2, 9, DeterministicClock);
+    let before = AllocationSnapshot::current_thread();
+    let single = runner.run(|| 7u64);
+    let (left, right) = runner.compare(|| 11u64, || 13u64);
+    let after = AllocationSnapshot::current_thread().since(before);
+    assert_eq!(after.allocations, 0);
+    assert_eq!(after.bytes, 0);
+    assert_eq!((single.median, left.median, right.median), (1.0, 1.0, 1.0));
+}
 
 fn allocation_snapshot() -> (u64, u64) {
-    (ALLOCS.with(Cell::get), BYTES.with(Cell::get))
+    let snapshot = AllocationSnapshot::current_thread();
+    (snapshot.allocations, snapshot.bytes)
 }
 
 fn allocation_delta(before: (u64, u64)) -> (u64, u64) {
@@ -52,62 +53,14 @@ fn allocation_delta(before: (u64, u64)) -> (u64, u64) {
     (after.0 - before.0, after.1 - before.1)
 }
 
-#[derive(Clone, Copy)]
-struct Stats {
-    median_us: f64,
-    q1_us: f64,
-    q3_us: f64,
-    worst_us: f64,
+type Stats = hymeko::util::measurement::Distribution;
+
+fn measure(f: impl FnMut()) -> Stats {
+    MeasurementRunner::new(2, 9).run(f)
 }
 
-fn summarize(mut samples_us: Vec<f64>) -> Stats {
-    samples_us.sort_by(f64::total_cmp);
-    let n = samples_us.len();
-    Stats {
-        median_us: samples_us[n / 2],
-        q1_us: samples_us[n / 4],
-        q3_us: samples_us[(3 * n) / 4],
-        worst_us: samples_us[n - 1],
-    }
-}
-
-fn measure(mut f: impl FnMut()) -> Stats {
-    for _ in 0..2 {
-        f();
-    }
-    let mut samples = Vec::with_capacity(9);
-    for _ in 0..9 {
-        let start = Instant::now();
-        f();
-        samples.push(start.elapsed().as_secs_f64() * 1e6);
-    }
-    summarize(samples)
-}
-
-fn measure_alternating(mut a: impl FnMut(), mut b: impl FnMut()) -> (Stats, Stats) {
-    for _ in 0..2 {
-        a();
-        b();
-    }
-    let mut sa = Vec::with_capacity(9);
-    let mut sb = Vec::with_capacity(9);
-    for i in 0..9 {
-        let first = Instant::now();
-        if i % 2 == 0 {
-            a();
-            sa.push(first.elapsed().as_secs_f64() * 1e6);
-            let second = Instant::now();
-            b();
-            sb.push(second.elapsed().as_secs_f64() * 1e6);
-        } else {
-            b();
-            sb.push(first.elapsed().as_secs_f64() * 1e6);
-            let second = Instant::now();
-            a();
-            sa.push(second.elapsed().as_secs_f64() * 1e6);
-        }
-    }
-    (summarize(sa), summarize(sb))
+fn measure_alternating(a: impl FnMut(), b: impl FnMut()) -> (Stats, Stats) {
+    MeasurementRunner::new(2, 9).compare(a, b)
 }
 
 fn dims(ir: &Ir) -> (usize, usize, usize) {
@@ -142,10 +95,10 @@ fn timed_row(
             incidences.to_string(),
             "2".to_string(),
             "9".to_string(),
-            format!("{:.3}", stats.median_us),
-            format!("{:.3}", stats.q1_us),
-            format!("{:.3}", stats.q3_us),
-            format!("{:.3}", stats.worst_us),
+            format!("{:.3}", stats.median),
+            format!("{:.3}", stats.q1),
+            format!("{:.3}", stats.q3),
+            format!("{:.3}", stats.worst),
             checksum.to_string(),
             format!("{value:.6}"),
             unit.to_string(),
@@ -310,7 +263,7 @@ fn audit_rank2_timing(rows: &mut Vec<String>, name: &str, ir: Ir) {
         &ir,
         forest,
         forest_out.len() as u64,
-        forest.median_us * 1000.0 / arcs,
+        forest.median * 1000.0 / arcs,
         "ns_per_arc",
         "alternating with weighted basis",
     );
@@ -322,7 +275,7 @@ fn audit_rank2_timing(rows: &mut Vec<String>, name: &str, ir: Ir) {
         &ir,
         weighted,
         weighted_out.len() as u64,
-        weighted.median_us / forest.median_us,
+        weighted.median / forest.median,
         "ratio_vs_forest",
         "alternating with forest; includes edge collection, allocation, sort, output",
     );
@@ -334,7 +287,7 @@ fn audit_rank2_timing(rows: &mut Vec<String>, name: &str, ir: Ir) {
         &ir,
         null_a,
         forest_out.len() as u64,
-        null_a.median_us / null_b.median_us,
+        null_a.median / null_b.median,
         "ratio_a_over_b",
         "same operation, alternating independent workspaces",
     );
@@ -346,7 +299,7 @@ fn audit_rank2_timing(rows: &mut Vec<String>, name: &str, ir: Ir) {
         &ir,
         null_b,
         null_out.len() as u64,
-        null_b.median_us / null_a.median_us,
+        null_b.median / null_a.median,
         "ratio_b_over_a",
         "same operation, alternating independent workspaces",
     );
@@ -377,7 +330,7 @@ fn audit_levi_timing(rows: &mut Vec<String>, name: &str, ir: Ir) {
         &ir,
         a,
         a_out.len() as u64,
-        a.median_us * 1000.0 / inc,
+        a.median * 1000.0 / inc,
         "ns_per_incidence",
         "alternating A/A; warm workspace and output capacity",
     );
@@ -389,7 +342,7 @@ fn audit_levi_timing(rows: &mut Vec<String>, name: &str, ir: Ir) {
         &ir,
         b,
         b_out.len() as u64,
-        b.median_us / a.median_us,
+        b.median / a.median,
         "ratio_b_over_a",
         "same operation, alternating independent workspaces",
     );
@@ -422,7 +375,7 @@ fn audit_batch_scaling(rows: &mut Vec<String>, name: &str, ir: Ir) {
                 assert_eq!(current, expected, "{name}: checksum at {threads} threads")
             }
         }
-        let base = *baseline.get_or_insert(stats.median_us);
+        let base = *baseline.get_or_insert(stats.median);
         timed_row(
             rows,
             "batch_scaling",
@@ -431,7 +384,7 @@ fn audit_batch_scaling(rows: &mut Vec<String>, name: &str, ir: Ir) {
             &ir,
             stats,
             current,
-            base / stats.median_us,
+            base / stats.median,
             "speedup_vs_1_thread",
             "fixed batch of 64 independent serial reachability searches; local Rayon pool",
         );
@@ -678,7 +631,7 @@ fn audit_like_for_like_components(rows: &mut Vec<String>, name: &str, ir: Ir) {
             &ir,
             query,
             c as u64,
-            query.median_us * 1000.0 / 100_000.0,
+            query.median * 1000.0 / 100_000.0,
             "ns_per_cached_read",
             "identical 100000-read result materialization loop for every representation",
         );

@@ -8,6 +8,35 @@ use hymeko::common::ids::HyperArcId;
 /// Typed failure of a matroid operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MatroidError {
+    /// Invalid paired-column dimensions or bounded frontier search controls.
+    InvalidFrontierRequest,
+    /// Invalid prefix, realizable columns or bounds for required-column search.
+    InvalidReconstructionRequest,
+    /// Invalid or numerically refused bounded latent proposal request.
+    InvalidLatentRequest,
+    /// A binary column has a coefficient that is not an absent/unit or 0/1 scalar.
+    NonBinaryIncidence {
+        /// Offending column.
+        arc: HyperArcId,
+        /// Offending reference position.
+        slot: u32,
+    },
+    /// A selected column occurs more than once in the ground set.
+    DuplicateGroundElement {
+        /// Repeated canonical column.
+        arc: HyperArcId,
+    },
+    /// Sparse binary elimination exceeded an explicit caller budget.
+    BinaryWorkspaceBudget,
+    /// A graded-cell Levi coordinate is outside its borrowed topology.
+    CellIncidenceOutOfRange {
+        /// Upper-cell rank, starting at one.
+        rank: usize,
+        /// Upper-cell position within its rank.
+        cell: usize,
+        /// Incidence position within the cell.
+        slot: usize,
+    },
     /// A canonical hyperarc ID is outside the bound snapshot's arc table.
     UnknownArc {
         /// The out-of-range hyperarc ID.
@@ -54,6 +83,26 @@ pub enum MatroidError {
 impl fmt::Display for MatroidError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidFrontierRequest => write!(f, "invalid binary frontier request"),
+            Self::InvalidReconstructionRequest => {
+                write!(f, "invalid bounded binary reconstruction request")
+            }
+            Self::InvalidLatentRequest => {
+                write!(f, "invalid bounded binary latent proposal request")
+            }
+            Self::NonBinaryIncidence { arc, slot } => write!(
+                f,
+                "hyperarc {} slot {slot} is not a binary coefficient",
+                arc.raw()
+            ),
+            Self::DuplicateGroundElement { arc } => {
+                write!(f, "duplicate binary ground element {}", arc.raw())
+            }
+            Self::BinaryWorkspaceBudget => write!(f, "binary matroid workspace budget exceeded"),
+            Self::CellIncidenceOutOfRange { rank, cell, slot } => write!(
+                f,
+                "invalid cell incidence at rank {rank}, cell {cell}, slot {slot}"
+            ),
             Self::UnknownArc { arc } => {
                 write!(f, "unknown hyperarc {} in the bound snapshot", arc.raw())
             }

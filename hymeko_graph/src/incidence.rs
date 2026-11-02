@@ -141,16 +141,15 @@ pub enum IncidenceOutput {
 
 /// Dispatch knobs for [`build_edge_incidence`].
 ///
-/// 2026-05-22: the parallel toggle is wired (Rayon `par_chunks(1024)`);
-/// `bitset_threshold` is reserved for the next phase (currently
-/// ignored — only the sorted-merge path is implemented).
+/// Serial and parallel execution share the same chunk walker. Adjacency is
+/// either sorted CSR merging or an explicitly enabled bitset representation.
 #[derive(Debug, Clone, Copy)]
 pub struct BuildOpts {
     /// If `true`, run the per-edge work via Rayon `par_chunks(1024)`.
     /// Default `false` (matches the pre-2026-05-22 serial path).
     pub parallel: bool,
-    /// Reserved: bitset-adjacency path threshold (max `T` for which
-    /// bitsets fit in cache).  `0` disables.  Currently ignored.
+    /// Enable bitset adjacency when the nonempty tuple-ID domain is at most
+    /// this size. `0` disables it. Memory depends on both vertices and tuples.
     pub bitset_threshold: u32,
     /// Output format; see [`IncidenceOutput`].
     pub output: IncidenceOutput,
@@ -202,6 +201,91 @@ struct CooSink<'a> {
     vals: &'a mut Vec<f32>,
 }
 
+impl CooSink<'_> {
+    /// Emit one complete triplet; the three parallel buffers grow together.
+    #[inline]
+    fn push(&mut self, row: u32, column: u32, value: f32) {
+        self.rows.push(row);
+        self.cols.push(column);
+        self.vals.push(value);
+    }
+}
+
+impl IncidenceCoo {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            rows: Vec::with_capacity(capacity),
+            cols: Vec::with_capacity(capacity),
+            vals: Vec::with_capacity(capacity),
+        }
+    }
+
+    fn sink(&mut self) -> CooSink<'_> {
+        CooSink {
+            rows: &mut self.rows,
+            cols: &mut self.cols,
+            vals: &mut self.vals,
+        }
+    }
+
+    fn append(&mut self, other: Self) {
+        self.rows.extend(other.rows);
+        self.cols.extend(other.cols);
+        self.vals.extend(other.vals);
+    }
+}
+
+/// Only adjacency arithmetic varies. Allocation, query order and output
+/// assembly belong to the shared runner; scratch stays local to a chunk.
+trait EdgeKernel: Sync {
+    type Scratch;
+    fn scratch(&self) -> Self::Scratch;
+    fn process(
+        &self,
+        row: u32,
+        u: u32,
+        v: u32,
+        scratch: &mut Self::Scratch,
+        sink: &mut CooSink<'_>,
+    );
+}
+
+impl EdgeKernel for CsrView<'_> {
+    type Scratch = Vec<u32>;
+    fn scratch(&self) -> Self::Scratch {
+        Vec::with_capacity(64)
+    }
+    #[inline]
+    fn process(
+        &self,
+        row: u32,
+        u: u32,
+        v: u32,
+        scratch: &mut Self::Scratch,
+        sink: &mut CooSink<'_>,
+    ) {
+        process_one_edge_into(row, u, v, self, scratch, sink);
+    }
+}
+
+impl EdgeKernel for BitsetView<'_> {
+    type Scratch = Vec<u64>;
+    fn scratch(&self) -> Self::Scratch {
+        Vec::with_capacity(self.adj.n_words)
+    }
+    #[inline]
+    fn process(
+        &self,
+        row: u32,
+        u: u32,
+        v: u32,
+        scratch: &mut Self::Scratch,
+        sink: &mut CooSink<'_>,
+    ) {
+        process_one_edge_bitset_into(row, u, v, self, scratch, sink);
+    }
+}
+
 /// The adjacency view `process_one_edge_into` reads.
 struct CsrView<'a> {
     n_nodes: usize,
@@ -221,7 +305,6 @@ fn process_one_edge_into(
 ) {
     let (n_nodes, csr_row_ptr, csr_col_idx, self_map) =
         (csr.n_nodes, csr.row_ptr, csr.col_idx, csr.self_map);
-    let (rows, cols, vals) = (&mut *sink.rows, &mut *sink.cols, &mut *sink.vals);
     if (u as usize) >= n_nodes || (v as usize) >= n_nodes {
         return;
     }
@@ -286,9 +369,7 @@ fn process_one_edge_into(
     }
     let w = 1.0_f32 / n_adj as f32;
     for &t in scratch.iter() {
-        rows.push(ei);
-        cols.push(t);
-        vals.push(w);
+        sink.push(ei, t, w);
     }
 }
 
@@ -309,7 +390,6 @@ fn process_one_edge_bitset_into(
     sink: &mut CooSink<'_>,
 ) {
     let (n_vertices, adj, self_map) = (view.n_vertices, view.adj, view.self_map);
-    let (rows, cols, vals) = (&mut *sink.rows, &mut *sink.cols, &mut *sink.vals);
     if (u as usize) >= n_vertices || (v as usize) >= n_vertices {
         return;
     }
@@ -337,9 +417,7 @@ fn process_one_edge_bitset_into(
         let base = (word_idx * 64) as u32;
         while remaining != 0 {
             let bit = remaining.trailing_zeros();
-            rows.push(ei);
-            cols.push(base + bit);
-            vals.push(w_val);
+            sink.push(ei, base + bit, w_val);
             remaining &= remaining - 1;
         }
     }
@@ -430,34 +508,25 @@ pub fn build_edge_incidence(
 
     let coo = if use_bitset {
         let adj = BitsetAdj::build(csr_row_ptr, csr_col_idx, n_tuples);
-        if opts.parallel {
-            run_parallel_bitset(edges_u, edges_v, &adj, &self_map, n_nodes)
-        } else {
-            run_serial_bitset(edges_u, edges_v, &adj, &self_map, n_nodes)
-        }
-    } else if opts.parallel {
-        run_parallel(
-            edges_u,
-            edges_v,
-            csr_row_ptr,
-            csr_col_idx,
-            &self_map,
-            n_nodes,
-        )
+        let kernel = BitsetView {
+            n_vertices: n_nodes,
+            adj: &adj,
+            self_map: &self_map,
+        };
+        assemble(edges_u, edges_v, &kernel, opts.parallel)
     } else {
-        run_serial(
-            edges_u,
-            edges_v,
-            csr_row_ptr,
-            csr_col_idx,
-            &self_map,
+        let kernel = CsrView {
             n_nodes,
-        )
+            row_ptr: csr_row_ptr,
+            col_idx: csr_col_idx,
+            self_map: &self_map,
+        };
+        assemble(edges_u, edges_v, &kernel, opts.parallel)
     };
 
     Ok(match opts.output {
         IncidenceOutput::Coo => IncidenceResult::Coo(coo),
-        IncidenceOutput::Csr => to_csr(coo, edges_u.len()).into(),
+        IncidenceOutput::Csr => to_csr(coo, edges_u.len()),
     })
 }
 
@@ -465,231 +534,55 @@ pub fn build_edge_incidence(
 // Serial path
 // ─────────────────────────────────────────────────────────────────────
 
-fn run_serial(
-    edges_u: &[u32],
-    edges_v: &[u32],
-    csr_row_ptr: &[u32],
-    csr_col_idx: &[u32],
-    self_map: &SelfMap,
-    n_nodes: usize,
-) -> IncidenceCoo {
-    let e_query = edges_u.len();
-    let mut rows: Vec<u32> = Vec::with_capacity(e_query * 16);
-    let mut cols: Vec<u32> = Vec::with_capacity(e_query * 16);
-    let mut vals: Vec<f32> = Vec::with_capacity(e_query * 16);
-    let mut scratch: Vec<u32> = Vec::with_capacity(64);
-
-    for ei in 0..e_query {
-        let csr = CsrView {
-            n_nodes,
-            row_ptr: csr_row_ptr,
-            col_idx: csr_col_idx,
-            self_map,
-        };
-        let mut sink = CooSink {
-            rows: &mut rows,
-            cols: &mut cols,
-            vals: &mut vals,
-        };
-        process_one_edge_into(
-            ei as u32,
-            edges_u[ei],
-            edges_v[ei],
-            &csr,
-            &mut scratch,
-            &mut sink,
-        );
-    }
-    IncidenceCoo { rows, cols, vals }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Parallel path (Rayon par_chunks)
-// ─────────────────────────────────────────────────────────────────────
-
 const PARALLEL_CHUNK_SIZE: usize = 1024;
 
-fn run_parallel(
+fn assemble_chunk<K: EdgeKernel>(
     edges_u: &[u32],
     edges_v: &[u32],
-    csr_row_ptr: &[u32],
-    csr_col_idx: &[u32],
-    self_map: &SelfMap,
-    n_nodes: usize,
+    base: usize,
+    kernel: &K,
 ) -> IncidenceCoo {
-    let e_query = edges_u.len();
-    if e_query == 0 {
+    let mut result = IncidenceCoo::with_capacity(edges_u.len() * 16);
+    let mut scratch = kernel.scratch();
+    let mut sink = result.sink();
+    for (offset, (&u, &v)) in edges_u.iter().zip(edges_v).enumerate() {
+        kernel.process((base + offset) as u32, u, v, &mut scratch, &mut sink);
+    }
+    result
+}
+
+fn assemble<K: EdgeKernel>(
+    edges_u: &[u32],
+    edges_v: &[u32],
+    kernel: &K,
+    parallel: bool,
+) -> IncidenceCoo {
+    if !parallel {
+        return assemble_chunk(edges_u, edges_v, 0, kernel);
+    }
+    if edges_u.is_empty() {
         return IncidenceCoo::default();
     }
-
-    // Per-chunk processing: each worker iterates a contiguous slice
-    // of `[base_ei .. base_ei + chunk_len)` with its own scratch
-    // buffer and output vectors, then we concatenate.
-    //
-    // Note (2026-05-22): a presort-by-(min,max)-endpoint experiment
-    // saved 6–18% on COO output but cost 76–86% on CSR output (the
-    // row-scramble forces `to_csr`'s slow counting-sort path).  Net
-    // negative — reverted.  See `reports/2026-05-22-incidence-vertex-adj-fast.md`.
-    let chunks: Vec<(usize, &[u32], &[u32])> = edges_u
+    // Keep indexed chunk order and the existing chunk size: concatenation
+    // must reproduce the serial row/column order, including skipped rows.
+    let chunks: Vec<_> = edges_u
         .chunks(PARALLEL_CHUNK_SIZE)
         .zip(edges_v.chunks(PARALLEL_CHUNK_SIZE))
         .enumerate()
-        .map(|(chunk_idx, (eu, ev))| (chunk_idx * PARALLEL_CHUNK_SIZE, eu, ev))
         .collect();
-
-    let partials: Vec<IncidenceCoo> = chunks
+    let partials: Vec<_> = chunks
         .into_par_iter()
-        .map(|(base_ei, eu, ev)| {
-            let mut local_rows: Vec<u32> = Vec::with_capacity(eu.len() * 16);
-            let mut local_cols: Vec<u32> = Vec::with_capacity(eu.len() * 16);
-            let mut local_vals: Vec<f32> = Vec::with_capacity(eu.len() * 16);
-            let mut scratch: Vec<u32> = Vec::with_capacity(64);
-
-            for (local_i, (&u, &v)) in eu.iter().zip(ev.iter()).enumerate() {
-                let ei = (base_ei + local_i) as u32;
-                let csr = CsrView {
-                    n_nodes,
-                    row_ptr: csr_row_ptr,
-                    col_idx: csr_col_idx,
-                    self_map,
-                };
-                let mut sink = CooSink {
-                    rows: &mut local_rows,
-                    cols: &mut local_cols,
-                    vals: &mut local_vals,
-                };
-                process_one_edge_into(ei, u, v, &csr, &mut scratch, &mut sink);
-            }
-            IncidenceCoo {
-                rows: local_rows,
-                cols: local_cols,
-                vals: local_vals,
-            }
-        })
+        .map(|(chunk, (eu, ev))| assemble_chunk(eu, ev, chunk * PARALLEL_CHUNK_SIZE, kernel))
         .collect();
-
-    // Concatenate in chunk order — within a chunk rows are ascending,
-    // across chunks rows are also ascending (chunk 0 has edges 0..1023,
-    // chunk 1 has 1024..2047, ...).  So the parallel output is in the
-    // SAME row order as the serial path.  Documented in IncidenceOutput.
-    let total_nnz: usize = partials.iter().map(|p| p.rows.len()).sum();
-    let mut rows: Vec<u32> = Vec::with_capacity(total_nnz);
-    let mut cols: Vec<u32> = Vec::with_capacity(total_nnz);
-    let mut vals: Vec<f32> = Vec::with_capacity(total_nnz);
-    for p in partials {
-        rows.extend(p.rows);
-        cols.extend(p.cols);
-        vals.extend(p.vals);
+    let mut result = IncidenceCoo::with_capacity(partials.iter().map(|p| p.rows.len()).sum());
+    for partial in partials {
+        result.append(partial);
     }
-    IncidenceCoo { rows, cols, vals }
+    result
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Bitset serial + parallel paths
-// ─────────────────────────────────────────────────────────────────────
-
-fn run_serial_bitset(
-    edges_u: &[u32],
-    edges_v: &[u32],
-    adj: &BitsetAdj,
-    self_map: &SelfMap,
-    n_nodes: usize,
-) -> IncidenceCoo {
-    let e_query = edges_u.len();
-    let mut rows: Vec<u32> = Vec::with_capacity(e_query * 16);
-    let mut cols: Vec<u32> = Vec::with_capacity(e_query * 16);
-    let mut vals: Vec<f32> = Vec::with_capacity(e_query * 16);
-    let mut word_scratch: Vec<u64> = Vec::with_capacity(adj.n_words);
-
-    for ei in 0..e_query {
-        let view = BitsetView {
-            n_vertices: n_nodes,
-            adj,
-            self_map,
-        };
-        let mut sink = CooSink {
-            rows: &mut rows,
-            cols: &mut cols,
-            vals: &mut vals,
-        };
-        process_one_edge_bitset_into(
-            ei as u32,
-            edges_u[ei],
-            edges_v[ei],
-            &view,
-            &mut word_scratch,
-            &mut sink,
-        );
-    }
-    IncidenceCoo { rows, cols, vals }
-}
-
-fn run_parallel_bitset(
-    edges_u: &[u32],
-    edges_v: &[u32],
-    adj: &BitsetAdj,
-    self_map: &SelfMap,
-    n_nodes: usize,
-) -> IncidenceCoo {
-    let e_query = edges_u.len();
-    if e_query == 0 {
-        return IncidenceCoo::default();
-    }
-
-    let chunks: Vec<(usize, &[u32], &[u32])> = edges_u
-        .chunks(PARALLEL_CHUNK_SIZE)
-        .zip(edges_v.chunks(PARALLEL_CHUNK_SIZE))
-        .enumerate()
-        .map(|(chunk_idx, (eu, ev))| (chunk_idx * PARALLEL_CHUNK_SIZE, eu, ev))
-        .collect();
-
-    let partials: Vec<IncidenceCoo> = chunks
-        .into_par_iter()
-        .map(|(base_ei, eu, ev)| {
-            let mut local_rows: Vec<u32> = Vec::with_capacity(eu.len() * 16);
-            let mut local_cols: Vec<u32> = Vec::with_capacity(eu.len() * 16);
-            let mut local_vals: Vec<f32> = Vec::with_capacity(eu.len() * 16);
-            let mut word_scratch: Vec<u64> = Vec::with_capacity(adj.n_words);
-
-            for (local_i, (&u, &v)) in eu.iter().zip(ev.iter()).enumerate() {
-                let ei = (base_ei + local_i) as u32;
-                let view = BitsetView {
-                    n_vertices: n_nodes,
-                    adj,
-                    self_map,
-                };
-                let mut sink = CooSink {
-                    rows: &mut local_rows,
-                    cols: &mut local_cols,
-                    vals: &mut local_vals,
-                };
-                process_one_edge_bitset_into(ei, u, v, &view, &mut word_scratch, &mut sink);
-            }
-            IncidenceCoo {
-                rows: local_rows,
-                cols: local_cols,
-                vals: local_vals,
-            }
-        })
-        .collect();
-
-    let total_nnz: usize = partials.iter().map(|p| p.rows.len()).sum();
-    let mut rows: Vec<u32> = Vec::with_capacity(total_nnz);
-    let mut cols: Vec<u32> = Vec::with_capacity(total_nnz);
-    let mut vals: Vec<f32> = Vec::with_capacity(total_nnz);
-    for p in partials {
-        rows.extend(p.rows);
-        cols.extend(p.cols);
-        vals.extend(p.vals);
-    }
-    IncidenceCoo { rows, cols, vals }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// COO → CSR
-// ─────────────────────────────────────────────────────────────────────
-
-fn to_csr(coo: IncidenceCoo, e_query: usize) -> CsrParts {
+// COO to CSR conversion retains its existing row-order contract.
+fn to_csr(coo: IncidenceCoo, e_query: usize) -> IncidenceResult {
     // Counting sort by row.  Rows are already in ascending order from
     // both serial and parallel paths, so we can skip the bucket sort
     // and just build `row_ptr` by counting.
@@ -707,7 +600,7 @@ fn to_csr(coo: IncidenceCoo, e_query: usize) -> CsrParts {
     // path changed the contract).
     let already_sorted = coo.rows.windows(2).all(|w| w[0] <= w[1]);
     if already_sorted {
-        return CsrParts {
+        return IncidenceResult::Csr {
             row_ptr,
             cols: coo.cols,
             vals: coo.vals,
@@ -725,26 +618,10 @@ fn to_csr(coo: IncidenceCoo, e_query: usize) -> CsrParts {
         vals_out[pos] = coo.vals[i];
         cur[r] += 1;
     }
-    CsrParts {
+    IncidenceResult::Csr {
         row_ptr,
         cols: cols_out,
         vals: vals_out,
-    }
-}
-
-struct CsrParts {
-    row_ptr: Vec<u32>,
-    cols: Vec<u32>,
-    vals: Vec<f32>,
-}
-
-impl From<CsrParts> for IncidenceResult {
-    fn from(p: CsrParts) -> Self {
-        IncidenceResult::Csr {
-            row_ptr: p.row_ptr,
-            cols: p.cols,
-            vals: p.vals,
-        }
     }
 }
 
@@ -755,6 +632,45 @@ impl From<CsrParts> for IncidenceResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn csr_conversion_moves_sorted_buffers_and_stably_groups_unsorted_rows() {
+        let sorted = IncidenceCoo {
+            rows: vec![0, 0, 2],
+            cols: vec![3, 4, 8],
+            vals: vec![0.5, 0.5, 1.0],
+        };
+        let pointers = (sorted.cols.as_ptr(), sorted.vals.as_ptr());
+        let IncidenceResult::Csr {
+            row_ptr,
+            cols,
+            vals,
+        } = to_csr(sorted, 3)
+        else {
+            panic!("CSR result")
+        };
+        assert_eq!(row_ptr, [0, 2, 2, 3]);
+        assert_eq!(pointers, (cols.as_ptr(), vals.as_ptr()));
+        assert_eq!(cols, [3, 4, 8]);
+        assert_eq!(vals, [0.5, 0.5, 1.0]);
+
+        let unsorted = IncidenceCoo {
+            rows: vec![1, 0, 1, 0],
+            cols: vec![8, 3, 7, 2],
+            vals: vec![0.25, 0.5, 0.75, 0.5],
+        };
+        let IncidenceResult::Csr {
+            row_ptr,
+            cols,
+            vals,
+        } = to_csr(unsorted, 3)
+        else {
+            panic!("CSR result")
+        };
+        assert_eq!(row_ptr, [0, 2, 4, 4]);
+        assert_eq!(cols, [3, 2, 8, 7]);
+        assert_eq!(vals, [0.5, 0.5, 0.25, 0.75]);
+    }
 
     /// CSR for the trivial graph 0-1, 0-2, 1-2 (each vertex incident
     /// to two tuples, tuple ids 0,1,2 in the order edges appear).

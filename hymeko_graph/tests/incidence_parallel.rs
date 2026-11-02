@@ -44,6 +44,16 @@ struct Fixture {
     self_tuple_idx: Vec<u32>,
 }
 
+impl Fixture {
+    /// A common invocation contract for this fixture. The production adapter,
+    /// independent HashSet oracle and parity comparator remain distinct owners.
+    fn check_dispatch(&self, options: BuildOpts) {
+        let actual = call_with_opts(self, options);
+        let reference = brute_force(self);
+        assert_parity(&actual, &reference);
+    }
+}
+
 /// Build a deterministic mid-size signed graph:
 ///   * `n_vertices` vertices
 ///   * `n_tuples` "cycles" (each is a pair of vertex indices, so this
@@ -386,6 +396,9 @@ fn call_with_opts(fix: &Fixture, opts: BuildOpts) -> IncidenceCoo {
             cols,
             vals,
         } => {
+            assert_eq!(row_ptr.len(), fix.edges_u.len() + 1);
+            assert_eq!(row_ptr.first(), Some(&0));
+            assert_eq!(row_ptr.last().copied(), Some(cols.len() as u32));
             // Re-expand CSR → COO so the parity helper can compare.
             let mut rows: Vec<u32> = Vec::with_capacity(cols.len());
             for ei in 0..(row_ptr.len() - 1) {
@@ -400,92 +413,129 @@ fn call_with_opts(fix: &Fixture, opts: BuildOpts) -> IncidenceCoo {
     }
 }
 
+fn dispatch_options() -> impl Iterator<Item = BuildOpts> {
+    [false, true].into_iter().flat_map(|parallel| {
+        [0, 128, 129].into_iter().flat_map(move |bitset_threshold| {
+            [IncidenceOutput::Coo, IncidenceOutput::Csr]
+                .into_iter()
+                .map(move |output| BuildOpts {
+                    parallel,
+                    bitset_threshold,
+                    output,
+                })
+        })
+    })
+}
+
+#[test]
+fn all_dispatches_preserve_exact_bits_and_order_across_chunk_boundaries() {
+    // Tuple IDs span three u64 words. Repeated queries exercise chunk offsets,
+    // including skipped rows and a partial final chunk, without a stress workload.
+    for threads in [1, 4] {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .unwrap();
+        for queries in [0, 1, 1023, 1024, 1025, 2051] {
+            let pairs = [(0, 1), (0, 0), (1, 2), (3, 3), (9, 0)];
+            let fix = Fixture {
+                edges_u: (0..queries).map(|i| pairs[i % pairs.len()].0).collect(),
+                edges_v: (0..queries).map(|i| pairs[i % pairs.len()].1).collect(),
+                csr_row_ptr: vec![0, 3, 6, 8, 8],
+                csr_col_idx: vec![0, 63, 64, 0, 64, 128, 63, 128],
+                self_keys_u: vec![1, 0],
+                self_keys_v: vec![2, 1],
+                self_tuple_idx: vec![128, 0],
+            };
+            let expected = brute_force(&fix);
+            for opts in dispatch_options() {
+                let actual = pool.install(|| call_with_opts(&fix, opts));
+                assert_eq!(actual.rows, expected.rows, "{queries} queries, {opts:?}");
+                assert_eq!(actual.cols, expected.cols);
+                assert!(
+                    actual
+                        .vals
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .eq(expected.vals.iter().map(|v| v.to_bits()))
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn dispatch_options_keep_length_error_priority() {
+    for opts in dispatch_options() {
+        let both_bad = build_edge_incidence(&[0], &[], &[0], &[], &[0], &[], &[], opts);
+        assert_eq!(
+            both_bad.unwrap_err(),
+            "edges_u and edges_v must have the same length"
+        );
+        let bad_self = build_edge_incidence(&[], &[], &[0], &[], &[0], &[], &[], opts);
+        assert_eq!(
+            bad_self.unwrap_err(),
+            "self_keys_* and self_tuple_idx must have the same length"
+        );
+    }
+}
+
 #[test]
 fn parity_parallel_matches_brute_force_mid_graph() {
     let fix = build_fixture(0x5EEDED, 200, 3500);
-    let actual = call_with_opts(
-        &fix,
-        BuildOpts {
-            parallel: true,
-            ..BuildOpts::default()
-        },
-    );
-    let reference = brute_force(&fix);
-    assert_parity(&actual, &reference);
+    fix.check_dispatch(BuildOpts {
+        parallel: true,
+        ..BuildOpts::default()
+    });
 }
 
 #[test]
 fn parity_csr_output_matches_brute_force_mid_graph() {
     let fix = build_fixture(0x5EEDED, 200, 3500);
-    let actual = call_with_opts(
-        &fix,
-        BuildOpts {
-            output: IncidenceOutput::Csr,
-            ..BuildOpts::default()
-        },
-    );
-    let reference = brute_force(&fix);
-    assert_parity(&actual, &reference);
+    fix.check_dispatch(BuildOpts {
+        output: IncidenceOutput::Csr,
+        ..BuildOpts::default()
+    });
 }
 
 #[test]
 fn parity_parallel_csr_matches_brute_force_mid_graph() {
     let fix = build_fixture(0x5EEDED, 200, 3500);
-    let actual = call_with_opts(
-        &fix,
-        BuildOpts {
-            parallel: true,
-            output: IncidenceOutput::Csr,
-            ..BuildOpts::default()
-        },
-    );
-    let reference = brute_force(&fix);
-    assert_parity(&actual, &reference);
+    fix.check_dispatch(BuildOpts {
+        parallel: true,
+        output: IncidenceOutput::Csr,
+        ..BuildOpts::default()
+    });
 }
 
 #[test]
 fn parity_bitset_serial_matches_brute_force() {
     let fix = build_fixture(0xC0FFEE, 50, 200);
     // n_tuples = 200, so bitset_threshold=512 is more than enough.
-    let actual = call_with_opts(
-        &fix,
-        BuildOpts {
-            bitset_threshold: 512,
-            ..BuildOpts::default()
-        },
-    );
-    let reference = brute_force(&fix);
-    assert_parity(&actual, &reference);
+    fix.check_dispatch(BuildOpts {
+        bitset_threshold: 512,
+        ..BuildOpts::default()
+    });
 }
 
 #[test]
 fn parity_bitset_parallel_matches_brute_force_mid_graph() {
     let fix = build_fixture(0x5EEDED, 200, 3500);
-    let actual = call_with_opts(
-        &fix,
-        BuildOpts {
-            parallel: true,
-            bitset_threshold: 4096,
-            ..BuildOpts::default()
-        },
-    );
-    let reference = brute_force(&fix);
-    assert_parity(&actual, &reference);
+    fix.check_dispatch(BuildOpts {
+        parallel: true,
+        bitset_threshold: 4096,
+        ..BuildOpts::default()
+    });
 }
 
 #[test]
 fn parity_bitset_parallel_csr_matches_brute_force_mid_graph() {
     let fix = build_fixture(0x5EEDED, 200, 3500);
-    let actual = call_with_opts(
-        &fix,
-        BuildOpts {
-            parallel: true,
-            bitset_threshold: 4096,
-            output: IncidenceOutput::Csr,
-        },
-    );
-    let reference = brute_force(&fix);
-    assert_parity(&actual, &reference);
+    fix.check_dispatch(BuildOpts {
+        parallel: true,
+        bitset_threshold: 4096,
+        output: IncidenceOutput::Csr,
+    });
 }
 
 #[test]
@@ -494,15 +544,10 @@ fn bitset_path_inactive_when_threshold_below_n_tuples() {
     // so the result must still equal brute force via the sorted-merge
     // path.  (Sanity that the threshold gate is correct.)
     let fix = build_fixture(0xC0FFEE, 50, 200);
-    let actual = call_with_opts(
-        &fix,
-        BuildOpts {
-            bitset_threshold: 100,
-            ..BuildOpts::default()
-        },
-    );
-    let reference = brute_force(&fix);
-    assert_parity(&actual, &reference);
+    fix.check_dispatch(BuildOpts {
+        bitset_threshold: 100,
+        ..BuildOpts::default()
+    });
 }
 
 #[test]

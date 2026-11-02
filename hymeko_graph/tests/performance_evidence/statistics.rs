@@ -18,13 +18,7 @@ pub struct Sample {
     pub checksum: u64,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Distribution {
-    pub median: f64,
-    pub q1: f64,
-    pub q3: f64,
-    pub worst: f64,
-}
+pub use hymeko::util::measurement::Distribution;
 
 #[derive(Debug)]
 pub struct Measurement {
@@ -36,19 +30,61 @@ pub struct Measurement {
     pub checksum: u64,
 }
 
+#[derive(Default)]
+pub struct PhaseSamples {
+    calls: Vec<[u128; 4]>,
+}
+impl PhaseSamples {
+    /// The clock is injected so correctness tests never collect real timings.
+    pub fn observe<T>(
+        &mut self,
+        mut clock: impl FnMut() -> u128,
+        operation: impl FnOnce(&mut dyn FnMut(usize)) -> T,
+    ) -> T {
+        let mut previous = clock();
+        let mut next = 0;
+        let mut durations = [0; 4];
+        let result = operation(&mut |phase| {
+            assert_eq!(phase, next, "phase order");
+            let now = clock();
+            durations[phase] = now.checked_sub(previous).expect("monotonic phase clock");
+            previous = now;
+            next += 1;
+        });
+        assert_eq!(next, 4, "complete phase coverage");
+        self.calls.push(durations);
+        result
+    }
+
+    pub fn normalized(&self, measurement: &Measurement) -> Vec<[f64; 4]> {
+        let repetitions = measurement.repetitions_per_sample;
+        assert!(repetitions > 0);
+        // measure_calibrated_verified: one probe, warmups, then measured calls.
+        // Its post-batch verification calls deliberately have no observer.
+        let start = 1 + measurement.warmups * repetitions;
+        assert_eq!(
+            self.calls.len(),
+            start + measurement.samples.len() * repetitions
+        );
+        self.calls[start..]
+            .chunks_exact(repetitions)
+            .map(|chunk| {
+                std::array::from_fn(|phase| {
+                    chunk.iter().map(|row| row[phase] as f64).sum::<f64>()
+                        / repetitions as f64
+                        / 1000.0
+                })
+            })
+            .collect()
+    }
+}
+
 fn summarize(mut values: Vec<f64>) -> Distribution {
     assert!(
         values.len() >= 5,
         "performance evidence requires at least five samples"
     );
-    values.sort_by(f64::total_cmp);
-    let n = values.len();
-    Distribution {
-        median: values[n / 2],
-        q1: values[n / 4],
-        q3: values[(3 * n) / 4],
-        worst: values[n - 1],
-    }
+    Distribution::summarize(&mut values)
 }
 
 fn finish(warmups: usize, repetitions_per_sample: usize, samples: Vec<Sample>) -> Measurement {
@@ -210,6 +246,60 @@ pub fn measure_factory<T>(mut factory: impl FnMut() -> (T, u64)) -> (Measurement
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn phase_samples_exclude_calibration_warmups_and_verification() {
+        let mut phases = PhaseSamples::default();
+        for call in 0..23 {
+            let mut tick = 0;
+            let step = if call < 5 { 99_000 } else { 1000 };
+            let output = phases.observe(
+                || {
+                    tick += step;
+                    tick
+                },
+                |boundary| {
+                    for phase in 0..4 {
+                        boundary(phase);
+                    }
+                    17
+                },
+            );
+            assert_eq!(output, 17);
+        }
+        let measurement = finish(
+            2,
+            2,
+            (0..9)
+                .map(|ordinal| Sample {
+                    ordinal,
+                    wall_us: 10.0,
+                    cpu_us: None,
+                    checksum: 17,
+                })
+                .collect(),
+        );
+        assert_eq!(phases.normalized(&measurement), vec![[1.0; 4]; 9]);
+    }
+
+    #[test]
+    #[should_panic(expected = "phase order")]
+    fn phase_samples_reject_missing_boundary() {
+        PhaseSamples::default().observe(|| 0, |boundary| boundary(1));
+    }
+
+    #[test]
+    #[should_panic(expected = "monotonic phase clock")]
+    fn phase_samples_reject_reverse_clock() {
+        let mut tick = 10;
+        PhaseSamples::default().observe(
+            || {
+                tick -= 1;
+                tick
+            },
+            |boundary| boundary(0),
+        );
+    }
 
     #[test]
     fn summary_is_ordered_and_uses_every_sample() {
