@@ -1,8 +1,0 @@
-\begin{tikzpicture}[node distance=6mm and 10mm, box/.style={draw, rounded corners, align=center, font=\small, inner sep=3pt}, >=Stealth]
-  \node[box] (topo) {\texttt{CellTopology}\\rank 0 vertices, graded signed ranks};
-  \node[box, right=of topo] (view) {\texttt{RankIncidence<'a>}\\members, signs, two scales};
-  \node[box, right=of view] (kern) {width-$d$ kernels\\forward, adjoint, sign gradient};
-  \node[box, below=of topo] (csr) {\texttt{RankCofaces}\\reverse CSR};
-  \node[box, below=of kern] (shi) {\texttt{SignedHyperIncidence}\\(delegates, $d=1$)};
-  \draw[->] (topo) -- (view); \draw[->] (view) -- (kern); \draw[->] (topo) -- (csr); \draw[->] (shi) -- (kern);
-\end{tikzpicture}

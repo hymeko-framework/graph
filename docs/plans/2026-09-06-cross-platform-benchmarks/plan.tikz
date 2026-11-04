@@ -1,1 +1,0 @@
-\begin{tikzpicture}\node[draw,text width=11cm,align=center]{Generator and direct IR construction $\to$ HyMeKo text $\to$ local file\\File read $\to$ real parser AST $\to$ Core IR $\to$ incidence index $\to$ Dijkstra\\Separate phase timings; directly measured file-to-result; warm OS file cache};\end{tikzpicture}

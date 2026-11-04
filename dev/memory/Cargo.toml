@@ -14,9 +14,9 @@ static-link = ["dep:graph_static"]
 dynamic-link = ["dep:graph_dynamic"]
 
 [dependencies]
-hymeko = { package = "hymeko_core", git = "ssh://git@192.168.1.228:2222/hymeko/core.git", rev = "a70f46bbbd13716a6721d28e9387ed598676605b" }
-graph_static = { package = "hymeko_graph", git = "ssh://git@192.168.1.228:2222/hymeko/graph.git", rev = "d006ba5780cf23dfe8cdea96688011a08f99ce52", optional = true }
-graph_dynamic = { package = "hymeko-graph-dylib", git = "ssh://git@192.168.1.228:2222/hymeko/graph.git", rev = "d006ba5780cf23dfe8cdea96688011a08f99ce52", optional = true }
+hymeko = { package = "hymeko_core", git = "https://github.com/hymeko-framework/core.git", rev = "a70f46bbbd13716a6721d28e9387ed598676605b" }
+graph_static = { package = "hymeko_graph", git = "https://github.com/hymeko-framework/graph.git", rev = "d006ba5780cf23dfe8cdea96688011a08f99ce52", optional = true }
+graph_dynamic = { package = "hymeko-graph-dylib", git = "https://github.com/hymeko-framework/graph.git", rev = "d006ba5780cf23dfe8cdea96688011a08f99ce52", optional = true }
 
 [profile.dev-dll]
 inherits = "dev"

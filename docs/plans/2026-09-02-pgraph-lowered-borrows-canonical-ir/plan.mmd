@@ -1,8 +1,0 @@
-flowchart TD
-  A["compile_to_lowered -> CompiledPGraph { ir: Ir, domain: PGraphDomain }"] --> B["caller: index = build_incidence_index(&bundle.ir)"]
-  B --> C["view = PGraphView::new(&index, &domain classification)"]
-  C --> D["MSG/SSG/ABB/axioms(&domain, &view): AND-folds via view.for_each_input (== .iter().all(), byte-identical)"]
-  D --> G{"byte-identical? 6 dumps + pgip + MSG/SSG/ABB + BooleanExact/fuzzy"}
-  G -->|yes| R["remove schema.{edges,incoming,outgoing,o_nodes,m_nodes}: model retains ZERO topology"]
-  G -->|no| STOP["revert; topology stays; report blocker"]
-  R --> F["fault mutants vs re-introducing dual authority"]

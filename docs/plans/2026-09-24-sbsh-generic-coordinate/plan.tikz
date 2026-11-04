@@ -1,4 +1,0 @@
-\begin{tikzpicture}[every node/.style={draw,rounded corners,font=\footnotesize}]
-\node (c) at (0,0) {Coordinate: f32, f64}; \node (t) at (4,0) {OrthTree$<$T = f64$>$};
-\node (r) at (4,-1) {SplitRule$<$T$>$ / CountSplit}; \draw[->] (c)--(t); \draw[->] (c)|-(r);
-\end{tikzpicture}

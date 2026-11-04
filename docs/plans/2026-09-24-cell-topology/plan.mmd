@@ -1,6 +1,0 @@
-flowchart LR
-  T["CellTopology (rank 0 + graded signed ranks)"] --> V["RankIncidence<'a> (members, signs, to_cell, to_lower)"]
-  V --> K["width-d kernels: lower_to_cell / cell_to_lower + adjoints + sign gradients"]
-  T --> C["RankCofaces (reverse CSR)"]
-  S["SignedHyperIncidence (d = 1)"] --> K
-  N["nagare hg_message / SignedHypergraph / CycleIncidence / MeshTopology"] -. later migration .-> T

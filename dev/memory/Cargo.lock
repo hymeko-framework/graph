@@ -273,7 +273,7 @@ dependencies = [
 [[package]]
 name = "hymeko-graph-dylib"
 version = "0.1.0"
-source = "git+ssh://git@192.168.1.228:2222/hymeko/graph.git?rev=d006ba5780cf23dfe8cdea96688011a08f99ce52#d006ba5780cf23dfe8cdea96688011a08f99ce52"
+source = "git+https://github.com/hymeko-framework/graph.git?rev=d006ba5780cf23dfe8cdea96688011a08f99ce52#d006ba5780cf23dfe8cdea96688011a08f99ce52"
 dependencies = [
  "hymeko_graph",
 ]
@@ -290,7 +290,7 @@ dependencies = [
 [[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+ssh://git@192.168.1.228:2222/hymeko/core.git?rev=a70f46bbbd13716a6721d28e9387ed598676605b#a70f46bbbd13716a6721d28e9387ed598676605b"
+source = "git+https://github.com/hymeko-framework/core.git?rev=a70f46bbbd13716a6721d28e9387ed598676605b#a70f46bbbd13716a6721d28e9387ed598676605b"
 dependencies = [
  "blake3",
  "ciborium",
@@ -305,7 +305,7 @@ dependencies = [
 [[package]]
 name = "hymeko_graph"
 version = "0.1.0"
-source = "git+ssh://git@192.168.1.228:2222/hymeko/graph.git?rev=d006ba5780cf23dfe8cdea96688011a08f99ce52#d006ba5780cf23dfe8cdea96688011a08f99ce52"
+source = "git+https://github.com/hymeko-framework/graph.git?rev=d006ba5780cf23dfe8cdea96688011a08f99ce52#d006ba5780cf23dfe8cdea96688011a08f99ce52"
 dependencies = [
  "dashmap",
  "hymeko_core",
@@ -316,12 +316,12 @@ dependencies = [
 [[package]]
 name = "hymeko_numerics"
 version = "0.1.0"
-source = "git+ssh://git@192.168.1.228:2222/hymeko/tensor.git?rev=1929e4d3902a8b51f45b5366460314783c1ec9e6#1929e4d3902a8b51f45b5366460314783c1ec9e6"
+source = "git+https://github.com/hymeko-framework/tensor.git?rev=1929e4d3902a8b51f45b5366460314783c1ec9e6#1929e4d3902a8b51f45b5366460314783c1ec9e6"
 
 [[package]]
 name = "hymeko_tensor"
 version = "0.1.0"
-source = "git+ssh://git@192.168.1.228:2222/hymeko/tensor.git?rev=9317ecf773d55a0e7968273a63bc2f4e8dbcc7c7#9317ecf773d55a0e7968273a63bc2f4e8dbcc7c7"
+source = "git+https://github.com/hymeko-framework/tensor.git?rev=9317ecf773d55a0e7968273a63bc2f4e8dbcc7c7#9317ecf773d55a0e7968273a63bc2f4e8dbcc7c7"
 
 [[package]]
 name = "indexmap"
@@ -448,7 +448,7 @@ dependencies = [
 [[package]]
 name = "parser"
 version = "0.1.0"
-source = "git+ssh://git@192.168.1.228:2222/hymeko/parser.git?rev=f11628591a8183586492807ecdf43c64e6d31c5f#f11628591a8183586492807ecdf43c64e6d31c5f"
+source = "git+https://github.com/hymeko-framework/parser.git?rev=f11628591a8183586492807ecdf43c64e6d31c5f#f11628591a8183586492807ecdf43c64e6d31c5f"
 dependencies = [
  "lalrpop",
  "lalrpop-util",

@@ -1,7 +1,0 @@
-flowchart LR
-  Core[Core canonical IR] --> Positions[Existing PositionProvider]
-  Positions --> Spatial[Existing SBSH partition]
-  Positions --> Batch[Proposed Graph batch topology operation]
-  Batch --> Traversal[Existing Graph traversal]
-  Batch --> VV[Analytical and integration checks]
-  note[No Nagare or Transformation dependency]

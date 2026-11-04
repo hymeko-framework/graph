@@ -1,5 +1,0 @@
-flowchart TD
-  G[SignedGraph: visible training edges] --> E[enumerate_closing_walks: simple paths u..v of L edges, L >= 2]
-  P[query pairs u,v] --> E
-  E --> R[ClosingWalks: vertices, Walk member signs, pair_offsets]
-  R --> N[Nagare admission closing: a query pools its pair's walks]
