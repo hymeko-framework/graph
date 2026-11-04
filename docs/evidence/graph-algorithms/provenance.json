@@ -1,0 +1,162 @@
+{
+  "recorded_on": "2026-10-20/21",
+  "host": {
+    "cpu": "AMD Ryzen Threadripper 7980X",
+    "physical_cores": 64,
+    "logical_cpus": 128,
+    "os": "Ubuntu 24.04.3 LTS",
+    "rust": "1.97.1",
+    "algorithm_threads": 1,
+    "logical_cpu_affinity": 2
+  },
+  "protocol": {
+    "processes": 330,
+    "raw_samples": 2970,
+    "cells": 66,
+    "fresh_processes_per_cell": 5,
+    "warmups_per_process": 2,
+    "samples_per_process": 9,
+    "aggregation": "median of five process medians; each sample is a calibrated batch mean",
+    "pilot_processes_excluded": 14
+  },
+  "comparison": {
+    "operation": "connected components",
+    "hypergraphz_commit": "e45b7b80e3ce302937a56760d9fe76016ef08e26",
+    "included": [
+      "fresh operation workspace",
+      "normalized output copying",
+      "temporary result destruction"
+    ],
+    "excluded": [
+      "graph construction",
+      "reverse incidence index construction"
+    ],
+    "parity": "complete normalized component partition compared in each process",
+    "hypergraphz_repository": "https://github.com/yamafaktory/hypergraphz",
+    "native_compiler": {
+      "zig": "0.17.0-dev.242+5d55999d2",
+      "optimization": "ReleaseFast",
+      "target": "x86_64-linux-gnu",
+      "cpu": "baseline",
+      "cross_compiled_from": "Windows x86_64"
+    }
+  },
+  "comparisons": [
+    {
+      "workload": "chain65k",
+      "hymeko_ms": 2.334774,
+      "hypergraphz_ms": 8.847879,
+      "ratio": 3.7896083303994303,
+      "paired_ratios": [
+        3.820375557379605,
+        3.7895389840761458,
+        3.7690112623535255,
+        3.77364124353146,
+        3.7906893772159536
+      ],
+      "paired_wins": 5
+    },
+    {
+      "workload": "hub32_1m",
+      "hymeko_ms": 4.495975,
+      "hypergraphz_ms": 67.151824,
+      "ratio": 14.935986966119696,
+      "paired_ratios": [
+        14.773179121325184,
+        15.740738100778687,
+        14.886109924180163,
+        14.962942215786681,
+        14.810786370741297
+      ],
+      "paired_wins": 5
+    },
+    {
+      "workload": "components8_1m",
+      "hymeko_ms": 8.863347,
+      "hypergraphz_ms": 62.336544,
+      "ratio": 7.033070464238848,
+      "paired_ratios": [
+        7.026923237914526,
+        7.012700837118753,
+        7.037176921345898,
+        7.104855310615304,
+        7.021444000554172
+      ],
+      "paired_wins": 5
+    },
+    {
+      "workload": "steiner255",
+      "hymeko_ms": 0.236577,
+      "hypergraphz_ms": 0.631664,
+      "ratio": 2.67001441391175,
+      "paired_ratios": [
+        2.696646695953288,
+        2.681773798805463,
+        2.6476245318627556,
+        2.6626618473077768,
+        2.654641579847613
+      ],
+      "paired_wins": 5
+    },
+    {
+      "workload": "complete32_3",
+      "hymeko_ms": 0.085252,
+      "hypergraphz_ms": 0.160228,
+      "ratio": 1.8794632383990992,
+      "paired_ratios": [
+        1.8842377260981913,
+        1.8860262472143288,
+        1.8744654677523285,
+        1.877481193316304,
+        1.8852930136536385
+      ],
+      "paired_wins": 5
+    },
+    {
+      "workload": "sunflower1024",
+      "hymeko_ms": 0.599746,
+      "hypergraphz_ms": 4.072164,
+      "ratio": 6.789814354743508,
+      "paired_ratios": [
+        6.77423942802453,
+        6.837324595840631,
+        6.766346941357428,
+        6.753431722934706,
+        6.803454399355829
+      ],
+      "paired_wins": 5
+    },
+    {
+      "workload": "mycielski7",
+      "hymeko_ms": 0.43461,
+      "hypergraphz_ms": 0.971927,
+      "ratio": 2.236319919007846,
+      "paired_ratios": [
+        2.2402581085411426,
+        2.228141233467192,
+        2.2453963336152687,
+        2.2490301649754953,
+        2.233016199773465
+      ],
+      "paired_wins": 5
+    }
+  ],
+  "measured_binary_sha256": "0fec5d07e4253920cbe8f6132562bcd3c0bde1f6388bbb755d97e0d8f109ab8d",
+  "native_library_sha256": "aa3fb04a713eeaaa8cb355ab152d12fca8a42e6a1ab0aee8a77cd59cdd7e52ea",
+  "source_content_sha256": "4ddc05f162116d5a7e78c2f323674d7c656249821b81a3f50ecc866da1adec30",
+  "source_manifest_sha256": "3a7ef3b31a905d61e1ef0415f4bc9501b671e0804e7ea574c88af5d2adb5fb7e",
+  "source_files": 519,
+  "limits": [
+    "Deterministic synthetic workloads, not an application-network sample.",
+    "Only components have an external comparison in this campaign.",
+    "Construction uses Core generators and IrConstruction; excludes parsing and source-file loading.",
+    "RSS covers the whole process, including fixture setup and both graphs in native comparisons.",
+    "Public packaging and dependency-URL changes are not a new timed campaign."
+  ],
+  "files": {
+    "report.pdf": "b656c614697c3700b588a1722dad0174535127664c7c5c682bfff58a09bf72d2",
+    "report.tex": "7bef40f7c0060a79130534e65b8137149577cf5694e2038a8cb926ae63a270f4",
+    "measurements.csv": "7ffda7f79909de35e3cc3a4bcf21ff72a96968831d0dfbb06d8a680eac74d118",
+    "raw-samples.csv": "7cb302d5c63810929dc520a511012a64ef8b043144f2aff5ec6c81495d3d0b50"
+  }
+}
