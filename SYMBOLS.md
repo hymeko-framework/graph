@@ -598,15 +598,18 @@ _No public symbols._
 
 ### structs
 
+- `Abb` — `hymeko_pgraph/src/abb.rs`
 - `AbbJson` — `hymeko_pgraph/src/dump.rs`
 - `AbbOptions` — `hymeko_pgraph/src/abb.rs`
 - `AbbSolution` — `hymeko_pgraph/src/abb.rs`
+- `AdditiveCost` — `hymeko_pgraph/src/abb.rs`
 - `AndOrWorkspace` — `hymeko_pgraph/src/andor.rs`
 - `Availability` — `hymeko_pgraph/src/andor.rs`
 - `AxiomBundle` — `hymeko_pgraph/src/axioms.rs`
 - `AxiomCertificateJson` — `hymeko_pgraph/src/dump.rs`
 - `AxiomTrace` — `hymeko_pgraph/src/axioms.rs`
 - `BooleanExact` — `hymeko_pgraph/src/andor.rs`
+- `BoundedAbb` — `hymeko_pgraph/src/abb.rs`
 - `Canonical` — `hymeko_pgraph/src/regime.rs`
 - `Composite` — `hymeko_pgraph/src/regime.rs`
 - `CostDominance` — `hymeko_pgraph/src/regime.rs`
@@ -638,6 +641,7 @@ _No public symbols._
 
 - `AxiomViolation` — `hymeko_pgraph/src/axioms.rs`
 - `BuilderError` — `hymeko_pgraph/src/builder.rs`
+- `ChildOrder` — `hymeko_pgraph/src/abb.rs`
 - `CliError` — `hymeko_pgraph/src/cli.rs`
 - `DumpAlgorithm` — `hymeko_pgraph/src/dump.rs`
 - `ExtensionAxiomViolation` — `hymeko_pgraph/src/axiom_extensions.rs`
@@ -722,6 +726,7 @@ _No public symbols._
 - `n_materials` — `hymeko_pgraph/src/schema.rs`
 - `n_operating_units` — `hymeko_pgraph/src/schema.rs`
 - `name` — `hymeko_pgraph/src/reachability.rs`
+- `new` — `hymeko_pgraph/src/abb.rs`
 - `new` — `hymeko_pgraph/src/andor.rs`
 - `new` — `hymeko_pgraph/src/axiom_extensions.rs`
 - `new` — `hymeko_pgraph/src/axioms.rs`
@@ -751,6 +756,7 @@ _No public symbols._
 - `render_pgraph` — `hymeko_pgraph/src/cli.rs`
 - `render_solution` — `hymeko_pgraph/src/cli.rs`
 - `solve` — `hymeko_pgraph/src/abb.rs`
+- `solve_on` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k_with_regime` — `hymeko_pgraph/src/abb.rs`
 - `solve_with_objective` — `hymeko_pgraph/src/abb.rs`
@@ -765,6 +771,7 @@ _No public symbols._
 - `validate` — `hymeko_pgraph/src/axioms.rs`
 - `validate` — `hymeko_pgraph/src/view.rs`
 - `validate_timed` — `hymeko_pgraph/src/axioms.rs`
+- `with_order` — `hymeko_pgraph/src/abb.rs`
 - `with_required_products` — `hymeko_pgraph/src/friedler.rs`
 - `with_valid_o_nodes` — `hymeko_pgraph/src/friedler.rs`
 - `write_pgip` — `hymeko_pgraph/src/pgip_io.rs`
