@@ -371,6 +371,8 @@ pub fn binary_frontier_barrier(
 struct FrontierRanks<'a, 'ir, 'ws> {
     view: MatroidRef<'a, 'ir>,
     inputs: &'a [HyperArcId],
+    /// Term reading each input column; empty pairs input `i` with term `i`.
+    input_terms: &'a [usize],
     outputs: &'a [HyperArcId],
     ws: &'ws mut BinaryMatroidWorkspace,
     cache: BTreeMap<u128, (usize, usize)>,
@@ -378,10 +380,14 @@ struct FrontierRanks<'a, 'ir, 'ws> {
 impl FrontierRanks<'_, '_, '_> {
     fn basis(&mut self, done: u128, output: bool) -> Result<BinaryBasis, MatroidError> {
         let columns = if output { self.outputs } else { self.inputs };
+        let term = |i: usize| match self.input_terms {
+            terms if output || terms.is_empty() => i,
+            terms => terms[i],
+        };
         let ground: BTreeSet<_> = columns
             .iter()
             .enumerate()
-            .filter(|(i, _)| (done >> i & 1 != 0) == output)
+            .filter(|(i, _)| (done >> term(*i) & 1 != 0) == output)
             .map(|(_, a)| *a)
             .collect();
         binary_weighted_basis(
@@ -426,6 +432,9 @@ impl FrontierRanks<'_, '_, '_> {
 
 /// Search paired input-read/output-span orders using the existing binary matroid.
 ///
+/// One term is one gate with one output column. `input_terms[i]` names the term
+/// reading `inputs[i]`, so a product reads both operand forms at its gate; an
+/// empty slice pairs `inputs[i]` with term `i` as before.
 /// At a gate, count input rank BEFORE retiring this read plus output rank AFTER
 /// adding this write. Input and output are distinct linear banks. Output columns
 /// describe independent formal contributions; callers must separately establish
@@ -437,14 +446,20 @@ impl FrontierRanks<'_, '_, '_> {
 pub fn binary_frontier_search(
     m: MatroidRef<'_, '_>,
     inputs: &[HyperArcId],
+    input_terms: &[usize],
     outputs: &[HyperArcId],
     ws: &mut BinaryMatroidWorkspace,
     beam: usize,
     budget: usize,
 ) -> Result<BinaryFrontierSearch, MatroidError> {
+    let paired = input_terms.is_empty() && inputs.len() == outputs.len();
+    let grouped = input_terms.len() == inputs.len()
+        && input_terms.iter().all(|t| *t < outputs.len())
+        && (0..outputs.len()).all(|t| input_terms.contains(&t));
     if inputs.is_empty()
-        || inputs.len() != outputs.len()
-        || inputs.len() > 128
+        || !(paired || grouped)
+        || outputs.len() > 128
+        || inputs.len() > 512
         || !(1..=256).contains(&beam)
         || !(1..=1_000_000).contains(&budget)
     {
@@ -453,17 +468,19 @@ pub fn binary_frontier_search(
     let mut ranks = FrontierRanks {
         view: m,
         inputs,
+        input_terms,
         outputs,
         ws,
         cache: BTreeMap::new(),
     };
-    let order: Vec<_> = (0..inputs.len()).collect();
+    let terms = outputs.len();
+    let order: Vec<_> = (0..terms).collect();
     let (baseline_peak, baseline) = ranks.evaluate(&order)?;
     let initial_rank = ranks.ranks(0)?.0;
-    let all = if inputs.len() == 128 {
+    let all = if terms == 128 {
         u128::MAX
     } else {
-        (1u128 << inputs.len()) - 1
+        (1u128 << terms) - 1
     };
     let lower_bound = initial_rank.max(ranks.ranks(all)?.1);
     let mut frontier = vec![FrontierOrder {
@@ -474,11 +491,11 @@ pub fn binary_frontier_search(
     let mut evaluated = 0;
     let mut truncated = false;
     let mut capped = false;
-    for _ in 0..inputs.len() {
+    for _ in 0..terms {
         let mut next = BTreeMap::<u128, FrontierOrder>::new();
         for state in frontier {
             let before = ranks.ranks(state.done)?.0;
-            for term in 0..inputs.len() {
+            for term in 0..terms {
                 if state.done >> term & 1 != 0 {
                     continue;
                 }
