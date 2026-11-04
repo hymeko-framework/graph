@@ -1,0 +1,134 @@
+[package]
+name = "hymeko-graph-dev"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+autobenches = false
+autoexamples = false
+description = "Existing Graph correctness clients linked through a shared Rust library"
+
+[dependencies]
+hymeko_graph = { package = "hymeko-graph-dylib", path = "dylib" }
+hymeko_core = { workspace = true }
+
+[dev-dependencies]
+rayon = "1.10"
+
+[[test]]
+name = "pagerank"
+path = "../hymeko_graph/tests/pagerank.rs"
+
+[[test]]
+name = "readme_example"
+path = "../hymeko_graph/tests/readme_example.rs"
+
+[[test]]
+name = "metric_tour"
+path = "../hymeko_graph/tests/metric_tour.rs"
+
+[[test]]
+name = "informed_search_vv"
+path = "../hymeko_graph/tests/informed_search_vv.rs"
+
+[[test]]
+name = "matroid_levi_vv"
+path = "../hymeko_graph/tests/matroid_levi_vv.rs"
+
+[[test]]
+name = "direct_ir_vv"
+path = "../hymeko_graph/tests/direct_ir_vv.rs"
+
+[[test]]
+name = "cell_topology"
+path = "../hymeko_graph/tests/cell_topology.rs"
+
+[[test]]
+name = "csr_sign_lookup"
+path = "../hymeko_graph/tests/csr_sign_lookup.rs"
+
+[[example]]
+name = "render_fixture_gallery"
+path = "../hymeko_graph/examples/render_fixture_gallery.rs"
+test = false
+
+[[example]]
+name = "cycle_stats"
+path = "../hymeko_graph/examples/cycle_stats.rs"
+test = false
+
+[[test]]
+name = "abb_global_topk"
+path = "../hymeko_graph/tests/abb_global_topk.rs"
+
+[[test]]
+name = "cell_matroid"
+path = "../hymeko_graph/tests/cell_matroid.rs"
+
+[[test]]
+name = "cell_rank_views"
+path = "../hymeko_graph/tests/cell_rank_views.rs"
+
+[[test]]
+name = "direct_ir_coverage"
+path = "../hymeko_graph/tests/direct_ir_coverage.rs"
+
+[[test]]
+name = "direct_ir_families"
+path = "../hymeko_graph/tests/direct_ir_families.rs"
+
+[[test]]
+name = "direct_ir_optional"
+path = "../hymeko_graph/tests/direct_ir_optional.rs"
+
+[[test]]
+name = "entropy_topk"
+path = "../hymeko_graph/tests/entropy_topk.rs"
+
+[[test]]
+name = "hybrid_topk"
+path = "../hymeko_graph/tests/hybrid_topk.rs"
+
+[[test]]
+name = "incidence_parallel"
+path = "../hymeko_graph/tests/incidence_parallel.rs"
+
+[[test]]
+name = "informed_oracles"
+path = "../hymeko_graph/tests/informed_oracles.rs"
+
+[[test]]
+name = "map_routing_nav"
+path = "../hymeko_graph/tests/map_routing_nav.rs"
+
+[[test]]
+name = "matroid_vv"
+path = "../hymeko_graph/tests/matroid_vv.rs"
+
+[[test]]
+name = "neural_gas"
+path = "../hymeko_graph/tests/neural_gas.rs"
+
+[[test]]
+name = "per_vertex_adaptive"
+path = "../hymeko_graph/tests/per_vertex_adaptive.rs"
+
+[[test]]
+name = "sphf"
+path = "../hymeko_graph/tests/sphf.rs"
+
+[[test]]
+name = "steiner_mycielski_nav"
+path = "../hymeko_graph/tests/steiner_mycielski_nav.rs"
+
+[[test]]
+name = "traversal_orientation_frozen"
+path = "../hymeko_graph/tests/traversal_orientation_frozen.rs"
+
+[[test]]
+name = "traversal_step_orientation"
+path = "../hymeko_graph/tests/traversal_step_orientation.rs"
+
+[[test]]
+name = "vertex_prefilter_integration"
+path = "../hymeko_graph/tests/vertex_prefilter_integration.rs"

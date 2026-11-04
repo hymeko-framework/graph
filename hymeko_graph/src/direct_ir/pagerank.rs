@@ -24,12 +24,19 @@
 //! and [PageRank](https://snap.stanford.edu/class/cs224w-readings/Brin98Anatomy.pdf).
 
 mod accumulator;
+mod automatic;
+mod krylov;
 mod parallel;
 mod plan;
+mod quotient;
 mod workspace;
 use accumulator::Sum;
+pub use automatic::{PageRankAutoConfig, PageRankAutoReason, PageRankAutoSelection};
+pub use krylov::PageRankSolver;
 pub use plan::PageRankPlanStats;
 use plan::{ExecutionPlan, SelectedRows};
+pub use quotient::PageRankQuotient;
+use quotient::QuotientPlan;
 pub use workspace::PageRankWorkspace;
 
 use hymeko::common::ids::{DeclId, HyperArcId, NodeId};
@@ -125,14 +132,16 @@ impl PageRankModel {
     }
 }
 
-/// Bounded power-iteration controls, independent of graph preparation.
+/// Bounded PageRank solver controls, independent of graph preparation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PageRankConfig {
     /// Probability of following a graph transition: finite, 0 <= damping < 1.
     pub damping: f64,
     /// Requested absolute L1 error bound; finite and strictly positive.
     pub tolerance: f64,
-    /// Maximum updates; strictly positive. Exhaustion is reported in the result.
+    /// Maximum updates; strictly positive. For GMRES this includes the final
+    /// certification update, leaving at most max_iterations - 1 Arnoldi steps.
+    /// Exhaustion is reported in the result.
     pub max_iterations: usize,
 }
 
@@ -166,7 +175,7 @@ impl PageRankConfig {
 /// Checked preparation or execution failure, carrying only bounded data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PageRankError {
-    /// The caller requested zero execution workers.
+    /// The requested worker count is unsupported (zero, or nonserial GMRES).
     InvalidWorkers {
         /// Rejected worker count.
         workers: usize,
@@ -180,7 +189,7 @@ pub enum PageRankError {
     ReverseIndex(IncidenceError),
     /// A supplied shared projection does not use canonical NodeId coordinates.
     InvalidProjectionDomain,
-    /// Damping, tolerance, or iteration limit is outside its documented domain.
+    /// Damping, tolerance, iteration limit or GMRES restart is outside its domain.
     InvalidConfig,
     /// A node record does not map back to its own declaration and NodeId.
     InvalidNode(NodeId),
@@ -282,6 +291,7 @@ pub struct PageRank<'ir> {
     execution: Option<ExecutionPlan<'ir>>,
     incoming_terms: Option<usize>,
     reverse: OnceLock<Result<IncidenceIndex<'ir>, IncidenceError>>,
+    quotient: OnceLock<Option<QuotientPlan>>,
 }
 
 impl<'ir> PageRank<'ir> {
@@ -320,6 +330,7 @@ impl<'ir> PageRank<'ir> {
             execution: None,
             incoming_terms: None,
             reverse: OnceLock::new(),
+            quotient: OnceLock::new(),
         };
         // Unit undirected masses are cardinalities. Up to 2^53 incidences,
         // every partial integer count is exactly representable in f64. Reuse
@@ -446,6 +457,11 @@ impl<'ir> PageRank<'ir> {
                 .get()
                 .and_then(|result| result.as_ref().ok())
                 .map_or(0, IncidenceIndex::retained_bytes)
+            + self
+                .quotient
+                .get()
+                .and_then(Option::as_ref)
+                .map_or(0, QuotientPlan::retained_bytes)
     }
     /// Present when structural analysis selected a lower-work range plan.
     pub fn plan_stats(&self) -> Option<PageRankPlanStats> {
@@ -470,6 +486,16 @@ impl<'ir> PageRank<'ir> {
         workspace: &'w mut PageRankWorkspace,
         personalization: Option<&[f64]>,
     ) -> Result<PageRankResult<'w>, PageRankError> {
+        self.run_power(config, workspace, personalization, false)
+    }
+
+    fn run_power<'w>(
+        &self,
+        config: PageRankConfig,
+        workspace: &'w mut PageRankWorkspace,
+        personalization: Option<&[f64]>,
+        ordered: bool,
+    ) -> Result<PageRankResult<'w>, PageRankError> {
         config.validate()?;
         workspace.initialize(self.node_count(), personalization)?;
         let pool = workspace.pool.clone();
@@ -477,9 +503,9 @@ impl<'ir> PageRank<'ir> {
             let reverse = (self.node_count() != 0 && config.damping != 0.0)
                 .then(|| self.reverse_index())
                 .transpose()?;
-            pool.install(|| self.iterate(config, workspace, reverse))
+            pool.install(|| self.iterate(config, workspace, reverse, ordered))
         } else {
-            self.iterate(config, workspace, None)
+            self.iterate(config, workspace, None, ordered)
         }
     }
 
@@ -488,59 +514,95 @@ impl<'ir> PageRank<'ir> {
         config: PageRankConfig,
         workspace: &'w mut PageRankWorkspace,
         reverse: Option<&IncidenceIndex<'ir>>,
+        ordered: bool,
     ) -> Result<PageRankResult<'w>, PageRankError> {
-        let mut progress = Progress::default();
+        let mut state = PowerState::new(ordered || self.execution.is_none() || reverse.is_some());
         if self.node_count() == 0 || config.damping == 0.0 {
-            progress.converged = true;
+            state.progress.converged = true;
         } else {
-            workspace.prepare_input(&self.outgoing, self.rates.weighted());
-            if self.incoming_terms.is_some_and(|n| n <= 2) {
-                workspace.auxiliary.resize(self.node_count(), 0.0);
-                workspace.auxiliary.fill(0.0);
-            }
-            let mut certified = self.execution.is_none() || reverse.is_some();
-            let mut previous_change = f64::INFINITY;
-            for iteration in 1..=config.max_iterations {
-                // A canonical compensated update certifies every successful
-                // return, and also the error estimate at the iteration cap.
-                let ordered = certified || iteration == config.max_iterations;
-                let (change, ordered) = if let Some(reverse) = reverse {
-                    (
-                        self.update_parallel(config.damping, workspace, reverse)?,
-                        true,
-                    )
-                } else if ordered {
-                    (self.update(config.damping, workspace)?, true)
-                } else {
-                    self.update_ranges(config.damping, workspace)?
-                };
-                progress = Progress {
-                    iterations: iteration,
-                    change_l1: change,
-                    error_bound_l1: config.damping * change / (1.0 - config.damping),
-                    converged: false,
-                };
-                let candidate = progress.error_bound_l1 <= config.tolerance;
-                progress.converged = ordered && candidate;
-                if progress.converged {
-                    break;
-                }
-                // Regrouping cannot trap the solve at its rounding-error floor.
-                if candidate || change >= previous_change || ordered {
-                    certified = true;
-                }
-                previous_change = change;
-            }
+            self.prepare_workspace(workspace);
+            self.advance_power(
+                config,
+                workspace,
+                reverse,
+                &mut state,
+                config.max_iterations,
+            )?;
         }
         Ok(PageRankResult {
             scores: &workspace.scores,
-            progress,
+            progress: state.progress,
+            automatic: None,
         })
     }
 
-    fn update(&self, damping: f64, ws: &mut PageRankWorkspace) -> Result<f64, PageRankError> {
+    /// Advance existing numeric state without restarting or rebuilding a model.
+    fn advance_power(
+        &self,
+        config: PageRankConfig,
+        workspace: &mut PageRankWorkspace,
+        reverse: Option<&IncidenceIndex<'ir>>,
+        state: &mut PowerState,
+        stop: usize,
+    ) -> Result<(), PageRankError> {
+        let stop = stop.min(config.max_iterations);
+        if state.progress.iterations >= stop || state.progress.converged {
+            return Ok(());
+        }
+        for iteration in state.progress.iterations + 1..=stop {
+            // A canonical compensated update certifies every successful
+            // return, and also the error estimate at the iteration cap.
+            let ordered = state.certified || iteration == config.max_iterations;
+            let (change, ordered) = if let Some(reverse) = reverse {
+                (
+                    self.update_parallel(config.damping, workspace, reverse)?,
+                    true,
+                )
+            } else if ordered {
+                (self.update(config.damping, workspace)?, true)
+            } else {
+                self.update_ranges(config.damping, workspace)?
+            };
+            state.progress = Progress {
+                iterations: iteration,
+                change_l1: change,
+                error_bound_l1: config.damping * change / (1.0 - config.damping),
+                converged: false,
+            };
+            let candidate = state.progress.error_bound_l1 <= config.tolerance;
+            state.progress.converged = ordered && candidate;
+            if state.progress.converged {
+                break;
+            }
+            // Regrouping cannot trap the solve at its rounding-error floor.
+            if candidate || change >= state.previous_change || ordered {
+                state.certified = true;
+            }
+            state.prior_change = state.previous_change;
+            state.previous_change = change;
+        }
+        Ok(())
+    }
+
+    fn prepare_workspace(&self, ws: &mut PageRankWorkspace) {
+        ws.prepare_input(&self.outgoing, self.rates.weighted());
         if self.incoming_terms.is_some_and(|n| n <= 2) {
-            return self.update_bounded_scatter(damping, ws);
+            ws.auxiliary.resize(self.node_count(), 0.0);
+            ws.auxiliary.fill(0.0);
+        }
+    }
+
+    fn update(&self, damping: f64, ws: &mut PageRankWorkspace) -> Result<f64, PageRankError> {
+        self.contract_ordered(damping, ws);
+        self.finish_transition(damping, ws, self.rates.weighted())
+    }
+
+    /// Shared linear incidence contraction for power iteration and Krylov vectors.
+    /// Signed inputs are valid; probability checks belong to the completed update.
+    fn contract_ordered(&self, damping: f64, ws: &mut PageRankWorkspace) {
+        if self.incoming_terms.is_some_and(|n| n <= 2) {
+            self.distribute_bounded_scatter(damping, ws);
+            return;
         }
         // Dispatch once per update, not once per incidence. Each instantiation
         // calls the same Core row operations and keeps the original FP order.
@@ -561,7 +623,6 @@ impl<'ir> PageRank<'ir> {
                 true,
             ),
         }
-        self.finish_transition(damping, ws, self.rates.weighted())
     }
 
     /// Every execution strategy uses the same teleportation and vertex update.
@@ -576,11 +637,8 @@ impl<'ir> PageRank<'ir> {
         workspace.finish_update(teleport, &self.outgoing, weighted)
     }
 
-    fn update_bounded_scatter(
-        &self,
-        damping: f64,
-        ws: &mut PageRankWorkspace,
-    ) -> Result<f64, PageRankError> {
+    fn distribute_bounded_scatter(&self, damping: f64, ws: &mut PageRankWorkspace) {
+        ws.auxiliary.resize(self.node_count(), 0.0);
         self.projection.for_each_row(
             &mut RowContraction::new(
                 &ws.scaled,
@@ -600,7 +658,6 @@ impl<'ir> PageRank<'ir> {
         for (incoming, value) in ws.incoming.iter_mut().zip(&mut ws.auxiliary) {
             *incoming = Sum::from_first(value.take_total());
         }
-        self.finish_transition(damping, ws, false)
     }
 
     fn update_ranges(
@@ -613,6 +670,23 @@ impl<'ir> PageRank<'ir> {
         };
         ws.auxiliary.resize(ws.scores.len(), 0.0);
         ws.auxiliary.copy_from_slice(&ws.scores);
+        self.contract_ranges(damping, ws, plan);
+        match self.finish_transition(damping, ws, false) {
+            Ok(change) => Ok((change, false)),
+            Err(PageRankError::NumericalMass) => {
+                ws.scores.copy_from_slice(&ws.auxiliary);
+                ws.prepare_input(&self.outgoing, false);
+                self.update(damping, ws).map(|v| (v, true))
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Linear prefix/difference contraction shared by probability updates and
+    /// signed Krylov vectors. Input is staged and incoming accumulators cleared
+    /// by the caller. Regrouping changes rounding, so convergence is certified
+    /// separately with the canonical ordered operator.
+    fn contract_ranges(&self, damping: f64, ws: &mut PageRankWorkspace, plan: &ExecutionPlan<'ir>) {
         match plan.layout.canonical_indices() {
             Some(order) => ws
                 .ranges
@@ -653,15 +727,6 @@ impl<'ir> PageRank<'ir> {
                 .ranges
                 .accumulate_mapped(&plan.partition, &mut ws.incoming, |slot| order[slot]),
             None => ws.ranges.accumulate_into(&plan.partition, &mut ws.incoming),
-        }
-        match self.finish_transition(damping, ws, false) {
-            Ok(change) => Ok((change, false)),
-            Err(PageRankError::NumericalMass) => {
-                ws.scores.copy_from_slice(&ws.auxiliary);
-                ws.prepare_input(&self.outgoing, false);
-                self.update(damping, ws).map(|v| (v, true))
-            }
-            Err(error) => Err(error),
         }
     }
 
@@ -719,7 +784,7 @@ impl RowTransform for RankTransfer<'_> {
 /// up to floating-point roundoff and is the L1 contraction bound for the returned iterate.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Progress {
-    /// Number of graph updates, excluding initialization.
+    /// Power updates, or GMRES Arnoldi steps plus one certification update.
     pub iterations: usize,
     /// L1 difference between the last two iterates (not the next-step residual).
     pub change_l1: f64,
@@ -736,11 +801,32 @@ pub struct PageRankResult<'w> {
     pub scores: &'w [f64],
     /// Stopping evidence, including explicit cap exhaustion.
     pub progress: Progress,
+    /// Actual adaptive decision and work accounting, only for the Auto strategy.
+    pub automatic: Option<PageRankAutoSelection>,
 }
 impl PageRankResult<'_> {
     /// Probability of one canonical node, or None for an out-of-range NodeId.
     pub fn score(&self, node: NodeId) -> Option<f64> {
         self.scores.get(node.raw()).copied()
+    }
+}
+
+/// Continuation state shared by explicit power and the adaptive strategy.
+#[derive(Clone, Copy)]
+struct PowerState {
+    progress: Progress,
+    certified: bool,
+    previous_change: f64,
+    prior_change: f64,
+}
+impl PowerState {
+    fn new(certified: bool) -> Self {
+        Self {
+            progress: Progress::default(),
+            certified,
+            previous_change: f64::INFINITY,
+            prior_change: f64::INFINITY,
+        }
     }
 }
 

@@ -6,6 +6,27 @@ use super::*;
 // This oracle does not call the new fused sweep or InputNormalization.
 struct BeforeSweep;
 impl BeforeSweep {
+    // Frozen from run_krylov_initialized before workspace extraction:
+    // krylov.rs SHA-256 0411a15a1f12bad5208a4f61c2ab344052744e94dbac44712a0c89130695e8cc.
+    // The candidate admission is independent of prepare_candidate; normalization
+    // below also predates InputNormalization and does not call production staging.
+    fn candidate(scores: &mut [f64]) -> Result<(), PageRankError> {
+        if scores.iter().any(|x| !x.is_finite()) {
+            return Err(PageRankError::NumericalMass);
+        }
+        for x in scores.iter_mut() {
+            *x = x.max(0.0);
+        }
+        let mass = Sum::of(scores.iter().copied());
+        if !mass.is_finite() || mass <= 0.0 {
+            return Err(PageRankError::NumericalMass);
+        }
+        for score in scores {
+            *score /= mass;
+        }
+        Ok(())
+    }
+
     fn normalize(scores: &[f64], outgoing: &[f64], weighted: bool) -> (Vec<f64>, f64) {
         let mut scaled = vec![0.0; scores.len()];
         let mut dangling = Sum::default();
@@ -47,6 +68,103 @@ impl BeforeSweep {
     }
     fn bits(values: &[f64]) -> Vec<u64> {
         values.iter().map(|v| v.to_bits()).collect()
+    }
+}
+
+#[test]
+fn solver_candidate_admission_preserves_bits_errors_and_staging() {
+    let tiny = f64::from_bits(1);
+    let mut cases = vec![
+        vec![],
+        vec![1.0],
+        vec![0.0, -0.0],
+        vec![-1.0, -tiny],
+        vec![tiny, tiny, -tiny, -0.0],
+        vec![f64::MIN_POSITIVE, 1.0, 1e-17, 1e-17],
+        vec![1e300, 1.0, -1e300, 1e-310],
+        vec![f64::MAX, f64::MAX],
+        vec![-1.0, f64::MAX, f64::MAX],
+        vec![-1.0, f64::MAX, f64::MAX, f64::NAN],
+        vec![-1.0, tiny, f64::INFINITY],
+        vec![-0.0, -tiny, tiny, 0.0],
+    ];
+    for invalid in [
+        f64::NAN,
+        f64::from_bits(0xfff8_0000_0000_0001),
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ] {
+        for position in 0..4 {
+            let mut values = vec![-0.0, -1.0, 0.25, 0.75];
+            values[position] = invalid;
+            cases.push(values);
+        }
+    }
+    // Fixed IEEE-pattern population: signed finite normals and subnormals,
+    // spanning enough exponents to exercise compensated summation and clipping.
+    let mut state = 0xCA11_DA7Eu64;
+    for size in [2, 3, 17, 65, 257] {
+        for _ in 0..8 {
+            let values = (0..size)
+                .map(|_| {
+                    state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+                    let sign = state & (1u64 << 63);
+                    let exponent = ((state >> 32) % 1900) << 52;
+                    f64::from_bits(sign | exponent | (state & ((1u64 << 52) - 1)))
+                })
+                .collect();
+            cases.push(values);
+        }
+    }
+    for weighted in [false, true] {
+        let mut actual = PageRankWorkspace::new();
+        for values in &cases {
+            let size = values.len();
+            let degrees: Vec<_> = (0..size).map(|i| (i % 7) as f64).collect();
+            actual.initialize(size, None).unwrap();
+            actual.scores.copy_from_slice(values);
+            actual.scaled.fill(-17.0);
+            actual.incoming.fill(Sum::default());
+            for incoming in &mut actual.incoming {
+                incoming.add(3.0);
+            }
+            actual.dangling = -23.0;
+            let mut expected = values.clone();
+            let verdict = BeforeSweep::candidate(&mut expected);
+            assert_eq!(actual.prepare_candidate(&degrees, weighted), verdict);
+            assert_eq!(
+                BeforeSweep::bits(&actual.scores),
+                BeforeSweep::bits(&expected)
+            );
+            if verdict.is_ok() {
+                let (scaled, dangling) = BeforeSweep::normalize(&expected, &degrees, weighted);
+                assert_eq!(
+                    BeforeSweep::bits(&actual.scaled),
+                    BeforeSweep::bits(&scaled)
+                );
+                assert_eq!(actual.dangling.to_bits(), dangling.to_bits());
+                assert!(
+                    actual
+                        .incoming
+                        .iter()
+                        .all(|value| value.total().to_bits() == 0)
+                );
+            } else {
+                assert!(actual.scaled.iter().all(|value| *value == -17.0));
+                assert!(actual.incoming.iter().all(|value| value.total() == 3.0));
+                assert_eq!(actual.dangling, -23.0);
+            }
+        }
+        // Reusing the same workspace after the entire population clears any
+        // rejected candidate's partial state without allocating an alternate IR.
+        actual.initialize(3, None).unwrap();
+        actual.scores.copy_from_slice(&[-1.0, 2.0, 2.0]);
+        actual
+            .prepare_candidate(&[0.0, 2.0, 0.0], weighted)
+            .unwrap();
+        assert_eq!(actual.scores, [0.0, 0.5, 0.5]);
+        assert_eq!(actual.dangling, 0.5);
+        assert!(actual.incoming.iter().all(|value| value.total() == 0.0));
     }
 }
 

@@ -7,6 +7,13 @@
 use std::env;
 use std::hint::black_box;
 
+#[cfg(feature = "evidence-heap")]
+#[path = "performance_evidence/heap.rs"]
+mod heap;
+#[cfg(feature = "evidence-heap")]
+#[global_allocator]
+static ALLOCATOR: heap::ObservedSystem = heap::ObservedSystem;
+
 use hymeko::common::ids::NodeId;
 use hymeko::ir::incidence::{IncidenceIndex, build_incidence_index};
 use hymeko::ir::ir::Ir;
@@ -66,8 +73,9 @@ fn optional(value: Option<f64>) -> String {
 fn emit_phase(run: &str, workload: &str, subject: &str, phase: &str) {
     match telemetry::memory_snapshot() {
         Some(memory) => println!(
-            "EVIDENCE_PHASE\trun={run}\tworkload={workload}\tsubject={subject}\tphase={phase}\tworking_set_b={}\tself_peak_b={}",
-            memory.working_set_bytes, memory.peak_working_set_bytes
+            "EVIDENCE_PHASE\trun={run}\tworkload={workload}\tsubject={subject}\tphase={phase}\tworking_set_b={}\tself_peak_b={}\tprivate_committed_b={}",
+            memory.working_set_bytes, memory.peak_working_set_bytes,
+            memory.private_committed_bytes.map_or_else(|| "NA".to_string(), |n| n.to_string())
         ),
         None => println!(
             "EVIDENCE_PHASE\trun={run}\tworkload={workload}\tsubject={subject}\tphase={phase}\tworking_set_b=NA\tself_peak_b=NA"

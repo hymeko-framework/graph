@@ -13,13 +13,37 @@ Extracted by grammar -- tree-sitter for Rust and C++, `ast` for Python -- so tha
 `pub(crate)`, a `pub fn` inside a private `mod`, and a `def` written inside a
 docstring are all excluded for a stated reason rather than by luck.
 
-**8 package(s), 679 public symbol(s).**
+**11 package(s), 749 public symbol(s).**
 
 ## hymeko_graph_benchmarks (rust)
 
 - **Root:** `benchmarks`
 - **Manifest:** `benchmarks/Cargo.toml`
 - **Charter:** <no charter>
+
+_No public symbols._
+
+## hymeko-graph-dev (rust)
+
+- **Root:** `dev`
+- **Manifest:** `dev/Cargo.toml`
+- **Charter:** Native Graph development linkage -- 2026-10-28
+
+_No public symbols._
+
+## hymeko-graph-dylib (rust)
+
+- **Root:** `dev/dylib`
+- **Manifest:** `dev/dylib/Cargo.toml`
+- **Charter:** Native development linkage; algorithms and canonical types keep their owners.
+
+_No public symbols._
+
+## hymeko-linkage-memory (rust)
+
+- **Root:** `dev/memory`
+- **Manifest:** `dev/memory/Cargo.toml`
+- **Charter:** Opt-in resident-memory client; generation and PageRank keep their existing owners.
 
 _No public symbols._
 
@@ -61,9 +85,11 @@ _No public symbols._
 - `BergeCost` — `hymeko_graph/src/direct_ir/informed.rs`
 - `BergeHeuristic` — `hymeko_graph/src/direct_ir/informed.rs`
 - `BoundedScorer` — `hymeko_graph/src/topk_cycles.rs`
+- `CofaceLabel` — `hymeko_graph/src/cell_topology.rs`
 - `CyclePruner` — `hymeko_graph/src/pruner.rs`
 - `CycleSampler` — `hymeko_graph/src/cycle_sampler.rs`
 - `Heuristic` — `hymeko_graph/src/traversal_heuristic.rs`
+- `IncidenceScalar` — `hymeko_graph/src/cell_topology.rs`
 - `Loader` — `hymeko_graph/src/signed_graph/loading.rs`
 - `PositionProvider` — `hymeko_graph/src/direct_ir/informed.rs`
 - `TransitionPolicy` — `hymeko_graph/src/direct_ir/informed.rs`
@@ -83,16 +109,28 @@ _No public symbols._
 - `BergeIncidence` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BergePath` — `hymeko_graph/src/direct_ir/traversal.rs`
 - `BergeStep` — `hymeko_graph/src/direct_ir/traversal.rs`
+- `BergeTour` — `hymeko_graph/src/direct_ir/tour.rs`
 - `BfsScratch` — `hymeko_graph/src/traversal.rs`
+- `BinaryBasis` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryCoordinate` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryFrontierBarrier` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryFrontierSearch` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryFrontierStep` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryLatentProposals` — `hymeko_graph/src/matroid/latent.rs`
+- `BinaryMatroidWorkspace` — `hymeko_graph/src/matroid/binary.rs`
+- `BinaryReconstructionOptions` — `hymeko_graph/src/matroid/reconstruction.rs`
+- `BinaryReconstructionSearch` — `hymeko_graph/src/matroid/reconstruction.rs`
 - `BipartiteOnlyPruner` — `hymeko_graph/src/balance.rs`
 - `BuildOpts` — `hymeko_graph/src/incidence.rs`
 - `CartwrightHararyPruner` — `hymeko_graph/src/balance.rs`
+- `Cell` — `hymeko_graph/src/cell_topology.rs`
 - `Cell` — `hymeko_graph/src/octree.rs`
 - `CellLeviCoord` — `hymeko_graph/src/matroid/cell.rs`
 - `CellLeviMatroid` — `hymeko_graph/src/matroid/cell.rs`
 - `CellLeviSession` — `hymeko_graph/src/matroid/cell.rs`
 - `CellRank` — `hymeko_graph/src/cell_topology.rs`
 - `CellTopology` — `hymeko_graph/src/cell_topology.rs`
+- `Christofides` — `hymeko_graph/src/direct_ir/tour.rs`
 - `CliffordFIR` — `hymeko_graph/src/spine.rs`
 - `ColorCodingSampler` — `hymeko_graph/src/color_coding.rs`
 - `CommunityAxiomPruner` — `hymeko_graph/src/community.rs`
@@ -138,6 +176,8 @@ _No public symbols._
 - `Octree` — `hymeko_graph/src/octree.rs`
 - `OrientedMaterialisationDigest` — `hymeko_graph/src/direct_ir/informed.rs`
 - `PageRank` — `hymeko_graph/src/direct_ir/pagerank.rs`
+- `PageRankAutoConfig` — `hymeko_graph/src/direct_ir/pagerank/automatic.rs`
+- `PageRankAutoSelection` — `hymeko_graph/src/direct_ir/pagerank/automatic.rs`
 - `PageRankConfig` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `PageRankModel` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `PageRankOptions` — `hymeko_graph/src/direct_ir/pagerank.rs`
@@ -146,6 +186,7 @@ _No public symbols._
 - `PageRankWorkspace` — `hymeko_graph/src/direct_ir/pagerank/workspace.rs`
 - `PathClosureSampler` — `hymeko_graph/src/path_closure.rs`
 - `PathHash` — `hymeko_graph/src/direct_ir/informed.rs`
+- `Position` — `hymeko_graph/src/cell_topology.rs`
 - `PreparedBergeSearch` — `hymeko_graph/src/direct_ir/informed/prepared.rs`
 - `Progress` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `PrunerStats` — `hymeko_graph/src/pruner.rs`
@@ -172,6 +213,7 @@ _No public symbols._
 - `TopKBuilder` — `hymeko_graph/src/topk_cycles.rs`
 - `TopKCyclesBatch` — `hymeko_graph/src/topk_cycles.rs`
 - `TopKWalksBatch` — `hymeko_graph/src/topk_walks.rs`
+- `TourLimits` — `hymeko_graph/src/direct_ir/tour.rs`
 - `TraversalWorkspace` — `hymeko_graph/src/direct_ir/workspace.rs`
 - `TriangleFilter` — `hymeko_graph/src/vertex_filter.rs`
 - `TupleEnumeration` — `hymeko_graph/src/signed_tuples.rs`
@@ -200,7 +242,10 @@ _No public symbols._
 - `InformedSearchError` — `hymeko_graph/src/direct_ir/informed.rs`
 - `MatroidError` — `hymeko_graph/src/matroid/error.rs`
 - `MultiEdgeSignResolution` — `hymeko_graph/src/signed_tuples.rs`
+- `PageRankAutoReason` — `hymeko_graph/src/direct_ir/pagerank/automatic.rs`
 - `PageRankError` — `hymeko_graph/src/direct_ir/pagerank.rs`
+- `PageRankQuotient` — `hymeko_graph/src/direct_ir/pagerank/quotient.rs`
+- `PageRankSolver` — `hymeko_graph/src/direct_ir/pagerank/krylov.rs`
 - `PrunerDecision` — `hymeko_graph/src/pruner.rs`
 - `RankFlow` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `RankOrdering` — `hymeko_graph/src/direct_ir/pagerank.rs`
@@ -210,6 +255,7 @@ _No public symbols._
 - `Sign` — `hymeko_graph/src/signed_graph.rs`
 - `SignedTupleFamily` — `hymeko_graph/src/signed_tuples.rs`
 - `Sink` — `hymeko_graph/src/unsigned_cycles/sink.rs`
+- `TourError` — `hymeko_graph/src/direct_ir/tour.rs`
 
 ### functions
 
@@ -243,6 +289,12 @@ _No public symbols._
 - `bfs_distances` — `hymeko_graph/src/traversal.rs`
 - `bfs_distances_into` — `hymeko_graph/src/unsigned_cycles/bfs.rs`
 - `bidirectional_bfs` — `hymeko_graph/src/traversal.rs`
+- `binary_column` — `hymeko_graph/src/matroid/binary.rs`
+- `binary_frontier_barrier` — `hymeko_graph/src/matroid/binary.rs`
+- `binary_frontier_search` — `hymeko_graph/src/matroid/binary.rs`
+- `binary_latent_proposals` — `hymeko_graph/src/matroid/latent.rs`
+- `binary_reconstruction_search` — `hymeko_graph/src/matroid/reconstruction.rs`
+- `binary_weighted_basis` — `hymeko_graph/src/matroid/binary.rs`
 - `bs_clear` — `hymeko_graph/src/traversal.rs`
 - `bs_clear` — `hymeko_graph/src/unsigned_cycles/csr.rs`
 - `bs_get` — `hymeko_graph/src/traversal.rs`
@@ -270,6 +322,7 @@ _No public symbols._
 - `clifford_fir_backward` — `hymeko_graph/src/spine.rs`
 - `clifford_fir_backward_with` — `hymeko_graph/src/spine.rs`
 - `clifford_fir_forward` — `hymeko_graph/src/spine.rs`
+- `coface_positions` — `hymeko_graph/src/cell_topology.rs`
 - `cofaces` — `hymeko_graph/src/cell_topology.rs`
 - `component_of` — `hymeko_graph/src/direct_ir/components.rs`
 - `component_of` — `hymeko_graph/src/direct_ir/s_connect.rs`
@@ -483,6 +536,7 @@ _No public symbols._
 - `retained_bytes` — `hymeko_graph/src/matroid/workspace.rs`
 - `rhs` — `hymeko_graph/src/hyper_operator.rs`
 - `run` — `hymeko_graph/src/direct_ir/pagerank.rs`
+- `run_with_solver` — `hymeko_graph/src/direct_ir/pagerank/krylov.rs`
 - `s` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `s_connected_components` — `hymeko_graph/src/direct_ir/s_connect.rs`
 - `same_component` — `hymeko_graph/src/direct_ir/components.rs`
@@ -491,6 +545,7 @@ _No public symbols._
 - `scales` — `hymeko_graph/src/cell_topology.rs`
 - `score` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `search` — `hymeko_graph/src/direct_ir/informed/prepared.rs`
+- `search_with_heuristic` — `hymeko_graph/src/direct_ir/informed/prepared.rs`
 - `set_workers` — `hymeko_graph/src/direct_ir/pagerank/workspace.rs`
 - `sign` — `hymeko_graph/src/sphf.rs`
 - `sign_product_abs` — `hymeko_graph/src/topk_cycles.rs`
@@ -498,6 +553,8 @@ _No public symbols._
 - `signs` — `hymeko_graph/src/cell_topology.rs`
 - `signs` — `hymeko_graph/src/hyper_operator.rs`
 - `snapshot` — `hymeko_graph/src/pruner.rs`
+- `solve` — `hymeko_graph/src/direct_ir/tour.rs`
+- `solve` — `hymeko_graph/src/matroid/reconstruction/quotient.rs`
 - `sort_by_score_desc` — `hymeko_graph/src/topk_cycles.rs`
 - `sources` — `hymeko_graph/src/sphf.rs`
 - `spanning_basis` — `hymeko_graph/src/matroid/cell.rs`
@@ -508,6 +565,7 @@ _No public symbols._
 - `targets` — `hymeko_graph/src/sphf.rs`
 - `tiered_m_v_by_degree` — `hymeko_graph/src/topk_cycles.rs`
 - `to_vec` — `hymeko_graph/src/cell_topology.rs`
+- `unit_incidence` — `hymeko_graph/src/cell_topology.rs`
 - `validate` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `vertex_count` — `hymeko_graph/src/matroid/cell.rs`
 - `vertices` — `hymeko_graph/src/cell_topology.rs`
@@ -516,6 +574,8 @@ _No public symbols._
 - `with_capacity` — `hymeko_graph/src/topk_cycles.rs`
 - `with_capacity` — `hymeko_graph/src/traversal.rs`
 - `with_capacity` — `hymeko_graph/src/traversal_heuristic.rs`
+- `with_cofaces` — `hymeko_graph/src/cell_topology.rs`
+- `with_limits` — `hymeko_graph/src/matroid/binary.rs`
 - `with_ordering` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `with_rank` — `hymeko_graph/src/cell_topology.rs`
 - `with_signs` — `hymeko_graph/src/cell_topology.rs`
@@ -534,18 +594,22 @@ _No public symbols._
 - `AndOrNorm` — `hymeko_pgraph/src/andor.rs`
 - `Regime` — `hymeko_pgraph/src/regime.rs`
 - `Reliability` — `hymeko_pgraph/src/andor.rs`
+- `StructureObjective` — `hymeko_pgraph/src/abb.rs`
 
 ### structs
 
+- `Abb` — `hymeko_pgraph/src/abb.rs`
 - `AbbJson` — `hymeko_pgraph/src/dump.rs`
 - `AbbOptions` — `hymeko_pgraph/src/abb.rs`
 - `AbbSolution` — `hymeko_pgraph/src/abb.rs`
+- `AdditiveCost` — `hymeko_pgraph/src/abb.rs`
 - `AndOrWorkspace` — `hymeko_pgraph/src/andor.rs`
 - `Availability` — `hymeko_pgraph/src/andor.rs`
 - `AxiomBundle` — `hymeko_pgraph/src/axioms.rs`
 - `AxiomCertificateJson` — `hymeko_pgraph/src/dump.rs`
 - `AxiomTrace` — `hymeko_pgraph/src/axioms.rs`
 - `BooleanExact` — `hymeko_pgraph/src/andor.rs`
+- `BoundedAbb` — `hymeko_pgraph/src/abb.rs`
 - `Canonical` — `hymeko_pgraph/src/regime.rs`
 - `Composite` — `hymeko_pgraph/src/regime.rs`
 - `CostDominance` — `hymeko_pgraph/src/regime.rs`
@@ -557,6 +621,7 @@ _No public symbols._
 - `MaximalStructure` — `hymeko_pgraph/src/msg.rs`
 - `MaximalStructureOptions` — `hymeko_pgraph/src/msg.rs`
 - `NoExcess` — `hymeko_pgraph/src/regime.rs`
+- `ObjectiveSolution` — `hymeko_pgraph/src/abb.rs`
 - `PGraphSchema` — `hymeko_pgraph/src/schema.rs`
 - `PGraphSchemaBuilder` — `hymeko_pgraph/src/schema.rs`
 - `PGraphView` — `hymeko_pgraph/src/view.rs`
@@ -565,15 +630,18 @@ _No public symbols._
 - `Product` — `hymeko_pgraph/src/andor.rs`
 - `PropagationConfig` — `hymeko_pgraph/src/andor.rs`
 - `SolutionStructure` — `hymeko_pgraph/src/ssg.rs`
+- `SsgConstraints` — `hymeko_pgraph/src/ssg_dm.rs`
 - `SsgDmOptions` — `hymeko_pgraph/src/ssg_dm.rs`
 - `SsgDmResult` — `hymeko_pgraph/src/ssg_dm.rs`
 - `SsgOptions` — `hymeko_pgraph/src/ssg.rs`
+- `SsgRequest` — `hymeko_pgraph/src/cli.rs`
 - `UnitReliability` — `hymeko_pgraph/src/andor.rs`
 
 ### enums
 
 - `AxiomViolation` — `hymeko_pgraph/src/axioms.rs`
 - `BuilderError` — `hymeko_pgraph/src/builder.rs`
+- `ChildOrder` — `hymeko_pgraph/src/abb.rs`
 - `CliError` — `hymeko_pgraph/src/cli.rs`
 - `DumpAlgorithm` — `hymeko_pgraph/src/dump.rs`
 - `ExtensionAxiomViolation` — `hymeko_pgraph/src/axiom_extensions.rs`
@@ -613,12 +681,14 @@ _No public symbols._
 - `close_producible_under_rule` — `hymeko_pgraph/src/reachability.rs`
 - `compile_sources` — `hymeko_pgraph/src/meta_resolve.rs`
 - `compile_to_lowered` — `hymeko_pgraph/src/meta_resolve.rs`
+- `constrained_source` — `hymeko_pgraph/src/cli.rs`
 - `consumers` — `hymeko_pgraph/src/lowering.rs`
 - `consumers_set` — `hymeko_pgraph/src/view.rs`
 - `counts_candidate_cost` — `hymeko_pgraph/src/reachability.rs`
 - `edges` — `hymeko_pgraph/src/schema.rs`
 - `enumerate` — `hymeko_pgraph/src/ssg.rs`
 - `enumerate` — `hymeko_pgraph/src/ssg_dm.rs`
+- `enumerate_constrained` — `hymeko_pgraph/src/ssg_dm.rs`
 - `enumerate_with_options` — `hymeko_pgraph/src/ssg.rs`
 - `enumerate_with_options` — `hymeko_pgraph/src/ssg_dm.rs`
 - `for_each_consumer` — `hymeko_pgraph/src/view.rs`
@@ -656,6 +726,7 @@ _No public symbols._
 - `n_materials` — `hymeko_pgraph/src/schema.rs`
 - `n_operating_units` — `hymeko_pgraph/src/schema.rs`
 - `name` — `hymeko_pgraph/src/reachability.rs`
+- `new` — `hymeko_pgraph/src/abb.rs`
 - `new` — `hymeko_pgraph/src/andor.rs`
 - `new` — `hymeko_pgraph/src/axiom_extensions.rs`
 - `new` — `hymeko_pgraph/src/axioms.rs`
@@ -685,8 +756,10 @@ _No public symbols._
 - `render_pgraph` — `hymeko_pgraph/src/cli.rs`
 - `render_solution` — `hymeko_pgraph/src/cli.rs`
 - `solve` — `hymeko_pgraph/src/abb.rs`
+- `solve_on` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k` — `hymeko_pgraph/src/abb.rs`
 - `solve_top_k_with_regime` — `hymeko_pgraph/src/abb.rs`
+- `solve_with_objective` — `hymeko_pgraph/src/abb.rs`
 - `solve_with_options` — `hymeko_pgraph/src/abb.rs`
 - `solve_with_regime` — `hymeko_pgraph/src/abb.rs`
 - `successors` — `hymeko_pgraph/src/schema.rs`
@@ -698,6 +771,7 @@ _No public symbols._
 - `validate` — `hymeko_pgraph/src/axioms.rs`
 - `validate` — `hymeko_pgraph/src/view.rs`
 - `validate_timed` — `hymeko_pgraph/src/axioms.rs`
+- `with_order` — `hymeko_pgraph/src/abb.rs`
 - `with_required_products` — `hymeko_pgraph/src/friedler.rs`
 - `with_valid_o_nodes` — `hymeko_pgraph/src/friedler.rs`
 - `write_pgip` — `hymeko_pgraph/src/pgip_io.rs`
@@ -776,14 +850,41 @@ _No public symbols._
 
 ### classes
 
+- `ApplicationCatalog` — `scripts/performance_evidence/campaign.py`
 - `Campaign` — `scripts/performance_evidence/campaign.py`
 - `CampaignSummary` — `scripts/performance_evidence/campaign.py`
+- `CanonicalCase` — `scripts/performance_evidence/external.py`
 - `Cell` — `scripts/performance_evidence/campaign.py`
+- `ComponentBackend` — `scripts/performance_evidence/external.py`
+- `ComposedBackend` — `scripts/performance_evidence/external.py`
 - `Evidence` — `scripts/performance_evidence/campaign.py`
+- `ExternalCell` — `scripts/performance_evidence/external.py`
 - `HostBusy` — `scripts/performance_evidence/host.py`
 - `HostState` — `scripts/performance_evidence/host.py`
+- `HyperNetXBackend` — `scripts/performance_evidence/external.py`
+- `HypergraphxBackend` — `scripts/performance_evidence/external.py`
+- `LinkageStudy` — `scripts/performance_evidence/linkage.py`
+- `MemoryClient` — `scripts/performance_evidence/memory.py`
+- `MemoryEvidence` — `scripts/performance_evidence/memory.py`
+- `MemorySummary` — `scripts/performance_evidence/memory.py`
+- `OperationLimit` — `scripts/performance_evidence/external.py`
+- `PhaseObserver` — `scripts/performance_evidence/ranking.py`
+- `PhaseSampler` — `scripts/performance_evidence/memory.py`
+- `PreparedRanking` — `scripts/performance_evidence/ranking.py`
+- `ProcessMemory` — `scripts/performance_evidence/host.py`
 - `ProcessRunner` — `scripts/performance_evidence/campaign.py`
+- `QueryDeadline` — `scripts/performance_evidence/external.py`
 - `QuietHostGuard` — `scripts/performance_evidence/host.py`
+- `RankResult` — `scripts/performance_evidence/ranking.py`
+- `RankingBackend` — `scripts/performance_evidence/ranking.py`
+- `ResidentCohort` — `scripts/performance_evidence/linkage.py`
+- `ReticulaBackend` — `scripts/performance_evidence/external.py`
+- `Route` — `scripts/performance_evidence/routing.py`
+- `RoutingBackend` — `scripts/performance_evidence/routing.py`
+- `RoutingHyperNetX` — `scripts/performance_evidence/routing.py`
+- `WindowsMemoryCapture` — `scripts/performance_evidence/memory.py`
+- `WindowsWorkingSet` — `scripts/performance_evidence/working_set.py`
+- `XGIBackend` — `scripts/performance_evidence/external.py`
 
 ### functions
 

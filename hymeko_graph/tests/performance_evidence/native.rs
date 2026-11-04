@@ -10,19 +10,23 @@ use hymeko::{
         incidence::{IncidenceDomain, IncidenceIndex, IncidenceProjection, build_incidence_index},
         ir::{Ir, IrBuilder},
     },
-    util::measurement::Distribution,
+    module_store::{execution::CompiledModel, source_provider::StdFsProvider},
+    util::{measurement::Distribution, real_parser::RealParser},
 };
 use hymeko_graph::{
-    PageRank, PageRankConfig, PageRankModel, PageRankWorkspace, TraversalWorkspace,
-    connected_components,
+    PageRank, PageRankAutoConfig, PageRankAutoSelection, PageRankConfig, PageRankModel,
+    PageRankQuotient, PageRankSolver, PageRankWorkspace, TraversalWorkspace, connected_components,
 };
 use std::{
     env,
     io::{self, Write},
+    path::{Path, PathBuf},
 };
 
 #[path = "native/library.rs"]
 mod library;
+#[path = "native/memory.rs"]
+mod memory;
 
 #[derive(Clone, Copy)]
 enum Operation {
@@ -32,6 +36,10 @@ enum Operation {
 #[derive(Clone, Copy)]
 enum Backend {
     Hymeko,
+    Phases,
+    Ordered,
+    Gmres,
+    Auto(PageRankQuotient),
     Prepared,
     Hypergraphz,
 }
@@ -52,6 +60,11 @@ impl Selection {
             },
             backend: match backend {
                 "hymeko" => Backend::Hymeko,
+                "phases" if operation == "rank" => Backend::Phases,
+                "ordered" if operation == "rank" => Backend::Ordered,
+                "gmres" if operation == "rank" => Backend::Gmres,
+                "auto" if operation == "rank" => Backend::Auto(PageRankQuotient::Disabled),
+                "auto_quotient" if operation == "rank" => Backend::Auto(PageRankQuotient::Pendant),
                 "prepared" => Backend::Prepared,
                 "hypergraphz" => Backend::Hypergraphz,
                 _ => panic!("unknown backend"),
@@ -65,6 +78,17 @@ impl Selection {
             (Operation::Components, _) => {
                 "prepared_index_fresh_workspace_components_normalize_drop"
             }
+        }
+    }
+    fn solver(&self) -> PageRankSolver {
+        match self.backend {
+            Backend::Auto(quotient) => PageRankSolver::Auto(PageRankAutoConfig {
+                quotient,
+                ..Default::default()
+            }),
+            Backend::Gmres => PageRankSolver::Gmres { restart: 20 },
+            Backend::Ordered => PageRankSolver::OrderedPowerIteration,
+            _ => PageRankSolver::PowerIteration,
         }
     }
 }
@@ -125,6 +149,85 @@ impl InputStats {
     }
 }
 impl Input {
+    fn application_source() -> Option<PathBuf> {
+        env::var_os("HYMEKO_APPLICATION_SOURCE").map(PathBuf::from)
+    }
+
+    fn compile_source(path: &Path) -> Ir {
+        let model = CompiledModel::compile(StdFsProvider::new(), RealParser, path)
+            .expect("application model must compile through Core");
+        // Published Core IR tables are shared: this retains their allocations,
+        // rather than rebuilding or flattening the compiled application model.
+        model.program().ir.clone()
+    }
+
+    fn write_incidence(&self, path: &Path) -> io::Result<()> {
+        let mut output = std::fs::File::create(path)?;
+        for value in [self.ir.nodes.len(), self.ir.arcs.len(), self.members.len()] {
+            output.write_all(
+                &u32::try_from(value)
+                    .expect("u32 input domain")
+                    .to_le_bytes(),
+            )?;
+        }
+        for value in self.offsets.iter().chain(&self.members) {
+            output.write_all(&value.to_le_bytes())?;
+        }
+        Ok(())
+    }
+
+    fn emit_auto(
+        auto: PageRankAutoSelection,
+        solver: PageRankSolver,
+        selection_timed: bool,
+        iteration: Option<usize>,
+    ) {
+        let PageRankSolver::Auto(policy) = solver else {
+            unreachable!()
+        };
+        println!(
+            "EVIDENCE_AUTO\tpolicy=periodic_power_probe\tselection_timed={selection_timed}\titeration={}\treason={:?}\tprobe_interval={}\trestart_limit={}\tmax_basis_bytes={}\titeration_limit={}\tprobe_updates={}\tselection_checks={}\tpower_updates={}\tgmres_updates={}\trestart={}\tbasis_bytes={}\tpredicted_power_updates={}\tpower_work={}\tgmres_work={}",
+            iteration.map_or_else(|| "none".to_string(), |n| n.to_string()),
+            auto.reason,
+            policy.probe_iterations,
+            policy.restart,
+            policy.max_basis_bytes,
+            PageRankConfig::default().max_iterations,
+            auto.probe_iterations,
+            auto.selection_checks,
+            auto.power_iterations,
+            auto.gmres_iterations,
+            auto.restart,
+            auto.basis_bytes
+                .map_or_else(|| "none".to_string(), |n| n.to_string()),
+            auto.estimated_power_iterations,
+            auto.estimated_power_work,
+            auto.estimated_gmres_work,
+        );
+        println!(
+            "EVIDENCE_QUOTIENT\tpolicy={:?}\tselected_nodes={}\titeration={}\tcanonical_validation=true\tpairwise_matrix=false",
+            policy.quotient,
+            auto.quotient_nodes
+                .map_or_else(|| "none".to_string(), |n| n.to_string()),
+            iteration.map_or_else(|| "none".to_string(), |n| n.to_string())
+        );
+    }
+    fn rank_with_phases(
+        &self,
+        scores: &mut [f64],
+        workers: usize,
+        mut boundary: impl FnMut(usize),
+    ) -> usize {
+        let projection = IncidenceProjection::build(&self.ir, IncidenceDomain::Nodes).unwrap();
+        boundary(0);
+        let rank = PageRank::from_projection(projection, PageRankModel::default()).unwrap();
+        boundary(1);
+        let iterations = Self::solve(&rank, &mut PageRankWorkspace::new(), scores, workers);
+        boundary(2);
+        drop(rank);
+        boundary(3);
+        iterations
+    }
     fn relabeling_parity(&self, fixture: Fixture) {
         let permutation = VertexPermutation::new(fixture.nodes, fixture.relabel_seed);
         let mapping_hash = Self::hash((0..fixture.nodes).map(|n| permutation.target(n) as u64));
@@ -267,15 +370,24 @@ impl Input {
         scores: &mut [f64],
         workers: usize,
     ) -> usize {
+        Self::solve_using(rank, workspace, scores, workers, PageRankSolver::default()).0
+    }
+    fn solve_using(
+        rank: &PageRank<'_>,
+        workspace: &mut PageRankWorkspace,
+        scores: &mut [f64],
+        workers: usize,
+        solver: PageRankSolver,
+    ) -> (usize, Option<PageRankAutoSelection>) {
         workspace.set_workers(workers).expect("rank worker budget");
         assert_eq!(workspace.worker_count(), workers);
         let result = rank
-            .run(PageRankConfig::default(), workspace, None)
+            .run_with_solver(PageRankConfig::default(), workspace, None, solver)
             .expect("rank solve");
         assert!(result.progress.converged);
         assert!(result.progress.error_bound_l1 <= 1e-10);
         scores.copy_from_slice(result.scores);
-        result.progress.iterations
+        (result.progress.iterations, result.automatic)
     }
     fn components(index: &IncidenceIndex<'_>, labels: &mut [u32]) -> u32 {
         let partition =
@@ -295,7 +407,12 @@ impl Input {
                 let rank = PageRank::build(&self.ir, PageRankModel::default()).unwrap();
                 let projection =
                     IncidenceProjection::build(&self.ir, IncidenceDomain::Nodes).unwrap();
-                if selection.workers > 1 {
+                if matches!(selection.backend, Backend::Ordered) {
+                    println!(
+                        "EVIDENCE_PLAN\tstrategy=ordered_rows\tsolver={:?}",
+                        selection.solver()
+                    );
+                } else if selection.workers > 1 {
                     println!(
                         "EVIDENCE_PLAN\tstrategy=parallel_pull\tworkers={}\treduction_order=canonical",
                         selection.workers
@@ -324,12 +441,16 @@ impl Input {
                 }
                 let mut scores = vec![0.0; self.ir.nodes.len()];
                 let mut other = scores.clone();
-                let own_iterations = Self::solve(
+                let (own_iterations, automatic) = Self::solve_using(
                     &rank,
                     &mut PageRankWorkspace::new(),
                     &mut scores,
                     selection.workers,
+                    selection.solver(),
                 );
+                if let Some(auto) = automatic {
+                    Self::emit_auto(auto, selection.solver(), true, None);
+                }
                 println!(
                     "EVIDENCE_LAYOUT\thymeko_prepared_bytes={}\tprojection_ranges={}",
                     rank.retained_bytes(),
@@ -389,7 +510,8 @@ impl Input {
                 let prepared = matches!(selection.backend, Backend::Prepared)
                     .then(|| PageRank::build(&self.ir, PageRankModel::default()).unwrap());
                 let mut workspace = PageRankWorkspace::new();
-                statistics::measure_calibrated_verified(|verify| {
+                let mut phases = statistics::PhaseSamples::default();
+                let measurement = statistics::measure_calibrated_verified(|verify| {
                     let iterations = match selection.backend {
                         Backend::Hypergraphz => native.rank(&mut scores),
                         Backend::Prepared => Self::solve(
@@ -398,14 +520,33 @@ impl Input {
                             &mut scores,
                             selection.workers,
                         ),
-                        Backend::Hymeko => {
+                        Backend::Hymeko | Backend::Gmres | Backend::Ordered | Backend::Auto(_) => {
                             let rank = PageRank::build(&self.ir, PageRankModel::default()).unwrap();
-                            Self::solve(
+                            Self::solve_using(
                                 &rank,
                                 &mut PageRankWorkspace::new(),
                                 &mut scores,
                                 selection.workers,
+                                selection.solver(),
                             )
+                            .0
+                        }
+                        Backend::Phases => {
+                            if verify {
+                                self.rank_with_phases(&mut scores, selection.workers, |_| {})
+                            } else {
+                                let epoch = std::time::Instant::now();
+                                phases.observe(
+                                    || epoch.elapsed().as_nanos(),
+                                    |boundary| {
+                                        self.rank_with_phases(
+                                            &mut scores,
+                                            selection.workers,
+                                            boundary,
+                                        )
+                                    },
+                                )
+                            }
                         }
                     };
                     if verify {
@@ -413,7 +554,21 @@ impl Input {
                     } else {
                         iterations as u64
                     }
-                })
+                });
+                if matches!(selection.backend, Backend::Phases) {
+                    for (ordinal, values) in phases.normalized(&measurement).iter().enumerate() {
+                        println!(
+                            "EVIDENCE_STAGE_SAMPLE\tordinal={ordinal}\trepetitions={}\tincidence_us={:.6}\tpreparation_us={:.6}\tsolve_us={:.6}\tcleanup_us={:.6}\tinner_total_us={:.6}\tboundary=same_call_partition",
+                            measurement.repetitions_per_sample,
+                            values[0],
+                            values[1],
+                            values[2],
+                            values[3],
+                            values.iter().sum::<f64>()
+                        );
+                    }
+                }
+                measurement
             }
             Operation::Components => {
                 let index = build_incidence_index(&self.ir).unwrap();
@@ -422,7 +577,11 @@ impl Input {
                     let count = match selection.backend {
                         Backend::Hypergraphz => native.components(&mut labels),
                         Backend::Hymeko => Self::components(&index, &mut labels),
-                        Backend::Prepared => {
+                        Backend::Prepared
+                        | Backend::Phases
+                        | Backend::Gmres
+                        | Backend::Ordered
+                        | Backend::Auto(_) => {
                             panic!("components require the matched fresh-workspace API")
                         }
                     };
@@ -445,6 +604,13 @@ fn native_cell() {
     let workload = env::var("EVIDENCE_WORKLOAD").unwrap();
     let subject = env::var("EVIDENCE_OPERATION").unwrap();
     let mut selection = Selection::parse(&subject);
+    if matches!(selection.backend, Backend::Phases) {
+        assert_eq!(
+            env::var("HYMEKO_PHASE_BENCH").as_deref(),
+            Ok("1"),
+            "phase timing disabled"
+        );
+    }
     selection.workers = env::var("EVIDENCE_THREADS")
         .unwrap_or_else(|_| "1".into())
         .parse()
@@ -453,18 +619,24 @@ fn native_cell() {
     if matches!(selection.backend, Backend::Hypergraphz) {
         assert_eq!(selection.workers, 1, "native upstream is single-threaded");
     }
-    let fixture = Fixture::named(&workload);
-    let input = Input::new(fixture.generate().unwrap());
-    assert_eq!(input.members.len(), fixture.incidence_count());
-    input.relabeling_parity(fixture);
+    let source = Input::application_source();
+    let fixture = source.is_none().then(|| Fixture::named(&workload));
+    let input = Input::new(match source {
+        Some(path) => Input::compile_source(&path),
+        None => fixture.unwrap().generate().unwrap(),
+    });
+    if let Some(fixture) = fixture {
+        assert_eq!(input.members.len(), fixture.incidence_count());
+        input.relabeling_parity(fixture);
+    }
     let library = library::Library::load();
     let mut native = library.build(input.ir.nodes.len(), &input.offsets, &input.members);
     println!(
         "EVIDENCE_INPUT\tfingerprint={}\tseed={}\tarity_cap={}\ttopology={}\tshape_reported=true\tconstruction_timed=false\tindex_timed=false\tmetric_scope={}\tprocess_memory=includes_both_graphs_and_parity",
         input.fingerprint(),
-        fixture.seed,
-        fixture.arity,
-        fixture.membership.label(),
+        fixture.map_or_else(|| "none".to_owned(), |f| f.seed.to_string()),
+        fixture.map_or(0, |f| f.arity),
+        fixture.map_or("compiled_application", |f| f.membership.label()),
         selection.scope()
     );
     InputStats::new(&input).emit();
@@ -490,6 +662,41 @@ fn native_cell() {
         &measurement,
     );
     emit_phase(&run, &workload, &subject, "complete");
+}
+
+#[test]
+#[ignore = "explicit compiled application export and correctness; no measurements"]
+fn application_source_export() {
+    let source = Input::application_source().expect("explicit application source");
+    let output = env::var_os("HYMEKO_APPLICATION_EXPORT").expect("explicit export path");
+    let input = Input::new(Input::compile_source(&source));
+    let rank = PageRank::build(&input.ir, PageRankModel::default()).unwrap();
+    for name in ["rank_hymeko", "rank_gmres", "rank_auto"] {
+        let mut scores = vec![0.0; input.ir.nodes.len()];
+        Input::solve_using(
+            &rank,
+            &mut PageRankWorkspace::new(),
+            &mut scores,
+            1,
+            Selection::parse(name).solver(),
+        );
+        assert!(input.residual_bound(&scores) <= 1.01e-10);
+        if name == "rank_hymeko" {
+            println!("APPLICATION_RANKS\t{scores:?}");
+        }
+    }
+    input.write_incidence(Path::new(&output)).unwrap();
+    let index = build_incidence_index(&input.ir).unwrap();
+    let mut labels = vec![u32::MAX; input.ir.nodes.len()];
+    let components = Input::components(&index, &mut labels);
+    println!("APPLICATION_COMPONENTS\tcount={components}\tlabels={labels:?}");
+    println!(
+        "APPLICATION_EXPORT\tnodes={}\tarcs={}\tincidences={}\tfingerprint={}",
+        input.ir.nodes.len(),
+        input.ir.arcs.len(),
+        input.members.len(),
+        input.fingerprint()
+    );
 }
 
 #[test]
@@ -563,6 +770,129 @@ fn native_parity() {
             input.parity(&Selection::parse(operation), &mut native);
         }
     }
+}
+
+#[test]
+fn rank_phase_boundaries_preserve_full_vector_without_reading_a_clock() {
+    for case in [
+        Case::unsigned(5, &[&[0, 1, 2], &[2, 3]]),
+        Case::unsigned(4, &[&[0, 1], &[0, 1], &[1, 2]]),
+        Case::unsigned(3, &[]),
+    ] {
+        let input = Input::new(case.build().unwrap());
+        let mut expected = vec![0.0; input.ir.nodes.len()];
+        let expected_iterations = Input::solve(
+            &PageRank::build(&input.ir, PageRankModel::default()).unwrap(),
+            &mut PageRankWorkspace::new(),
+            &mut expected,
+            1,
+        );
+        let mut actual = expected.clone();
+        let mut observed = Vec::new();
+        let iterations = input.rank_with_phases(&mut actual, 1, |phase| observed.push(phase));
+        assert_eq!(observed, [0, 1, 2, 3]);
+        assert_eq!(iterations, expected_iterations);
+        assert_eq!(actual, expected);
+        assert!(matches!(
+            Selection::parse("rank_phases").backend,
+            Backend::Phases
+        ));
+    }
+}
+
+#[test]
+fn rank_solver_selection_and_independent_residuals_require_no_native_library_or_clock() {
+    let input = Input::new(
+        Case::unsigned(7, &[&[], &[0, 1, 2], &[2, 3], &[3, 4]])
+            .build()
+            .unwrap(),
+    );
+    let rank = PageRank::build(&input.ir, PageRankModel::default()).unwrap();
+    for name in [
+        "rank_hymeko",
+        "rank_ordered",
+        "rank_gmres",
+        "rank_auto",
+        "rank_auto_quotient",
+    ] {
+        let selection = Selection::parse(name);
+        let mut scores = vec![0.0; 7];
+        let (iterations, auto) = Input::solve_using(
+            &rank,
+            &mut PageRankWorkspace::new(),
+            &mut scores,
+            1,
+            selection.solver(),
+        );
+        assert_eq!(auto.is_some(), name.starts_with("rank_auto"));
+        if let Some(auto) = auto {
+            assert_eq!(auto.power_iterations + auto.gmres_iterations, iterations);
+        }
+        assert!(input.residual_bound(&scores) <= 1e-10);
+    }
+}
+
+#[test]
+#[ignore = "large canonical input correctness, no timing or external library"]
+fn rank_solver_full_catalog_correctness() {
+    for base in ["chain65k", "rank2_1m", "hub32_1m", "components8_1m"] {
+        for suffix in ["", "@17"] {
+            let name = format!("{base}{suffix}");
+            let fixture = Fixture::named(&name);
+            let input = Input::new(fixture.generate().unwrap());
+            let rank = PageRank::build(&input.ir, PageRankModel::default()).unwrap();
+            let mut reference = vec![0.0; rank.node_count()];
+            let mut candidate = reference.clone();
+            let mut ws = PageRankWorkspace::new();
+            Input::solve(&rank, &mut ws, &mut reference, 1);
+            for solver in [
+                PageRankSolver::OrderedPowerIteration,
+                PageRankSolver::Gmres { restart: 20 },
+                PageRankSolver::Auto(Default::default()),
+                PageRankSolver::Auto(PageRankAutoConfig {
+                    quotient: PageRankQuotient::Pendant,
+                    ..Default::default()
+                }),
+            ] {
+                let (steps, automatic) =
+                    Input::solve_using(&rank, &mut ws, &mut candidate, 1, solver);
+                let bound = input.residual_bound(&candidate);
+                let difference: f64 = reference
+                    .iter()
+                    .zip(&candidate)
+                    .map(|(a, b)| (a - b).abs())
+                    .sum();
+                assert!(
+                    bound <= 1.01e-10 && difference <= 2e-10,
+                    "{name} {solver:?}: {bound}, {difference}"
+                );
+                println!(
+                    "SOLVER_CORRECTNESS workload={name} solver={solver:?} steps={steps} residual_bound={bound:e} reference_l1={difference:e} automatic={automatic:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn rank_phase_requires_an_additional_opt_in_before_fixture_loading() {
+    // An invalid fixture also prevents any graph work if the guard regresses.
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["native::native_cell", "--exact", "--ignored", "--nocapture"])
+        .env("HYMEKO_NATIVE_BENCH", "1")
+        .env_remove("HYMEKO_PHASE_BENCH")
+        .env("EVIDENCE_RUN", "untimed-opt-in-contract")
+        .env("EVIDENCE_WORKLOAD", "deliberately-invalid-fixture")
+        .env("EVIDENCE_OPERATION", "rank_phases")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let messages = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(messages.contains("phase timing disabled"), "{messages}");
 }
 
 #[test]

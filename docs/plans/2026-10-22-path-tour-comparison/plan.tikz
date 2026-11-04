@@ -1,0 +1,6 @@
+\begin{center}\begin{tikzpicture}[every node/.style={draw,align=center}]
+\node (ir) at (0,0) {Canonical IR};
+\node (metric) at (4,0) {Existing Berge search\\metric distances};
+\node (tour) at (9,0) {MST + exact matching\\Euler shortcut + expansion};
+\draw[->] (ir)--(metric);\draw[->] (metric)--(tour);
+\end{tikzpicture}\end{center}

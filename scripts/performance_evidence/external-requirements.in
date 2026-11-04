@@ -1,0 +1,5 @@
+# Benchmark-only environment. No production Cargo dependency is changed.
+hypernetx==2.4.3
+xgi==0.10.2
+hypergraphx==1.8.0
+reticula==0.13.0

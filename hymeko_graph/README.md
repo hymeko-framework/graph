@@ -1,7 +1,7 @@
 # hymeko_graph
 
-Generic signed-graph cycle and walk enumeration with **axiomatic
-pruning**.
+Graph algorithms over the canonical HyMeKo IR, and generic signed-graph
+cycle and walk enumeration with **axiomatic pruning**.
 
 A pure-Rust library that lifts the cycle / walk enumeration code
 out of `hymeko_py` so it can be used outside the KAN /
@@ -9,19 +9,17 @@ deep-learning pipeline.  The headline feature is the pluggable
 `CyclePruner` trait: cycles that violate domain axioms are
 **pruned during DFS, not after enumeration**.
 
-> Previously `hymeko_framework_rust/hymeko_graph`, with a
-> byte-identical vendored copy in `nagare`. This is the canonical
-> one; see the [repository README](../README.md) for how it sits
-> beside `hymeko_pgraph` and `hotaru::hypergraph`, which sound
-> similar and are not.
+> See the [repository README](../README.md) for the canonical-IR
+> algorithms (`direct_ir`: Berge paths, components, informed search,
+> PageRank, matroids) and for how this crate sits beside
+> `hymeko_pgraph` and `hymeko_sbsh`.
 
-## Not a hypergraph library
+## Signed graphs
 
-Everything here is a *pairwise* signed graph — `SignedGraph` is
-`edges: Vec<(u32, u32)>`. A hypergraph reaches these algorithms
-only by being star-expanded first, which is what
-`BipartiteOnlyPruner` exists for. For hypergraphs as hypergraphs,
-see [`hotaru::hypergraph`](http://amaterasu.local:3000/hymeko/hotaru).
+`SignedGraph` is a *pairwise* signed graph — `edges: Vec<(u32, u32)>`.
+Hypergraphs are traversed in place through `direct_ir`; a hypergraph
+reaches the pairwise cycle algorithms below only by being
+star-expanded first, which is what `BipartiteOnlyPruner` exists for.
 
 ## What's in the box
 
@@ -62,13 +60,13 @@ enumerator body is here — `cycle_enum.rs` and the 4,100 lines of
 `topk_cycles.rs` — not in `hymeko_py/src/cycles.rs`, and it takes
 the `&dyn CyclePruner` the note anticipated.
 
-**167 tests** — 109 unit, 58 integration. The Friedler scenarios and the
-two axiom examples moved to `hymeko_pgraph` along with the pruner.
+The Friedler scenarios and the two axiom examples moved to
+`hymeko_pgraph` along with the pruner.
 
 ## Building
 
 ```
-cargo test -p hymeko_graph   # two dependencies, rayon and dashmap
+cargo test -p hymeko_graph
 cargo build --examples
 cd ../benchmarks && cargo bench
 ```
@@ -79,8 +77,7 @@ Criterion's closure is around a hundred and twenty crates
 including a wasm-bindgen toolchain, and needing all of it to run
 `cargo test` on a graph library is the wrong trade. Nothing is
 lost — the bench sources are unchanged in `benchmarks/benches/` —
-but running them needs crates.io, which the vendored-registry
-build machines deliberately do not carry.
+but running them needs their crates from crates.io.
 
 `proptest` was dropped from the dev-dependencies on extraction: it
 was declared but no test, bench or example ever used it.

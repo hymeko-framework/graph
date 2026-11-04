@@ -1,0 +1,13 @@
+\begin{center}\begin{tikzpicture}[font=\small,box/.style={draw,rounded corners,align=center,text width=33mm,minimum height=12mm},arrow/.style={-{Latex},thick}]
+\node[box] (ir) {Core canonical IR\\existing Fixture};
+\node[box,right=6mm of ir] (input) {Exact exported\\memberships + oracle};
+\node[box,right=6mm of input] (native) {Framework-native\\construction / query};
+\node[box,below=7mm of input] (guard) {Existing process runner\\host and resource gates};
+\draw[arrow] (ir)--(input);\draw[arrow] (input)--(native);\draw[arrow] (guard)--(native);
+\node[box,below=7mm of native] (memory) {Single-case process\\phase RSS and peaks};
+\node[box,below=7mm of guard] (verify) {Independent full vector\\check after child exit};
+\draw[arrow] (native)--(memory);\draw[arrow] (guard)--(memory);
+\draw[arrow] (memory)--(verify);
+\node[box,below=7mm of ir] (operator) {Same incidence operator\\Power / Tensor GMRES};
+\draw[arrow] (ir)--(operator);\draw[arrow] (operator)--(verify);
+\end{tikzpicture}\end{center}
