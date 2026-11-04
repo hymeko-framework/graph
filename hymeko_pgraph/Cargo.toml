@@ -3,7 +3,7 @@ name = "hymeko_pgraph"
 version = "0.1.0"
 edition = "2024"
 description = "P-graph framework: bipartite Material/Operating-Unit overlay on the canonical signed-incidence hypergraph IR. Axiom checker, MSG/SSG generation, ABB solver. Phase 0 — schema and types."
-license = "MIT OR Apache-2.0"
+license = "MIT"
 
 [lib]
 name = "hymeko_pgraph"

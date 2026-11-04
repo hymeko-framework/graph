@@ -3,7 +3,7 @@ name = "hymeko_sbsh"
 version = "0.1.0"
 edition = "2024"
 description = "SBSH — Spatial Bounded-width Signed Hypergraph. An N-dimensional laminar orthtree over positioned IR declarations, supplying the spatial patch family the canonical signed-incidence IR does not carry, plus the min-degree treewidth certificate that predicts whether a bounded-width solve over it is cheap."
-license = "MIT OR Apache-2.0"
+license = "MIT"
 
 [lib]
 name = "hymeko_sbsh"
