@@ -33,7 +33,8 @@ use hymeko_graph::direct_ir::{PageRank, PageRankConfig, PageRankModel, PageRankW
 
 let source = "net_description {} net { a {} b {} c {} @link { ( +a, -b, -c ); } }";
 let sources = MemProvider::default().with_file("net.hymeko", source);
-let model = CompiledModel::compile(sources, RealParser, Path::new("net.hymeko"))?;
+let model = CompiledModel::compile(sources, RealParser, Path::new("net.hymeko"))
+    .map_err(|e| format!("{e:?}"))?; // ModuleLoadError is Debug, not Error
 
 let rank = PageRank::build(&model.program().ir, PageRankModel::default())?;
 let mut workspace = PageRankWorkspace::new();
