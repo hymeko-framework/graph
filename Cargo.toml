@@ -28,6 +28,6 @@ debug = "line-tables-only"
 [workspace.dependencies]
 # The split-out HyMeKo repos. `hymeko_framework_rust` is retired; these are
 # the live ones.
-hymeko_core = { git = "https://github.com/hymeko-framework/core.git", rev = "adf5611d57df5d31c355f2d8c9d10235cdd26778" }
+hymeko_core = { git = "https://github.com/hymeko-framework/core.git", rev = "957cf76a19989c077ee5a10b283f5382441b8f08" }
 parser = { git = "https://github.com/hymeko-framework/parser.git", rev = "a7b50743fe9f55a8c122f27b3986478919f29345" }
-hymeko_numerics = { git = "https://github.com/hymeko-framework/tensor.git", rev = "ad09422ea42ed9e6aea9178212f3d2d1397d9cc7" }
+hymeko_numerics = { git = "https://github.com/hymeko-framework/tensor.git", rev = "2b0c18523e977d36691af2738bb8f4feabd8dc4b" }
