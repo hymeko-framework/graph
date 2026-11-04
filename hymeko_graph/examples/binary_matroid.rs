@@ -299,6 +299,7 @@ fn run_frontier(args: &[String], action: FrontierAction) -> Result<(), Box<dyn s
     let result = binary_frontier_search(
         view,
         &input.iter().map(|x| x.0).collect::<Vec<_>>(),
+        &[],
         &output.iter().map(|x| x.0).collect::<Vec<_>>(),
         &mut ws,
         beam,

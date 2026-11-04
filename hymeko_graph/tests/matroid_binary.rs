@@ -363,7 +363,7 @@ fn frontier_matches_exhaustive_orders_and_certifies_every_live_basis() {
         let mut ws = BinaryMatroidWorkspace::default();
         let a: Vec<_> = (0..4).map(HyperArcId::new).collect();
         let b: Vec<_> = (4..8).map(HyperArcId::new).collect();
-        let result = binary_frontier_search(view, &a, &b, &mut ws, 256, 1000).unwrap();
+        let result = binary_frontier_search(view, &a, &[], &b, &mut ws, 256, 1000).unwrap();
         let mut optimum = usize::MAX;
         for i in 0..4 {
             for j in 0..4 {
@@ -407,11 +407,11 @@ fn frontier_matches_exhaustive_orders_and_certifies_every_live_basis() {
             }
         }
         assert_eq!(done, 15);
-        let limited = binary_frontier_search(view, &a, &b, &mut ws, 1, 1).unwrap();
+        let limited = binary_frontier_search(view, &a, &[], &b, &mut ws, 1, 1).unwrap();
         assert!(limited.budget_reached);
         assert_eq!(limited.steps.len(), 4);
-        assert!(binary_frontier_search(view, &a, &b[..3], &mut ws, 1, 10).is_err());
-        assert!(binary_frontier_search(view, &a, &b, &mut ws, 0, 10).is_err());
+        assert!(binary_frontier_search(view, &a, &[], &b[..3], &mut ws, 1, 10).is_err());
+        assert!(binary_frontier_search(view, &a, &[], &b, &mut ws, 0, 10).is_err());
     }
 }
 
@@ -424,16 +424,17 @@ fn frontier_counts_read_before_retirement_and_handles_repeated_forms() {
     let a = HyperArcId::new(0);
     let b = HyperArcId::new(1);
     let result =
-        binary_frontier_search(MatroidRef::new(&index), &[a], &[b], &mut ws, 1, 10).unwrap();
+        binary_frontier_search(MatroidRef::new(&index), &[a], &[], &[b], &mut ws, 1, 10).unwrap();
     assert_eq!(result.peak, 2);
     assert_eq!(result.steps[0].input_rank_after, 0);
     let repeated =
-        binary_frontier_search(MatroidRef::new(&index), &[a, a], &[b, b], &mut ws, 4, 10).unwrap();
+        binary_frontier_search(MatroidRef::new(&index), &[a, a], &[], &[b, b], &mut ws, 4, 10).unwrap();
     assert_eq!(repeated.peak, 2);
     assert!(
         binary_frontier_search(
             MatroidRef::new(&index),
             &[a],
+            &[],
             &[HyperArcId::new(99)],
             &mut ws,
             1,
@@ -535,7 +536,7 @@ fn grouped_barrier_is_sound_for_small_orderings_and_refuses_weak_groups() {
     let proof = binary_frontier_barrier(view, &a, &b, &groups, &mut ws).unwrap();
     assert!(proof.certified);
     assert_eq!((proof.input_cover, proof.active_groups), (2, 2));
-    let exact = binary_frontier_search(view, &a, &b, &mut ws, 256, 100).unwrap();
+    let exact = binary_frontier_search(view, &a, &[], &b, &mut ws, 256, 100).unwrap();
     assert_eq!(exact.peak, proof.input_rank + proof.output_rank);
     // Independent singleton directions admit a3-rank frontier, so a4-rank
     // obstruction must not be certified.
@@ -663,4 +664,30 @@ fn every_certified_small_barrier_is_below_all_exact_order_costs() {
         }
     }
     assert!(certified > 0);
+}
+
+#[test]
+fn grouped_frontier_keeps_every_operand_of_a_product_until_its_gate() {
+    use hymeko_graph::matroid::binary_frontier_search;
+    // Term 0 reads e0 and e1 (a product), term 1 reads e0; outputs o0, o1.
+    // Order (0,1) peaks at 2+1 then 1+2; order (1,0) must hold e1 until the
+    // product, peaking at 2+2. A paired model reading only e0 would miss it.
+    let ir = model(&[1, 2, 1, 4, 8]);
+    let index = build_incidence_index(&ir).unwrap();
+    let arcs: Vec<_> = (0..5).map(HyperArcId::new).collect();
+    let mut ws = BinaryMatroidWorkspace::default();
+    let view = MatroidRef::new(&index);
+    let result =
+        binary_frontier_search(view, &arcs[..3], &[0, 0, 1], &arcs[3..], &mut ws, 8, 100).unwrap();
+    assert_eq!((result.baseline_peak, result.peak), (3, 3));
+    assert_eq!(
+        result.steps.iter().map(|s| s.term).collect::<Vec<_>>(),
+        [0, 1]
+    );
+    assert_eq!(result.steps[0].input_before.elements.len(), 2);
+    for bad in [&[0, 0][..], &[0, 0, 0], &[0, 0, 2]] {
+        assert!(
+            binary_frontier_search(view, &arcs[..3], bad, &arcs[3..], &mut ws, 8, 100).is_err()
+        );
+    }
 }
