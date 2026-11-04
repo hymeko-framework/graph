@@ -1,6 +1,8 @@
 //! Objective-driven ABB (`solve_with_objective`): additive objectives agree with
 //! `solve`; a non-additive peak objective and objective-side rejection agree with
-//! brute force over the decision-mapping solution structures.
+//! brute force over the decision-mapping solution structures. The classic ABB
+//! reports an unproven incumbent; lower-bound-first under an exact bound reaches
+//! the optimum on its first descent.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -9,7 +11,8 @@ use hymeko_pgraph::lowering::LoweredPGraph;
 use hymeko_pgraph::msg::maximal_structure_with_regime;
 use hymeko_pgraph::regime::{Canonical, Regime};
 use hymeko_pgraph::{
-    AbbOptions, StructureObjective, abb_solve, lower, solve_with_objective, ssg_dm_enumerate,
+    Abb, AbbOptions, AdditiveCost, BoundedAbb, ChildOrder, StructureObjective, abb_solve, lower,
+    solve_with_objective, ssg_dm_enumerate,
 };
 use parser::parse_description;
 
@@ -38,18 +41,6 @@ fn ids(p: &LoweredPGraph) -> BTreeMap<String, DeclId> {
 
 fn cost(p: &LoweredPGraph, units: &BTreeSet<DeclId>) -> f64 {
     units.iter().map(|u| p.costs.get(u).copied().unwrap_or(1.0)).sum()
-}
-
-/// Sum of unit costs; the included sum bounds every completion (costs are >= 0).
-struct Additive<'a>(&'a LoweredPGraph);
-
-impl StructureObjective for Additive<'_> {
-    fn lower_bound(&self, included: &BTreeSet<DeclId>, _open: &BTreeSet<DeclId>) -> f64 {
-        cost(self.0, included)
-    }
-    fn evaluate(&self, units: &BTreeSet<DeclId>) -> Option<f64> {
-        Some(cost(self.0, units))
-    }
 }
 
 /// (max unit width)^2 * total cost, the shape of a Q^2*T objective; monotone in the
@@ -91,7 +82,7 @@ fn additive_objective_matches_classic_abb() {
     let p = graph();
     let msg = maximal_structure_with_regime(&p, &Canonical);
     let classic = abb_solve(&p, &msg).unwrap();
-    let general = solve_with_objective(&p, &msg, &AbbOptions::default(), &Canonical, &Additive(&p)).unwrap();
+    let general = solve_with_objective(&p, &msg, &AbbOptions::default(), &Canonical, &AdditiveCost::new(&p, None)).unwrap();
     assert!(general.complete);
     assert_eq!(general.value, classic.cost);
     assert_eq!(cost(&p, &general.units), classic.cost);
@@ -125,6 +116,78 @@ fn exploration_limit_reports_an_unproven_incumbent() {
     let p = graph();
     let msg = maximal_structure_with_regime(&p, &Canonical);
     let opts = AbbOptions { max_explored: 7, ..AbbOptions::default() };
-    let found = solve_with_objective(&p, &msg, &opts, &Canonical, &Additive(&p));
+    let found = solve_with_objective(&p, &msg, &opts, &Canonical, &AdditiveCost::new(&p, None));
     assert!(found.is_none_or(|s| !s.complete));
+}
+
+/// Rejects every structure containing `banned`, with an infinite bound as soon as it is included.
+struct Banned<'a> {
+    p: &'a LoweredPGraph,
+    banned: DeclId,
+}
+
+impl StructureObjective for Banned<'_> {
+    fn lower_bound(&self, included: &BTreeSet<DeclId>, _open: &BTreeSet<DeclId>) -> f64 {
+        if included.contains(&self.banned) { f64::INFINITY } else { cost(self.p, included) }
+    }
+    fn evaluate(&self, units: &BTreeSet<DeclId>) -> Option<f64> {
+        (!units.contains(&self.banned)).then(|| cost(self.p, units))
+    }
+}
+
+#[test]
+fn an_infinite_bound_prunes_before_any_incumbent_exists() {
+    let p = graph();
+    let msg = maximal_structure_with_regime(&p, &Canonical);
+    // Include-first order enters the first unit's subtree first; it must be cut at once.
+    let banned = *msg.units.iter().next().unwrap();
+    let opts = AbbOptions { max_explored: 2 * msg.units.len() as u64 + 2, ..AbbOptions::default() };
+    let found = solve_with_objective(&p, &msg, &opts, &Canonical, &Banned { p: &p, banned }).unwrap();
+    assert!(!found.units.contains(&banned));
+    assert!(found.pruned_by_bound > 0);
+}
+
+#[test]
+fn classic_abb_reports_whether_its_search_completed() {
+    let p = graph();
+    let msg = maximal_structure_with_regime(&p, &Canonical);
+    let full = Abb::new(&Canonical, 0).solve(&p, &msg, None).unwrap();
+    assert!(full.complete);
+    assert_eq!(full.cost, brute_force(&p, &AdditiveCost::new(&p, None)).0);
+    let cut = Abb::new(&Canonical, 7).solve(&p, &msg, None);
+    assert!(cut.is_none_or(|s| !s.complete));
+}
+
+/// The best completion over the admissible structures: a bound with no slack.
+struct Exact(Vec<(BTreeSet<DeclId>, f64)>);
+
+impl StructureObjective for Exact {
+    fn lower_bound(&self, included: &BTreeSet<DeclId>, open: &BTreeSet<DeclId>) -> f64 {
+        self.0
+            .iter()
+            .filter(|(s, _)| included.is_subset(s) && s.iter().all(|u| included.contains(u) || open.contains(u)))
+            .fold(f64::INFINITY, |m, (_, v)| m.min(*v))
+    }
+    fn evaluate(&self, units: &BTreeSet<DeclId>) -> Option<f64> {
+        self.0.iter().find(|(s, _)| s == units).map(|(_, v)| *v)
+    }
+}
+
+#[test]
+fn lower_bound_first_under_an_exact_bound_reaches_the_optimum_on_its_first_descent() {
+    let p = graph();
+    let msg = maximal_structure_with_regime(&p, &Canonical);
+    let exact = Exact(
+        ssg_dm_enumerate(&p, &msg)
+            .into_iter()
+            .filter(|s| Canonical.structure_admissible(&p, &s.units))
+            .map(|s| (s.units.clone(), cost(&p, &s.units)))
+            .collect(),
+    );
+    let abb = Abb::new(&Canonical, 0).with_order(ChildOrder::LowerBoundFirst);
+    let found = BoundedAbb::new(abb, &exact).solve(&p, &msg).unwrap();
+    assert!(found.complete);
+    assert_eq!(found.value, brute_force(&p, &exact).0);
+    // The root, then per decided unit the descending child and its cut sibling.
+    assert_eq!(found.explored, 2 * msg.units.len() as u64 + 1);
 }

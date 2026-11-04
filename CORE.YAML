@@ -12,6 +12,11 @@
 schema_version: 1
 
 approved_edits:
+  - slug: quantum-abb-operator
+    date: 2026-11-01
+    authority: user explicitly approves a new feature branch with the ABB as a struct and operator, the bounded ABB as a separate structure, and hyperedge (graph) execution where possible; then asks to reduce the explored nodes further
+    scope: hymeko_pgraph abb.rs only; Abb (operator) and BoundedAbb (operator composed with a StructureObjective) replace the two duplicated private traversals; the infinite-bound cut applies to both; AbbSolution gains complete; AdditiveCost is the classic cost as an objective; ChildOrder (IncludeFirst default, LowerBoundFirst) orders the two children; BoundedAbb::solve_on decides reachability by firing the units over the canonical incidence (existing andor BooleanExact over PGraphView). Existing free functions keep their signatures and include-first order as adapters; no dependency change
+    plan: ../hymeko-quantum/HANDOFF.txt 2026-11-01 21:30 ABB-operator entry; consumers adopt it by pin after merge
   - slug: quantum-bounded-abb-objective
     date: 2026-10-31
     authority: user explicitly approves a bounded ABB with a caller-supplied (schedule-aware) objective for the Quantum global P-graph optimum
