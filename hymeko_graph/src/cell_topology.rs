@@ -40,11 +40,76 @@
 //! chooses, the kernels read either through the same order, and `±1` round-trips exactly, so the
 //! form changes the bytes held, never a result.
 
+use core::marker::PhantomData;
+
 use rayon::prelude::*;
 
 /// Cells one parallel task contracts. A fixed block: the rows are independent, so the partition
 /// decides only which thread computes a row, never its bits.
 const CELLS_PER_TASK: usize = 256;
+
+/// Incidence-features below which a gather runs on the calling thread: fewer than this many
+/// multiply-adds cost less than waking the pool. Rows are independent either way, so the choice
+/// decides only which thread computes a row, never its bits.
+const PARALLEL_WORK: usize = 1 << 15;
+
+/// Gather tasks per pool thread ([`RankIncidence::with_cofaces`]): the lower cells are blocked by
+/// their incidence count into this many blocks a thread, so a skewed degree still balances.
+const GATHER_TASKS_PER_THREAD: usize = 4;
+
+/// Incidences below which a gather block is not split further.
+const GATHER_MIN_INCIDENCES: usize = 64;
+
+/// **The value type of an incidence view**: its signs, scales and features. `f32` is the storage
+/// and the default -- every recorded kernel result is `f32` -- and `f64` serves a consumer whose
+/// solver runs in double precision (plan 2026-10-20-rank-incidence-scalar). A kernel performs the
+/// same operations in the same order at either type.
+pub trait IncidenceScalar:
+    Copy
+    + Send
+    + Sync
+    + core::fmt::Debug
+    + PartialEq
+    + core::ops::Add<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::MulAssign
+    + core::iter::Sum
+{
+    /// Zero.
+    const ZERO: Self;
+    /// One.
+    const ONE: Self;
+    /// A count as a value: an arity.
+    fn from_count(n: usize) -> Self;
+    /// `+1` for `bit == 0`, `-1` for `bit == 1`, built from the bits without a branch.
+    fn unit_sign(bit: u64) -> Self;
+}
+
+impl IncidenceScalar for f32 {
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    fn from_count(n: usize) -> Self {
+        n as f32
+    }
+    #[inline]
+    fn unit_sign(bit: u64) -> Self {
+        f32::from_bits(0x3f80_0000 | ((bit as u32) << 31))
+    }
+}
+
+impl IncidenceScalar for f64 {
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    fn from_count(n: usize) -> Self {
+        n as f64
+    }
+    #[inline]
+    fn unit_sign(bit: u64) -> Self {
+        f64::from_bits(0x3ff0_0000_0000_0000 | (bit << 63))
+    }
+}
 
 /// A rank's incidence signs, stored by what they are.
 #[derive(Clone, Debug, PartialEq)]
@@ -95,17 +160,17 @@ impl SignTable {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum SignsRef<'a> {
+enum SignsRef<'a, F = f32> {
     Unit { negative: &'a [u64], len: usize },
-    Values(&'a [f32]),
+    Values(&'a [F]),
 }
 
 /// A borrowed sign table: one sign per incidence, in member order, held as one bit each when every
-/// sign is `±1` and as an `f32` each otherwise.
+/// sign is `±1` and as an `F` each otherwise.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Signs<'a>(SignsRef<'a>);
+pub struct Signs<'a, F = f32>(SignsRef<'a, F>);
 
-impl<'a> Signs<'a> {
+impl<'a, F: IncidenceScalar> Signs<'a, F> {
     /// Incidences.
     #[must_use]
     pub const fn len(self) -> usize {
@@ -126,7 +191,7 @@ impl<'a> Signs<'a> {
     /// # Panics
     /// When `at >= self.len()`.
     #[must_use]
-    pub fn get(self, at: usize) -> f32 {
+    pub fn get(self, at: usize) -> F {
         assert!(at < self.len(), "sign {at} of {}", self.len());
         match self.0 {
             SignsRef::Unit { negative, .. } => UnitBits(negative).sign(at),
@@ -135,19 +200,19 @@ impl<'a> Signs<'a> {
     }
 
     /// Every sign, in member order.
-    pub fn iter(self) -> impl ExactSizeIterator<Item = f32> + 'a {
+    pub fn iter(self) -> impl ExactSizeIterator<Item = F> + 'a {
         (0..self.len()).map(move |at| self.get(at))
     }
 
-    /// The signs as `f32` values.
+    /// The signs as values.
     #[must_use]
-    pub fn to_vec(self) -> Vec<f32> {
+    pub fn to_vec(self) -> Vec<F> {
         self.iter().collect()
     }
 
-    /// The `f32` table, when the signs are held as one.
+    /// The value table, when the signs are held as one.
     #[must_use]
-    pub const fn as_values(self) -> Option<&'a [f32]> {
+    pub const fn as_values(self) -> Option<&'a [F]> {
         match self.0 {
             SignsRef::Unit { .. } => None,
             SignsRef::Values(values) => Some(values),
@@ -171,13 +236,13 @@ impl<'a> Signs<'a> {
 }
 
 /// How a kernel reads a sign; chosen once per call, so the inner loop does not branch on the form.
-trait SignLookup: Copy + Send + Sync {
-    fn sign(self, at: usize) -> f32;
+trait SignLookup<F>: Copy + Send + Sync {
+    fn sign(self, at: usize) -> F;
 }
 
-impl SignLookup for &[f32] {
+impl<F: IncidenceScalar> SignLookup<F> for &[F] {
     #[inline]
-    fn sign(self, at: usize) -> f32 {
+    fn sign(self, at: usize) -> F {
         self[at]
     }
 }
@@ -185,12 +250,11 @@ impl SignLookup for &[f32] {
 #[derive(Clone, Copy)]
 struct UnitBits<'a>(&'a [u64]);
 
-impl SignLookup for UnitBits<'_> {
-    /// `±1.0` built from the stored bit: `1.0`'s bits with the sign bit set for `-1`, no branch.
+impl<F: IncidenceScalar> SignLookup<F> for UnitBits<'_> {
+    /// `±1` built from the stored bit: `1`'s bits with the sign bit set for `-1`, no branch.
     #[inline]
-    fn sign(self, at: usize) -> f32 {
-        let bit = ((self.0[at / 64] >> (at % 64)) & 1) as u32;
-        f32::from_bits(0x3f80_0000 | (bit << 31))
+    fn sign(self, at: usize) -> F {
+        F::unit_sign((self.0[at / 64] >> (at % 64)) & 1)
     }
 }
 
@@ -206,6 +270,86 @@ macro_rules! with_sign_lookup {
                 let $s = values;
                 $body
             }
+        }
+    };
+}
+
+/// A kernel's row width: `d` features, or exactly one, which the compiler then addresses as a
+/// scalar instead of a slice. The arithmetic and its order are the same for both.
+trait Width: Copy + Send + Sync {
+    fn d(self) -> usize;
+
+    /// `row = Σ w · x[c]` over `terms`, summed in their order from `+0`: what zeroing `row` and
+    /// accumulating each term into it computes, bit for bit.
+    fn gather<F: IncidenceScalar>(
+        self,
+        row: &mut [F],
+        x: &[F],
+        terms: impl Iterator<Item = (F, usize)>,
+    );
+}
+
+/// One feature per row.
+#[derive(Clone, Copy)]
+struct One;
+
+impl Width for One {
+    #[inline]
+    fn d(self) -> usize {
+        1
+    }
+
+    /// The sum is held in a local, not in `row`: a store into `row` before every term's bounds
+    /// check would chain each addition through memory.
+    #[inline]
+    fn gather<F: IncidenceScalar>(
+        self,
+        row: &mut [F],
+        x: &[F],
+        terms: impl Iterator<Item = (F, usize)>,
+    ) {
+        let mut sum = F::ZERO;
+        for (w, c) in terms {
+            sum += w * x[c];
+        }
+        row[0] = sum;
+    }
+}
+
+/// `d` features per row.
+#[derive(Clone, Copy)]
+struct Features(usize);
+
+impl Width for Features {
+    #[inline]
+    fn d(self) -> usize {
+        self.0
+    }
+
+    #[inline]
+    fn gather<F: IncidenceScalar>(
+        self,
+        row: &mut [F],
+        x: &[F],
+        terms: impl Iterator<Item = (F, usize)>,
+    ) {
+        let d = self.0;
+        row.fill(F::ZERO);
+        for (w, c) in terms {
+            accumulate(row, w, &x[c * d..c * d + d]);
+        }
+    }
+}
+
+/// Run `$body` with `$w` bound to the [`Width`] of `$d`, monomorphised per form.
+macro_rules! with_width {
+    ($d:expr, |$w:ident| $body:expr) => {
+        if $d == 1 {
+            let $w = One;
+            $body
+        } else {
+            let $w = Features($d);
+            $body
         }
     };
 }
@@ -430,7 +574,44 @@ impl CellTopology {
             signs: cells.signs(),
             to_cell: &scales.to_cell,
             to_lower: &scales.to_lower,
+            cofaces: None,
         })
+    }
+
+    /// The borrowed incidence of `rank` at any scalar `F`, with the given scales, for a rank whose
+    /// every sign is `±1`: held as bits, those read as `±1` at every scalar, so no table is
+    /// converted. `None` when the rank holds real-valued signs -- an `f32` table, which only the
+    /// `f32` view of [`Self::incidence`] reads.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::NoSuchRank`], or [`CellTopologyError::ShapeMismatch`] when a scale does
+    /// not have one entry per lower cell.
+    pub fn unit_incidence<'a, F: IncidenceScalar>(
+        &'a self,
+        rank: usize,
+        to_cell: &'a [F],
+        to_lower: &'a [F],
+    ) -> Result<Option<RankIncidence<'a, F>>, CellTopologyError> {
+        let cells = self.rank(rank)?;
+        let n_lower = self.n_cells(rank - 1)?;
+        if to_cell.len() != n_lower || to_lower.len() != n_lower {
+            return Err(CellTopologyError::ShapeMismatch { rank });
+        }
+        let SignTable::Unit { negative, len } = &cells.signs else {
+            return Ok(None);
+        };
+        Ok(Some(RankIncidence {
+            n_lower,
+            arity: cells.arity,
+            members: &cells.members,
+            signs: Signs(SignsRef::Unit {
+                negative,
+                len: *len,
+            }),
+            to_cell,
+            to_lower,
+            cofaces: None,
+        }))
     }
 
     /// The reverse incidence of `rank`: for every lower cell, the cells that contain it.
@@ -438,6 +619,25 @@ impl CellTopology {
     /// # Errors
     /// [`CellTopologyError::NoSuchRank`].
     pub fn cofaces(&self, rank: usize) -> Result<RankCofaces, CellTopologyError> {
+        self.reverse_incidence(rank)
+    }
+
+    /// The reverse incidence of `rank` by position: for every lower cell, the positions in the
+    /// member table that name it -- what [`RankIncidence::with_cofaces`] gathers over.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::NoSuchRank`].
+    pub fn coface_positions(
+        &self,
+        rank: usize,
+    ) -> Result<RankCofaces<Position>, CellTopologyError> {
+        self.reverse_incidence(rank)
+    }
+
+    fn reverse_incidence<L: CofaceLabel>(
+        &self,
+        rank: usize,
+    ) -> Result<RankCofaces<L>, CellTopologyError> {
         let cells = self.rank(rank)?;
         Ok(RankCofaces::build(
             &cells.members,
@@ -496,16 +696,19 @@ pub struct RankScales {
 /// `to_cell.len() == to_lower.len() == n_lower`. [`CellTopology::incidence`] guarantees them;
 /// [`Self::new`] checks them for a caller that holds the tables itself.
 #[derive(Clone, Copy, Debug)]
-pub struct RankIncidence<'a> {
+pub struct RankIncidence<'a, F = f32> {
     n_lower: usize,
     arity: usize,
     members: &'a [u32],
-    signs: Signs<'a>,
-    to_cell: &'a [f32],
-    to_lower: &'a [f32],
+    signs: Signs<'a, F>,
+    to_cell: &'a [F],
+    to_lower: &'a [F],
+    /// The rank's reverse incidence by position, when the caller holds it: the scatters then run
+    /// as gathers ([`Self::with_cofaces`]).
+    cofaces: Option<&'a RankCofaces<Position>>,
 }
 
-impl<'a> RankIncidence<'a> {
+impl<'a, F: IncidenceScalar> RankIncidence<'a, F> {
     /// A rank view over tables the caller holds.
     ///
     /// # Errors
@@ -515,9 +718,9 @@ impl<'a> RankIncidence<'a> {
         n_lower: usize,
         arity: usize,
         members: &'a [u32],
-        signs: &'a [f32],
-        to_cell: &'a [f32],
-        to_lower: &'a [f32],
+        signs: &'a [F],
+        to_cell: &'a [F],
+        to_lower: &'a [F],
     ) -> Result<Self, CellTopologyError> {
         let rank = 1;
         if arity == 0 {
@@ -544,6 +747,7 @@ impl<'a> RankIncidence<'a> {
             signs: Signs(SignsRef::Values(signs)),
             to_cell,
             to_lower,
+            cofaces: None,
         })
     }
 
@@ -551,7 +755,7 @@ impl<'a> RankIncidence<'a> {
     ///
     /// # Errors
     /// [`CellTopologyError::ShapeMismatch`] when `signs` is not one per incidence.
-    pub fn with_signs(self, signs: &'a [f32]) -> Result<Self, CellTopologyError> {
+    pub fn with_signs(self, signs: &'a [F]) -> Result<Self, CellTopologyError> {
         if signs.len() != self.members.len() {
             return Err(CellTopologyError::ShapeMismatch { rank: 1 });
         }
@@ -559,6 +763,68 @@ impl<'a> RankIncidence<'a> {
             signs: Signs(SignsRef::Values(signs)),
             ..self
         })
+    }
+
+    /// The same incidence holding its reverse incidence by position, `cofaces` (from
+    /// [`CellTopology::coface_positions`] of the same rank): [`Self::cell_to_lower`] and
+    /// [`Self::lower_to_cell_adjoint`] then run as gathers, each lower cell over its positions, in
+    /// parallel -- once the scatter holds [`PARALLEL_WORK`] incidence-features; below, the serial
+    /// scatter is the cheaper walk. The bits are the serial scatters': both add into a lower cell
+    /// in ascending position.
+    ///
+    /// # Errors
+    /// [`CellTopologyError::ShapeMismatch`] when `cofaces` is not this rank's: another number of
+    /// lower cells or of positions, a row not strictly ascending, or a position naming another
+    /// lower cell. Together these make the listing a permutation of this rank's positions.
+    pub fn with_cofaces(
+        self,
+        cofaces: &'a RankCofaces<Position>,
+    ) -> Result<Self, CellTopologyError> {
+        let mismatch = Err(CellTopologyError::ShapeMismatch { rank: 1 });
+        if cofaces.n_lower() != self.n_lower || cofaces.parts().1.len() != self.members.len() {
+            return mismatch;
+        }
+        for v in 0..self.n_lower {
+            let row = cofaces.of(v);
+            let ascending = row.windows(2).all(|pair| pair[0] < pair[1]);
+            let names_v = row.iter().all(|&at| {
+                self.members
+                    .get(at as usize)
+                    .is_some_and(|&m| m as usize == v)
+            });
+            if !(ascending && names_v) {
+                return mismatch;
+            }
+        }
+        Ok(Self {
+            cofaces: Some(cofaces),
+            ..self
+        })
+    }
+
+    /// Every member of cell `c` in slot order, as `(position, lower cell)`.
+    #[inline]
+    fn members_of(&self, c: usize) -> impl Iterator<Item = (usize, usize)> + '_ {
+        let first = c * self.arity;
+        self.members[first..first + self.arity]
+            .iter()
+            .enumerate()
+            .map(move |(slot, &v)| (first + slot, v as usize))
+    }
+
+    /// Every incidence of lower cell `v` in ascending position, as `(position, cell)`.
+    #[inline]
+    fn cofaces_of<'c>(
+        &self,
+        cofaces: &'c RankCofaces<Position>,
+        v: usize,
+    ) -> impl Iterator<Item = (usize, usize)> + 'c {
+        // `arity` fits `u32`: every position is a `u32` below `members.len()`.
+        let arity = self.arity as u32;
+        cofaces
+            .of(v)
+            .iter()
+            .map(move |&at| (at as usize, (at / arity) as usize))
     }
 
     /// Lower cells.
@@ -587,12 +853,12 @@ impl<'a> RankIncidence<'a> {
 
     /// Flat sign table.
     #[must_use]
-    pub const fn signs(&self) -> Signs<'a> {
+    pub const fn signs(&self) -> Signs<'a, F> {
         self.signs
     }
 
-    fn inv_arity(&self) -> f32 {
-        1.0 / self.arity as f32
+    fn inv_arity(&self) -> F {
+        F::ONE / F::from_count(self.arity)
     }
 
     /// Signed scaled mean of each cell's members, `d` features wide: `(n_lower, d)` →
@@ -604,62 +870,74 @@ impl<'a> RankIncidence<'a> {
     ///
     /// # Panics
     /// When `x.len() != n_lower * d` or `out.len() != n_cells * d`.
-    pub fn lower_to_cell(&self, x: &[f32], d: usize, out: &mut [f32]) {
+    pub fn lower_to_cell(&self, x: &[F], d: usize, out: &mut [F]) {
         assert_eq!(x.len(), self.n_lower * d, "x must be (n_lower, d)");
         assert_eq!(out.len(), self.n_cells() * d, "out must be (n_cells, d)");
-        with_sign_lookup!(self.signs, |s| self.lower_to_cell_by(s, x, d, out));
+        with_sign_lookup!(self.signs, |s| with_width!(d, |w| self
+            .lower_to_cell_by(s, x, w, out)));
     }
 
-    fn lower_to_cell_by<S: SignLookup>(&self, s: S, x: &[f32], d: usize, out: &mut [f32]) {
+    fn lower_to_cell_by<S: SignLookup<F>, W: Width>(&self, s: S, x: &[F], w: W, out: &mut [F]) {
         let inv_k = self.inv_arity();
-        self.per_cell(d, out, |c, row| {
-            for at in c * self.arity..(c + 1) * self.arity {
-                let v = self.members[at] as usize;
-                accumulate(
-                    row,
-                    s.sign(at) * self.to_cell[v] * inv_k,
-                    &x[v * d..v * d + d],
-                );
-            }
+        let work = out.len() * self.arity;
+        self.per_row(w, out, work, |c, row| {
+            let terms = self
+                .members_of(c)
+                .map(|(at, v)| (s.sign(at) * self.to_cell[v] * inv_k, v));
+            w.gather(row, x, terms);
         })
     }
 
     /// The adjoint of [`Self::lower_to_cell`]: `(n_cells, d)` → `(n_lower, d)`, written into
-    /// `out`.
+    /// `out`. A scatter, serial -- or, on a view holding its cofaces ([`Self::with_cofaces`]), a
+    /// parallel gather with the same bits.
     ///
     /// # Panics
     /// When `grad_h.len() != n_cells * d` or `out.len() != n_lower * d`.
-    pub fn lower_to_cell_adjoint(&self, grad_h: &[f32], d: usize, out: &mut [f32]) {
+    pub fn lower_to_cell_adjoint(&self, grad_h: &[F], d: usize, out: &mut [F]) {
         assert_eq!(
             grad_h.len(),
             self.n_cells() * d,
             "grad_h must be (n_cells, d)"
         );
         assert_eq!(out.len(), self.n_lower * d, "out must be (n_lower, d)");
-        with_sign_lookup!(self.signs, |s| {
-            self.lower_to_cell_adjoint_by(s, grad_h, d, out);
-        });
+        with_sign_lookup!(self.signs, |s| with_width!(d, |w| self
+            .lower_to_cell_adjoint_by(s, grad_h, w, out)));
     }
 
-    fn lower_to_cell_adjoint_by<S: SignLookup>(
+    fn lower_to_cell_adjoint_by<S: SignLookup<F>, W: Width>(
         &self,
         s: S,
-        grad_h: &[f32],
-        d: usize,
-        grad_x: &mut [f32],
+        grad_h: &[F],
+        w: W,
+        grad_x: &mut [F],
     ) {
-        let inv_k = self.inv_arity();
-        grad_x.fill(0.0);
+        let (inv_k, d) = (self.inv_arity(), w.d());
+        let work = self.members.len() * d;
+        if let Some(cofaces) = self.cofaces.filter(|_| work >= PARALLEL_WORK) {
+            self.per_lower(w, cofaces, grad_x, |v, row| {
+                let terms = self
+                    .cofaces_of(cofaces, v)
+                    .map(|(at, c)| (s.sign(at) * self.to_cell[v] * inv_k, c));
+                w.gather(row, grad_h, terms);
+            });
+            return;
+        }
+        grad_x.fill(F::ZERO);
         self.for_each_incidence(s, |c, v, sign| {
-            let w = sign * self.to_cell[v] * inv_k;
-            accumulate(&mut grad_x[v * d..v * d + d], w, &grad_h[c * d..c * d + d]);
+            let weight = sign * self.to_cell[v] * inv_k;
+            accumulate(
+                &mut grad_x[v * d..v * d + d],
+                weight,
+                &grad_h[c * d..c * d + d],
+            );
         });
     }
 
     /// Every incidence in member order as `(cell, lower cell, sign)`, walked cell by cell so the
     /// cell index is counted, not divided out of the position. The walk of the two serial kernels:
     /// their order is the contract's, unchanged.
-    fn for_each_incidence<S: SignLookup>(&self, s: S, mut visit: impl FnMut(usize, usize, f32)) {
+    fn for_each_incidence<S: SignLookup<F>>(&self, s: S, mut visit: impl FnMut(usize, usize, F)) {
         // `arity >= 1`: both constructors refuse arity zero.
         for (c, members) in self.members.chunks_exact(self.arity).enumerate() {
             let first = c * self.arity;
@@ -670,18 +948,33 @@ impl<'a> RankIncidence<'a> {
     }
 
     /// Signed sum of each lower cell's cofaces, scaled after summing: `(n_cells, d)` →
-    /// `(n_lower, d)`, written into `out`.
+    /// `(n_lower, d)`, written into `out`. A scatter, serial -- or, on a view holding its cofaces
+    /// ([`Self::with_cofaces`]), a parallel gather with the same bits.
     ///
     /// # Panics
     /// When `h.len() != n_cells * d` or `out.len() != n_lower * d`.
-    pub fn cell_to_lower(&self, h: &[f32], d: usize, out: &mut [f32]) {
+    pub fn cell_to_lower(&self, h: &[F], d: usize, out: &mut [F]) {
         assert_eq!(h.len(), self.n_cells() * d, "h must be (n_cells, d)");
         assert_eq!(out.len(), self.n_lower * d, "out must be (n_lower, d)");
-        with_sign_lookup!(self.signs, |s| self.cell_to_lower_by(s, h, d, out));
+        with_sign_lookup!(self.signs, |s| with_width!(d, |w| self
+            .cell_to_lower_by(s, h, w, out)));
     }
 
-    fn cell_to_lower_by<S: SignLookup>(&self, s: S, h: &[f32], d: usize, y: &mut [f32]) {
-        y.fill(0.0);
+    fn cell_to_lower_by<S: SignLookup<F>, W: Width>(&self, s: S, h: &[F], w: W, y: &mut [F]) {
+        let d = w.d();
+        let work = self.members.len() * d;
+        if let Some(cofaces) = self.cofaces.filter(|_| work >= PARALLEL_WORK) {
+            self.per_lower(w, cofaces, y, |v, row| {
+                let terms = self.cofaces_of(cofaces, v).map(|(at, c)| (s.sign(at), c));
+                w.gather(row, h, terms);
+                let scale = self.to_lower[v];
+                for value in row {
+                    *value *= scale;
+                }
+            });
+            return;
+        }
+        y.fill(F::ZERO);
         self.for_each_incidence(s, |c, v, sign| {
             accumulate(&mut y[v * d..v * d + d], sign, &h[c * d..c * d + d]);
         });
@@ -698,53 +991,100 @@ impl<'a> RankIncidence<'a> {
     ///
     /// # Panics
     /// When `grad_y.len() != n_lower * d` or `out.len() != n_cells * d`.
-    pub fn cell_to_lower_adjoint(&self, grad_y: &[f32], d: usize, out: &mut [f32]) {
+    pub fn cell_to_lower_adjoint(&self, grad_y: &[F], d: usize, out: &mut [F]) {
         assert_eq!(
             grad_y.len(),
             self.n_lower * d,
             "grad_y must be (n_lower, d)"
         );
         assert_eq!(out.len(), self.n_cells() * d, "out must be (n_cells, d)");
-        with_sign_lookup!(self.signs, |s| {
-            self.cell_to_lower_adjoint_by(s, grad_y, d, out);
-        });
+        with_sign_lookup!(self.signs, |s| with_width!(d, |w| self
+            .cell_to_lower_adjoint_by(s, grad_y, w, out)));
     }
 
-    fn cell_to_lower_adjoint_by<S: SignLookup>(
+    fn cell_to_lower_adjoint_by<S: SignLookup<F>, W: Width>(
         &self,
         s: S,
-        grad_y: &[f32],
-        d: usize,
-        out: &mut [f32],
+        grad_y: &[F],
+        w: W,
+        out: &mut [F],
     ) {
-        self.per_cell(d, out, |c, row| {
-            for at in c * self.arity..(c + 1) * self.arity {
-                let v = self.members[at] as usize;
-                accumulate(
-                    row,
-                    s.sign(at) * self.to_lower[v],
-                    &grad_y[v * d..v * d + d],
-                );
-            }
+        let work = out.len() * self.arity;
+        self.per_row(w, out, work, |c, row| {
+            let terms = self
+                .members_of(c)
+                .map(|(at, v)| (s.sign(at) * self.to_lower[v], v));
+            w.gather(row, grad_y, terms);
         })
     }
 
-    /// Fills the `(n_cells, d)` field `field`: row `c` is zeroed and then written by `row(c, ..)`
-    /// alone, over fixed blocks of [`CELLS_PER_TASK`] cells in parallel. The task that computes a
-    /// row is the first to touch it.
-    fn per_cell(&self, d: usize, field: &mut [f32], row: impl Fn(usize, &mut [f32]) + Sync) {
+    /// Fills the `(rows, d)` field `field` -- cells or lower cells: row `r` is written whole by
+    /// `row(r, ..)` alone, which [`Width::gather`] does, over fixed blocks of [`CELLS_PER_TASK`] rows -- in parallel
+    /// once `work` (the multiply-adds the rows take) reaches [`PARALLEL_WORK`], on the calling
+    /// thread below. The task that computes a row is the first to touch it.
+    fn per_row<W: Width>(
+        &self,
+        w: W,
+        field: &mut [F],
+        work: usize,
+        row: impl Fn(usize, &mut [F]) + Sync,
+    ) {
+        let d = w.d();
         if d == 0 {
             return;
         }
-        field
-            .par_chunks_mut(CELLS_PER_TASK * d)
-            .enumerate()
-            .for_each(|(task, block)| {
-                for (offset, out) in block.chunks_mut(d).enumerate() {
-                    out.fill(0.0);
-                    row(task * CELLS_PER_TASK + offset, out);
-                }
-            });
+        let task =
+            |(task, block): (usize, &mut [F])| fill_rows(task * CELLS_PER_TASK, block, d, &row);
+        if work < PARALLEL_WORK {
+            field
+                .chunks_mut(CELLS_PER_TASK * d)
+                .enumerate()
+                .for_each(task);
+        } else {
+            field
+                .par_chunks_mut(CELLS_PER_TASK * d)
+                .enumerate()
+                .for_each(task);
+        }
+    }
+
+    /// Fills the `(n_lower, d)` field `field` by gathering over `cofaces`: row `v` is written whole
+    /// by `row(v, ..)` alone, the rows in contiguous blocks of equal incidence
+    /// count, [`GATHER_TASKS_PER_THREAD`] a pool thread, in parallel -- so a hub's block holds few
+    /// rows and a sparse one many. A row is never split: it sums in its own order under any
+    /// partition, and the pool's size decides only the partition.
+    fn per_lower<W: Width>(
+        &self,
+        w: W,
+        cofaces: &RankCofaces<Position>,
+        field: &mut [F],
+        row: impl Fn(usize, &mut [F]) + Sync,
+    ) {
+        let d = w.d();
+        if d == 0 {
+            return;
+        }
+        let (offsets, _) = cofaces.parts();
+        let tasks = GATHER_TASKS_PER_THREAD * rayon::current_num_threads();
+        let per_task = self
+            .members
+            .len()
+            .div_ceil(tasks)
+            .max(GATHER_MIN_INCIDENCES);
+        let mut blocks = Vec::new();
+        let (mut first, mut rest) = (0, field);
+        while first < self.n_lower {
+            // The first row past `first` whose incidences start at or beyond the target.
+            let target = offsets[first] as usize + per_task;
+            let reached = offsets[first + 1..].partition_point(|&o| (o as usize) < target);
+            let end = (first + 1 + reached).min(self.n_lower);
+            let (block, tail) = core::mem::take(&mut rest).split_at_mut((end - first) * d);
+            blocks.push((first, block));
+            (first, rest) = (end, tail);
+        }
+        blocks
+            .into_par_iter()
+            .for_each(|(first, block)| fill_rows(first, block, d, &row));
     }
 
     /// The gradient of [`Self::lower_to_cell`] with respect to the signs, one per incidence,
@@ -753,13 +1093,7 @@ impl<'a> RankIncidence<'a> {
     /// # Panics
     /// When `x` or `grad_h` does not have the forward's shape, or `out` does not hold one value
     /// per incidence.
-    pub fn lower_to_cell_sign_gradient(
-        &self,
-        x: &[f32],
-        grad_h: &[f32],
-        d: usize,
-        out: &mut [f32],
-    ) {
+    pub fn lower_to_cell_sign_gradient(&self, x: &[F], grad_h: &[F], d: usize, out: &mut [F]) {
         assert_eq!(x.len(), self.n_lower * d, "x must be (n_lower, d)");
         assert_eq!(
             grad_h.len(),
@@ -784,13 +1118,7 @@ impl<'a> RankIncidence<'a> {
     /// # Panics
     /// When `h` or `grad_y` does not have the forward's shape, or `out` does not hold one value
     /// per incidence.
-    pub fn cell_to_lower_sign_gradient(
-        &self,
-        h: &[f32],
-        grad_y: &[f32],
-        d: usize,
-        out: &mut [f32],
-    ) {
+    pub fn cell_to_lower_sign_gradient(&self, h: &[F], grad_y: &[F], d: usize, out: &mut [F]) {
         assert_eq!(h.len(), self.n_cells() * d, "h must be (n_cells, d)");
         assert_eq!(
             grad_y.len(),
@@ -809,9 +1137,22 @@ impl<'a> RankIncidence<'a> {
     }
 }
 
+/// Rows `first..` of a field, `d` wide, in `block`: each written whole by `row`.
+#[inline]
+fn fill_rows<F: IncidenceScalar>(
+    first: usize,
+    block: &mut [F],
+    d: usize,
+    row: &impl Fn(usize, &mut [F]),
+) {
+    for (offset, out) in block.chunks_mut(d).enumerate() {
+        row(first + offset, out);
+    }
+}
+
 /// `out += w · x`, element by element.
 #[inline]
-fn accumulate(out: &mut [f32], w: f32, x: &[f32]) {
+fn accumulate<F: IncidenceScalar>(out: &mut [F], w: F, x: &[F]) {
     for (o, &xj) in out.iter_mut().zip(x) {
         *o += w * xj;
     }
@@ -819,23 +1160,55 @@ fn accumulate(out: &mut [f32], w: f32, x: &[f32]) {
 
 /// `Σ a[j] · b[j]`, summed in index order.
 #[inline]
-fn dot(a: &[f32], b: &[f32]) -> f32 {
+fn dot<F: IncidenceScalar>(a: &[F], b: &[F]) -> F {
     a.iter().zip(b).map(|(&x, &y)| x * y).sum()
 }
 
-/// The reverse incidence of one rank: for every lower cell, the ascending ids of the cells that
-/// contain it. A cell that names a member twice is listed twice.
+/// The reverse incidence of one rank: for every lower cell, its incidences in ascending order,
+/// labelled by `L` -- the ids of the cells that contain it ([`Cell`], the default), or the
+/// member-table positions that name it ([`Position`]). A cell that names a member twice is listed
+/// twice.
 ///
 /// # Invariants
 /// `offsets.len() == n_lower + 1`, non-decreasing, `offsets[n_lower] == cells.len()`, and every
 /// row sorted ascending.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RankCofaces {
+pub struct RankCofaces<L = Cell> {
     offsets: Vec<u32>,
     cells: Vec<u32>,
+    label: PhantomData<L>,
 }
 
-impl RankCofaces {
+/// What a reverse incidence lists for each lower cell: the [`Cell`] containing it, or the
+/// [`Position`] in the member table that names it.
+pub trait CofaceLabel: Copy {
+    /// The label of slot `slot` of cell `cell`, cells of `arity` members.
+    fn label(cell: usize, slot: usize, arity: usize) -> u32;
+}
+
+/// Lists cell ids: [`CellTopology::cofaces`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Cell;
+
+impl CofaceLabel for Cell {
+    #[inline]
+    fn label(cell: usize, _: usize, _: usize) -> u32 {
+        cell as u32
+    }
+}
+
+/// Lists member-table positions, `cell · arity + slot`: [`CellTopology::coface_positions`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Position;
+
+impl CofaceLabel for Position {
+    #[inline]
+    fn label(cell: usize, slot: usize, arity: usize) -> u32 {
+        (cell * arity + slot) as u32
+    }
+}
+
+impl<L: CofaceLabel> RankCofaces<L> {
     /// Counting sort over a flat member table: two passes and a prefix sum.
     fn build(members: &[u32], arity: usize, n_lower: usize) -> Self {
         let mut offsets = vec![0u32; n_lower + 1];
@@ -848,13 +1221,17 @@ impl RankCofaces {
         let mut cells = vec![0u32; members.len()];
         let mut cursor = offsets.clone();
         for (cell, chunk) in members.chunks_exact(arity).enumerate() {
-            for &member in chunk {
+            for (at, &member) in chunk.iter().enumerate() {
                 let slot = &mut cursor[member as usize];
-                cells[*slot as usize] = cell as u32;
+                cells[*slot as usize] = L::label(cell, at, arity);
                 *slot += 1;
             }
         }
-        Self { offsets, cells }
+        Self {
+            offsets,
+            cells,
+            label: PhantomData,
+        }
     }
 
     /// Lower cells covered.
@@ -863,7 +1240,8 @@ impl RankCofaces {
         self.offsets.len() - 1
     }
 
-    /// The cells containing lower cell `v`, ascending.
+    /// The labels of lower cell `v`, ascending: the cells containing it, or the positions naming
+    /// it.
     ///
     /// # Panics
     /// When `v >= n_lower`.
@@ -872,7 +1250,7 @@ impl RankCofaces {
         &self.cells[self.offsets[v] as usize..self.offsets[v + 1] as usize]
     }
 
-    /// The flat offsets and cell ids, for a caller that walks the CSR itself.
+    /// The flat offsets and labels, for a caller that walks the CSR itself.
     #[must_use]
     pub fn parts(&self) -> (&[u32], &[u32]) {
         (&self.offsets, &self.cells)

@@ -85,9 +85,11 @@ _No public symbols._
 - `BergeCost` — `hymeko_graph/src/direct_ir/informed.rs`
 - `BergeHeuristic` — `hymeko_graph/src/direct_ir/informed.rs`
 - `BoundedScorer` — `hymeko_graph/src/topk_cycles.rs`
+- `CofaceLabel` — `hymeko_graph/src/cell_topology.rs`
 - `CyclePruner` — `hymeko_graph/src/pruner.rs`
 - `CycleSampler` — `hymeko_graph/src/cycle_sampler.rs`
 - `Heuristic` — `hymeko_graph/src/traversal_heuristic.rs`
+- `IncidenceScalar` — `hymeko_graph/src/cell_topology.rs`
 - `Loader` — `hymeko_graph/src/signed_graph/loading.rs`
 - `PositionProvider` — `hymeko_graph/src/direct_ir/informed.rs`
 - `TransitionPolicy` — `hymeko_graph/src/direct_ir/informed.rs`
@@ -121,6 +123,7 @@ _No public symbols._
 - `BipartiteOnlyPruner` — `hymeko_graph/src/balance.rs`
 - `BuildOpts` — `hymeko_graph/src/incidence.rs`
 - `CartwrightHararyPruner` — `hymeko_graph/src/balance.rs`
+- `Cell` — `hymeko_graph/src/cell_topology.rs`
 - `Cell` — `hymeko_graph/src/octree.rs`
 - `CellLeviCoord` — `hymeko_graph/src/matroid/cell.rs`
 - `CellLeviMatroid` — `hymeko_graph/src/matroid/cell.rs`
@@ -183,6 +186,7 @@ _No public symbols._
 - `PageRankWorkspace` — `hymeko_graph/src/direct_ir/pagerank/workspace.rs`
 - `PathClosureSampler` — `hymeko_graph/src/path_closure.rs`
 - `PathHash` — `hymeko_graph/src/direct_ir/informed.rs`
+- `Position` — `hymeko_graph/src/cell_topology.rs`
 - `PreparedBergeSearch` — `hymeko_graph/src/direct_ir/informed/prepared.rs`
 - `Progress` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `PrunerStats` — `hymeko_graph/src/pruner.rs`
@@ -318,6 +322,7 @@ _No public symbols._
 - `clifford_fir_backward` — `hymeko_graph/src/spine.rs`
 - `clifford_fir_backward_with` — `hymeko_graph/src/spine.rs`
 - `clifford_fir_forward` — `hymeko_graph/src/spine.rs`
+- `coface_positions` — `hymeko_graph/src/cell_topology.rs`
 - `cofaces` — `hymeko_graph/src/cell_topology.rs`
 - `component_of` — `hymeko_graph/src/direct_ir/components.rs`
 - `component_of` — `hymeko_graph/src/direct_ir/s_connect.rs`
@@ -560,6 +565,7 @@ _No public symbols._
 - `targets` — `hymeko_graph/src/sphf.rs`
 - `tiered_m_v_by_degree` — `hymeko_graph/src/topk_cycles.rs`
 - `to_vec` — `hymeko_graph/src/cell_topology.rs`
+- `unit_incidence` — `hymeko_graph/src/cell_topology.rs`
 - `validate` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `vertex_count` — `hymeko_graph/src/matroid/cell.rs`
 - `vertices` — `hymeko_graph/src/cell_topology.rs`
@@ -568,6 +574,7 @@ _No public symbols._
 - `with_capacity` — `hymeko_graph/src/topk_cycles.rs`
 - `with_capacity` — `hymeko_graph/src/traversal.rs`
 - `with_capacity` — `hymeko_graph/src/traversal_heuristic.rs`
+- `with_cofaces` — `hymeko_graph/src/cell_topology.rs`
 - `with_limits` — `hymeko_graph/src/matroid/binary.rs`
 - `with_ordering` — `hymeko_graph/src/direct_ir/pagerank.rs`
 - `with_rank` — `hymeko_graph/src/cell_topology.rs`

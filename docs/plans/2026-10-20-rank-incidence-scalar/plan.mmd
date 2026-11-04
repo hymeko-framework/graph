@@ -1,0 +1,4 @@
+flowchart TB
+  topo[CellTopology f32 storage] --> view[RankIncidence<'a, F = f32>]
+  f32[HSiKAN / conv / messages, F = f32] --> view
+  f64[one-form normal operator, F = f64] --> view
