@@ -16,13 +16,13 @@
 name = "hymeko_graph_benchmarks"
 version = "0.1.0"
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 publish = false
 
 [dependencies]
 hymeko_graph = { path = "../hymeko_graph" }
 hymeko_pgraph = { path = "../hymeko_pgraph" }
-parser = { git = "https://github.com/hymeko-framework/parser.git", rev = "f11628591a8183586492807ecdf43c64e6d31c5f" }
+parser = { git = "https://github.com/hymeko-framework/parser.git", rev = "a7b50743fe9f55a8c122f27b3986478919f29345" }
 
 [dev-dependencies]
 criterion = "0.8.2"

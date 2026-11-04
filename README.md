@@ -1,6 +1,51 @@
 # graph
 
-Graph theory and hypergraph extensions for analysis and modelling with HyMeKo.
+Hypergraph and graph algorithms over the canonical HyMeKo IR. `direct_ir`
+walks the signed-incidence hypergraph that
+[core](https://github.com/hymeko-framework/core) compiles, in place: Berge
+paths, components, informed search, PageRank and matroids run without star or
+clique expansion and without a second graph model. A separate `SignedGraph`
+API serves explicitly pairwise signed graphs. Iterative solvers come from
+[tensor](https://github.com/hymeko-framework/tensor).
+
+## Crates
+
+| Crate | Contents | Framework dependencies |
+|---|---|---|
+| [`hymeko_graph`](hymeko_graph/) | Canonical-IR traversal (`direct_ir`), Berge paths, Dijkstra/A*, components, PageRank, Levi and binary matroids, cell topology, signed-graph cycle and walk enumeration with axiomatic pruning, top-k search | core, tensor |
+| [`hymeko_pgraph`](hymeko_pgraph/) | P-graph process networks over the IR: Material/Operating-Unit schema, A1-A5 axioms, MSG/SSG enumeration, constrained decision mapping, the ABB solver and the `pgraph` command line | graph, core, parser |
+| [`hymeko_sbsh`](hymeko_sbsh/) | Spatial bounded-width signed hypergraphs: an N-dimensional orthtree over positioned IR declarations and elimination-width certificates | graph, core |
+
+## Use
+
+```toml
+[dependencies]
+hymeko_core = { git = "https://github.com/hymeko-framework/core.git" }
+hymeko_graph = { git = "https://github.com/hymeko-framework/graph.git" }
+```
+
+```rust
+use std::path::Path;
+
+use hymeko::module_store::{execution::CompiledModel, source_provider::MemProvider};
+use hymeko::util::real_parser::RealParser;
+use hymeko_graph::direct_ir::{PageRank, PageRankConfig, PageRankModel, PageRankWorkspace};
+
+let source = "net_description {} net { a {} b {} c {} @link { ( +a, -b, -c ); } }";
+let sources = MemProvider::default().with_file("net.hymeko", source);
+let model = CompiledModel::compile(sources, RealParser, Path::new("net.hymeko"))
+    .map_err(|e| format!("{e:?}"))?; // ModuleLoadError is Debug, not Error
+
+let rank = PageRank::build(&model.program().ir, PageRankModel::default())?;
+let mut workspace = PageRankWorkspace::new();
+let result = rank.run(PageRankConfig::default(), &mut workspace, None)?;
+assert!(result.progress.converged);
+// result.scores holds one probability per canonical node, in NodeId order.
+```
+
+PageRank reuses its workspace across runs and reports an L1 error bound;
+reaching the iteration cap returns `converged == false`. The contracts of
+these and the other algorithms are in [docs/api-notes.md](docs/api-notes.md).
 
 ## Recorded results: native connected components
 
@@ -46,118 +91,12 @@ retain the measurement implementation. Timing cells are explicitly opt-in. The p
 compiled as a native C-ABI library with Zig `0.17.0-dev.242+5d55999d2`,
 `ReleaseFast`, target `x86_64-linux-gnu`, CPU `baseline`.
 
-The campaign parser, provenance and host-admission contracts have 31 focused
-Python tests. Their archived input fixtures are included in the repository:
+The campaign parser, provenance and host-admission contracts have focused
+Python tests. Some need NumPy, Matplotlib or NetworkX, and the host checks
+need a POSIX system:
 
 ```sh
 python -m unittest discover -s scripts/performance_evidence -p 'test_*.py'
-```
-
-## Canonical-IR algorithms
-
-`direct_ir::PageRank` ranks canonical IR nodes without materializing a pairwise
-graph. `PageRank::build(&ir, PageRankModel::default())` prepares an undirected
-vertex–hyperarc–vertex probability walk. `run(config, &mut workspace,
-personalization)` uses reusable `PageRankWorkspace` buffers and returns scores in
-`NodeId` order, iteration count, an L1 error bound and explicit convergence status.
-Reaching the iteration cap returns `converged=false` rather than claiming success.
-
-The default includes self-return and incidence multiplicity. `RankFlow` also
-offers explicit minus-to-plus and In-to-Out routing; algebraic sign and port
-direction remain independent. `RankWeights::Component(i)` selects one nonnegative
-numeric weight-vector component. Dangling nodes redistribute to the normalized
-personalization, uniform when absent. Every canonical node record is included;
-non-node arc targets are rejected. Each iteration takes O(nodes + arcs +
-incidences), with no clique expansion, and the tested prepared serial warm path allocates no heap storage.
-
-The default `PageRank::build` now consumes Core's numeric incidence projection
-and shared gather/scatter row operations. Target resolution and sign/port routing
-happen during preparation. Undirected unit incidence needs no coefficient array;
-directed unit incidence stores role bits, and weighted modes store normalized rates.
-The compensated arithmetic, selected vector component and convergence contract
-are unchanged. A fused per-arc apply needs no additional arc-sized scratch vector.
-
-An existing `PreparedIr` or incidence index can share the same topology with
-several consumers:
-
-```rust
-let projection = prepared.incidences()
-    .prepare_projection(hymeko::ir::incidence::IncidenceDomain::Nodes)?;
-let rank = PageRank::from_projection(projection.clone(), model)?;
-```
-
-Projection storage is O(incidences + arcs), with native-size indices preserving
-the canonical ID range. Normalizations remain specific to each PageRank model.
-The current comparison and its exact scope are linked above; older local reports
-record the intermediate implementations and are not part of this Git repository.
-
-For directed hyperarcs, construct `PageRankModel { flow: RankFlow::InToOut,
-..Default::default() }` for operator ports, or choose `RankFlow::MinusToPlus`
-for algebraic incidence roles. A hyperarc may have several source and destination
-slots: their mass is gathered and scattered without enumerating every source–target
-pair. Neutral/unspecified slots are inactive in the corresponding directed mode.
-An arc without destination mass is excluded from outgoing normalization; nodes
-without a remaining outgoing transition use the dangling-node rule. The published
-timing table currently characterizes the undirected mode only.
-
-The existing performance-evidence client has an explicit `--suite ranking` mode.
-It separates preparation, complete PageRank convergence and prepared reachability
-from graph construction. Cells require `HYMEKO_RANK_BENCH=1` and remain ignored in
-normal tests. Local unpublished revision sets may be checked through
-`--source-manifest`; files and binaries are hashed and source drift aborts a run.
-See `reports/2026-10-17-pagerank/report.pdf` for exact semantics, tested cases,
-measurement boundaries and the shared archive receipt.
-
-Signed edge-list tools share `signed_graph::{Loader, SignedEdgeListLoader}`.
-`load` accepts a buffered stream; `load_path` uses the same implementation for a
-file. Compatibility rules preserve the former example loaders' malformed-row and
-self-loop skipping, individual space/tab/comma separators, edge order, signs, and
-one-vertex empty-input convention. An unrepresentable vertex count returns an error.
-
-`signed_graph::SignedGraphGenerator` implements Core's `GraphGenerator` and
-`SyntheticGenerator`. It reproduces the existing seeded LCG fixtures while writing
-directly into the final edge/sign buffers. Probabilities use per-mille units.
-Cycle integration tests share typed runners and explicit comparison strategies;
-Core's `util::measurement` owns timing statistics and allocation instrumentation.
-
-`hymeko_pgraph::PGraphSchemaBuilder` builds an explicit-ID schema from material IDs,
-unit IDs and numbered edges. Validation and adjacency remain owned by
-`PGraphSchema::try_new`; conflicting node roles are reported, while repeated edge
-IDs retain the map constructor's last-write behavior. The named, domain-level
-construction API remains `PgraphBuilder`. Unit tests use a shared declarative
-schema case so their inputs and expected failures stay visible.
-
-`direct_ir::HopHeuristic` borrows a prepared DeclId-indexed hop table;
-`MaxHeuristic` composes two borrowed bounds and combines their guarantees by
-conjunction. Hop tables must describe exact undirected distances to the query's
-goal on the same IR, and the supplied step bound must be valid for the cost model.
-Construction checks numeric bounds and finite estimates; it does not certify the
-table's topology or its coupling to the cost model.
-
-Informed-search tests share borrowed cases and static Dijkstra/A* strategies.
-Evidence clients share checksum/work verification and typed TSV result rows;
-timing entry points remain explicitly opt-in. The declaration-permutation test
-compiles two reordered sources, checks actual ID changes and remapped references,
-and rejects use of a stale dense node ID. See
-`reports/2026-10-14-informed-search-runners.pdf` for validation and remaining limits.
-
-The public build pins Core by exact GitHub revision. Core owns construction,
-identity and incidence storage; `direct_ir` executes algorithms over that same IR.
-It is not another intermediate representation.
-
-| Crate | Responsibility | Framework dependencies |
-|---|---|---|
-| [`hymeko_graph`](hymeko_graph/) | Traversal, Berge paths, Dijkstra/A*, components, PageRank, Levi matroids, cycles and top-k search | Core (and its Tensor provider) |
-| [`hymeko_pgraph`](hymeko_pgraph/) | Material/Operating-Unit P-graph schema, axioms, MSG/SSG and ABB | Graph, Core, Parser |
-| [`hymeko_sbsh`](hymeko_sbsh/) | Spatial orthtree overlay and width certificates | Graph, Core |
-
-Both came out of `hymeko_framework_rust`, which is retired. **This repository
-is the canonical home for both.**
-
-```
-cargo test --locked -p hymeko_graph --test pagerank --test pagerank_alloc
-cargo test --locked -p hymeko_graph --test steiner_mycielski_nav --test matroid_vv
-cargo check --locked -p hymeko_graph -p hymeko_pgraph -p hymeko_sbsh --lib
 ```
 
 ## Nothing here needs SQLite
@@ -168,17 +107,13 @@ SQLite databases — so reading one means `rusqlite`, and `rusqlite` with
 with one external tool*, and no price at all to pay for using a graph
 library.
 
-So `pgip` is an **opt-in feature**. The default build of `hymeko_pgraph`
-resolves 114 crates and not one of them is `rusqlite` or `libsqlite3-sys`;
-there is no C in it. The `.pgip` reader, its round-trip tests and the two
+So `pgip` is an **opt-in feature**. No crate in the default build of
+`hymeko_pgraph` is `rusqlite` or `libsqlite3-sys`; there is no C in it. The `.pgip` reader, its round-trip tests and the two
 binaries that use it are all behind the feature:
 
 ```
 cargo build -p hymeko_pgraph --features pgip
 ```
-
-211 tests run without it, 216 with — the five extra being the Studio
-round-trips.
 
 ## Where the line is
 
@@ -206,14 +141,16 @@ of one thing. `axioms` validates A1–A5 against a lowered model and reports
 which failed and why — a verdict you read. The pruner is a predicate in a hot
 loop, and only A0/A1/A3 have a cycle-enumeration reading at all.
 
-## Hypergraph ownership
+## Build and test
 
-`hymeko_graph::direct_ir` traverses canonical Core hyperarcs directly. Berge
-paths, components, dual traversal, informed search, PageRank and Levi matroids
-use Core incidence views; this path does not require star or clique expansion.
-The separate `SignedGraph` API serves explicitly pairwise signed-graph workloads.
-`hymeko_pgraph` owns process-network semantics, and `hymeko_sbsh` supplies a spatial
-overlay while retaining Core declaration identity.
+```sh
+cargo test --locked
+cargo test --locked -p hymeko_graph --test pagerank --test matroid_binary
+cargo build --locked -p hymeko_pgraph --features pgip
+```
+
+`cargo dev-test` runs the correctness suites against a dynamic-library build,
+which shortens incremental rebuilds; see [dev/README.txt](dev/README.txt).
 
 ## Layout
 
@@ -221,28 +158,15 @@ overlay while retaining Core declaration identity.
 hymeko_graph/     canonical hypergraph and signed-graph algorithms, tests and examples
 hymeko_pgraph/    P-graph semantics, tests and optional binaries
 hymeko_sbsh/      spatial orthtree overlays and width certificates
-data/             fixtures both crates' tests read with include_str!
-benchmarks/       every bench, as a separate crate with its own workspace root
+data/             fixtures the tests read with include_str!
+benchmarks/       Criterion benches, as a separate crate with its own workspace root
+scripts/          the performance-evidence campaign runner and its tests
+docs/             API notes and the retained evidence
 ```
 
 `benchmarks/` has its own workspace so Criterion stays outside the library
-build. The retained comparison above uses the explicit performance-evidence test
-client. Publication checks resolve the separate benchmark dependencies; they do
-not execute every historical Criterion target.
+build.
 
-## Notes on the extraction
+## License
 
-- At the original extraction, source files were preserved except `hymeko_graph/src/lib.rs`,
-  whose doc comment was stale — it claimed the cycle enumerator still lived in
-  `hymeko_py/src/cycles.rs`.
-- `hymeko_pgraph`'s path dependencies on `../hymeko_core` and `../parser`
-  became git dependencies on the live split-out repos.
-- `data/pgraph/Chapter4/example4_3.pgip` was **not** brought across. It is a
-  32 MB SQLite blob that no test, bench or example references; everything else
-  under `data/` came, and the whole directory is 835 KB. Fetch it from the
-  monorepo if a Studio round-trip needs it.
-- `proptest` is dropped from both crates' dev-dependencies: declared, never
-  used.
-- `hymeko_pgraph_py`, the PyO3 binding, stayed behind. It is a packaging
-  concern rather than analysis, and needs a decision about where Python
-  bindings live in the split-out world.
+MIT; see [LICENSE](LICENSE).

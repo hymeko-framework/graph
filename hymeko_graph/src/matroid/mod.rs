@@ -22,7 +22,17 @@
 //! weighted shortest paths, incidence signs, hyperedge semantics, T/S-norm propagation, B/Bᵀ/BᵀB, nor
 //! message passing. It must never replace the canonical hypergraph.
 
+mod binary;
 mod cell;
+mod latent;
+pub use binary::{
+    BinaryBasis, BinaryCoordinate, BinaryFrontierBarrier, BinaryFrontierSearch, BinaryFrontierStep,
+    BinaryMatroidWorkspace, binary_column, binary_frontier_barrier, binary_frontier_search,
+    binary_weighted_basis,
+};
+pub use latent::{BinaryLatentProposals, binary_latent_proposals};
+mod reconstruction;
+pub use reconstruction::{BinaryReconstructionOptions, BinaryReconstructionSearch, binary_reconstruction_search};
 mod error;
 pub use cell::{CellLeviCoord, CellLeviMatroid, CellLeviSession};
 mod facade;

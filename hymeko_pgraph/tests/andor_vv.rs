@@ -1,6 +1,7 @@
 //! V&V for the direct-Ir AND/OR algebra (mission §3/§8): PGraphView adjacency parity vs the schema, the
 //! BooleanExact-closure == `close_producible` proof, AND/OR truth semantics, cycles, duplicate incidence,
-//! neutral rejection, empty graphs, out-of-range rejection, convergence/non-convergence, determinism.
+//! neutral rejection, empty graphs, out-of-range rejection, convergence/non-convergence, determinism, and
+//! the hypergraph-native ABB, whose unit firing decides every reachability cut as the schema closure does.
 //!
 //! Sources use the `<isa>` archetype classification (via `meta_pgraph.hymeko`) so `lower_resolved` yields
 //! both the canonical `Ir` (for `PGraphView`/`IncidenceIndex`) and the `LoweredPGraph` (for
@@ -22,8 +23,10 @@ use hymeko_pgraph::andor::{
 };
 use hymeko_pgraph::lowering::LoweredPGraph;
 use hymeko_pgraph::meta_resolve::lower_resolved;
-use hymeko_pgraph::msg::close_producible;
+use hymeko_pgraph::msg::{close_producible, maximal_structure_with_regime};
+use hymeko_pgraph::regime::Canonical;
 use hymeko_pgraph::view::{PGraphView, ViewError};
+use hymeko_pgraph::{Abb, AdditiveCost, BoundedAbb, ObjectiveSolution};
 
 const META: &str = include_str!("../data/meta_pgraph.hymeko");
 
@@ -136,6 +139,28 @@ fn boolean_exact_equals_close_producible_on_multiple_graphs() {
         let lowered = lower_of(&prog, &ms);
         parity_check(&prog.ir, &lowered);
     }
+}
+
+#[test]
+fn abb_unit_firing_decides_every_reachability_cut_as_the_schema_closure() {
+    let trace = |s: &ObjectiveSolution| {
+        (s.units.clone(), s.value, s.explored, s.pruned_by_bound, s.pruned_by_reachability, s.complete)
+    };
+    let mut cuts = 0;
+    for body in [MULTI_AND, MULTI_OR, CYCLE_NO_RAW, DUP_INPUT, CHAIN, REVERSE_CHAIN] {
+        let (prog, ms) = compile_isa(body);
+        let lowered = lower_of(&prog, &ms);
+        let index = build_incidence_index(&prog.ir).expect("index");
+        let view = PGraphView::from_lowered(&index, &lowered);
+        let msg = maximal_structure_with_regime(&lowered, &Canonical);
+        let cost = AdditiveCost::new(&lowered, None);
+        let abb = BoundedAbb::new(Abb::new(&Canonical, 0), &cost);
+        let firing = abb.solve_on(&view, &lowered, &msg).expect("propagate");
+        // Equal traces mean the same cut at every node of the same traversal.
+        assert_eq!(firing.as_ref().map(trace), abb.solve(&lowered, &msg).as_ref().map(trace), "{body}");
+        cuts += firing.map_or(0, |s| s.pruned_by_reachability);
+    }
+    assert!(cuts > 0);
 }
 
 #[test]

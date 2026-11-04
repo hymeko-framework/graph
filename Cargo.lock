@@ -328,9 +328,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "hymeko-graph-dev"
+version = "0.1.0"
+dependencies = [
+ "hymeko-graph-dylib",
+ "hymeko_core",
+ "rayon",
+]
+
+[[package]]
+name = "hymeko-graph-dylib"
+version = "0.1.0"
+dependencies = [
+ "hymeko_graph",
+]
+
+[[package]]
 name = "hymeko_core"
 version = "0.1.0"
-source = "git+https://github.com/hymeko-framework/core.git?rev=21f36f697d4249fd696466bd7bab8556f5d42fe8#21f36f697d4249fd696466bd7bab8556f5d42fe8"
+source = "git+https://github.com/hymeko-framework/core.git?rev=957cf76a19989c077ee5a10b283f5382441b8f08#957cf76a19989c077ee5a10b283f5382441b8f08"
 dependencies = [
  "blake3",
  "ciborium",
@@ -348,8 +364,14 @@ version = "0.1.0"
 dependencies = [
  "dashmap",
  "hymeko_core",
+ "hymeko_numerics",
  "rayon",
 ]
+
+[[package]]
+name = "hymeko_numerics"
+version = "0.1.0"
+source = "git+https://github.com/hymeko-framework/tensor.git?rev=2b0c18523e977d36691af2738bb8f4feabd8dc4b#2b0c18523e977d36691af2738bb8f4feabd8dc4b"
 
 [[package]]
 name = "hymeko_pgraph"
@@ -375,7 +397,7 @@ dependencies = [
 [[package]]
 name = "hymeko_tensor"
 version = "0.1.0"
-source = "git+https://github.com/hymeko-framework/tensor.git?rev=2d5c64347c4e75c6a520a1d1ee26e0895e127680#2d5c64347c4e75c6a520a1d1ee26e0895e127680"
+source = "git+https://github.com/hymeko-framework/tensor.git?rev=2b0c18523e977d36691af2738bb8f4feabd8dc4b#2b0c18523e977d36691af2738bb8f4feabd8dc4b"
 
 [[package]]
 name = "indexmap"
@@ -518,7 +540,7 @@ dependencies = [
 [[package]]
 name = "parser"
 version = "0.1.0"
-source = "git+https://github.com/hymeko-framework/parser.git?rev=f11628591a8183586492807ecdf43c64e6d31c5f#f11628591a8183586492807ecdf43c64e6d31c5f"
+source = "git+https://github.com/hymeko-framework/parser.git?rev=a7b50743fe9f55a8c122f27b3986478919f29345#a7b50743fe9f55a8c122f27b3986478919f29345"
 dependencies = [
  "lalrpop",
  "lalrpop-util",

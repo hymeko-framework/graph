@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from campaign import (
+    ApplicationCatalog,
     COMPARISON_WORKLOADS,
     PHASES,
     Campaign,
@@ -21,7 +22,344 @@ from campaign import (
 
 
 class EvidenceContract(unittest.TestCase):
-    ARCHIVE = Path(__file__).with_name("fixtures")
+    def test_application_catalog_freezes_sources_and_extends_only_explicit_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'model.hymeko';source.write_text('application {}')
+            data={'root':'.','cases':{'app_model':'model.hymeko'},
+                  'files':{'model.hymeko':hashlib.sha256(source.read_bytes()).hexdigest()}}
+            path=root/'catalog.json';path.write_text(json.dumps(data))
+            catalog=ApplicationCatalog(path)
+            self.assertEqual(catalog.source('app_model'),source)
+            self.assertEqual(catalog.identity(),hashlib.sha256(path.read_bytes()).hexdigest())
+            cells=Cell.select('ranking_solvers',subjects=['rank_auto','rank_hymeko','rank_gmres'],
+                              workloads=['app_model'],application_workloads=tuple(catalog.cases))
+            self.assertEqual(len(cells),3)
+            self.assertTrue(all(c.test=='native::native_cell' for c in cells))
+            memory=Cell.select('memory',subjects=['hymeko','hymeko-auto-fresh','hymeko-gmres-fresh'],
+                               workloads=['app_model'],application_workloads=tuple(catalog.cases))
+            self.assertEqual(len(memory),3)
+            with self.assertRaises(ValueError):Cell.select('ranking_solvers',workloads=['app_model'])
+            with self.assertRaises(ValueError):Cell.select('traversal',application_workloads=('app_model',))
+            self.assertEqual(len(Cell.select('ranking_solvers')),48)
+            source.write_text('changed {}')
+            with self.assertRaises(ValueError):catalog.identity()
+            path.write_text(json.dumps(data)+' ')
+            with self.assertRaises(ValueError):catalog.identity()
+
+    def test_quotient_is_explicit_and_basis_uses_certified_dimension(self):
+        self.assertEqual(len(Cell.select('ranking_solvers')),48)
+        cells=Cell.select('ranking_solvers',workloads=['components8_1m'],subjects=['rank_auto','rank_auto_quotient'])
+        self.assertEqual({c.subject for c in cells},{'rank_auto','rank_auto_quotient'})
+        for cell in cells:self.assertEqual(cell.environment(1)['HYMEKO_NATIVE_BENCH'],'1')
+        records=Evidence.parse(self.native_fixture('rank2_1m','rank_hymeko'))
+        records['CELL'][0]['subject']='rank_auto_quotient'
+        records['NATIVE'][0]['hymeko_iterations']='7'
+        records['AUTO']=[dict(policy='periodic_power_probe',selection_timed='true',iteration='none',
+            reason='KrylovEstimate',probe_interval='4',restart_limit='20',max_basis_bytes='67108864',
+            iteration_limit='200',probe_updates='4',selection_checks='1',power_updates='4',gmres_updates='3',
+            restart='2',basis_bytes='32',predicted_power_updates='30',power_work='10000',gmres_work='5000')]
+        records['QUOTIENT']=[dict(policy='Pendant',selected_nodes='2',iteration='none',canonical_validation='true',pairwise_matrix='false')]
+        Evidence.verify_native(records,records['CELL'][0])
+        for key,value in [('selected_nodes','0'),('selected_nodes','3'),('policy','Disabled'),
+                          ('canonical_validation','false'),('pairwise_matrix','true'),('iteration','1')]:
+            bad=copy.deepcopy(records);bad['QUOTIENT'][0][key]=value
+            with self.assertRaises(ValueError):Evidence.verify_native(bad,bad['CELL'][0])
+        bad=copy.deepcopy(records);del bad['QUOTIENT']
+        with self.assertRaises(ValueError):Evidence.verify_native(bad,bad['CELL'][0])
+        bad=copy.deepcopy(records);bad['AUTO'][0]['basis_bytes']='48'
+        with self.assertRaises(ValueError):Evidence.verify_native(bad,bad['CELL'][0])
+
+    def test_followup_rank_inputs_are_explicit_and_preserve_existing_defaults(self):
+        from campaign import RANKING_FOLLOWUP_WORKLOADS
+        self.assertEqual(len(Cell.select('ranking_solvers')), 48)
+        cells=Cell.select('ranking_solvers', workloads=list(RANKING_FOLLOWUP_WORKLOADS),
+                          subjects=['rank_auto','rank_hymeko','rank_gmres','rank_hypergraphz','hypernetx-pagerank-first'])
+        self.assertEqual(len(cells),40)
+        self.assertEqual({c.workload for c in cells},set(RANKING_FOLLOWUP_WORKLOADS))
+        for cell in cells:
+            self.assertEqual(cell.environment(1).get('HYMEKO_NATIVE_BENCH') if cell.suite=='algorithm'
+                             else cell.environment(1).get('HYMEKO_EXTERNAL_BENCH'), '1')
+        memory=Cell.select('memory',workloads=['rank32_1m@17'],subjects=['hymeko-auto-fresh','hymeko-auto-reused'])
+        self.assertEqual(len(memory),2)
+        self.assertTrue(all(c.environment(1)['HYMEKO_MEMORY_BENCH']=='1' for c in memory))
+
+    def test_batch_summary_keeps_per_batch_units_and_rejects_different_method_inputs(self):
+        subjects=['batch_astar_1','batch_assisted_1']
+        cells=Cell.select('search_reuse',workloads=['grid200_d20'],subjects=subjects)
+        observations=[]
+        for c in cells:
+            records=Evidence.parse(self.native_fixture())
+            records['CELL'][0].update(subject=c.subject,workload=c.workload,section='informed_query_batch')
+            records['BATCH']=[dict(queries='1',goal='2',seed='20261027',query_hash='10',verified='true',
+                unit='us_per_batch',construction_timed='false',query_plan_timed='false',index_builds='1',caller_setups='1',
+                workspace='fresh_per_batch_reused_within',metric_scope='resident_ir_to_preparation_queries_full_paths_and_drop')]
+            records['RESULT']=[dict(items='1',path_hash=records['CELL'][0]['checksum'],reachable='NA',hops='NA',cost_micros='NA')]
+            records['BATCH_QUERY']=[dict(ordinal='0',start='0',goal='2',reachable='true',cost_micros='1000000',
+                expected_cost_micros='1000000',hops='1',vertices='[0,2]',arc_ids='[0]',expanded_nodes='2',resolved_incidences='3')]
+            observations.append(dict(id=c.key,run=1,records=records,resources=dict(exit_code=0,peak_rss_bytes=1000,wall_seconds=1.)))
+        campaign=dict(complete=True,smoke=False,runs=1,suite='search_reuse',platform='native',source_commit='b'*40,
+            workloads=['grid200_d20'],subjects=subjects,cells=observations)
+        summary=CampaignSummary(Path('unused'));summary.accept(campaign)
+        self.assertEqual({r['batch_unit'] for r in summary.rows},{'us_per_batch'})
+        self.assertEqual({r['batch_queries'] for r in summary.rows},{'1'})
+        observations[-1]['records']['BATCH_QUERY'][0].update(start='1',vertices='[1,2]')
+        observations[-1]['records']['BATCH'][0]['query_hash']='11'
+        with self.assertRaises(ValueError):CampaignSummary(Path('unused')).accept(campaign)
+
+    def test_search_reuse_extends_existing_runner_without_changing_old_defaults(self):
+        cells=Cell.select('search_reuse')
+        self.assertEqual(len(cells),54)
+        self.assertEqual({c.test for c in cells},{'assisted::batch::batch_cell'})
+        self.assertTrue(all(c.environment(1)['HYMEKO_ASSISTED_BENCH']=='1' for c in cells))
+        self.assertTrue(all(c.environment(1)['RAYON_NUM_THREADS']=='1' for c in cells))
+        self.assertEqual(len(Cell.select('search_reuse',workloads=['grid200_d20'],subjects=['batch_astar_8'])),1)
+        self.assertEqual(len(Cell.select('assisted')),21)
+        self.assertEqual(len(Cell.select('assisted',workloads=['grid200_d20','grid200_d40'])),14)
+        self.assertEqual(len(Cell.select('routing',workloads=['grid200_d20','grid200_d40'])),22)
+        self.assertEqual(len(Cell.select('routing_unit',workloads=['grid200_d20','grid200_d40'])),8)
+        with self.assertRaises(ValueError):Cell.select('search_reuse',workloads=['map128'],subjects=['batch_bfs_1'])
+        with self.assertRaises(ValueError):Cell.select('search_reuse',subjects=['batch_astar_1000'])
+
+    def test_search_batch_rejects_changed_boundaries_costs_and_incomplete_witnesses(self):
+        cell=dict(subject='batch_assisted_1',nodes='3',arcs='1',section='informed_query_batch')
+        records={'BATCH':[dict(queries='1',goal='2',seed='20261027',query_hash='10',verified='true',
+            unit='us_per_batch',construction_timed='false',query_plan_timed='false',index_builds='1',caller_setups='1',
+            workspace='fresh_per_batch_reused_within',metric_scope='resident_ir_to_preparation_queries_full_paths_and_drop')],
+            'RESULT':[dict(items='1')],
+            'BATCH_QUERY':[dict(ordinal='0',start='0',goal='2',reachable='true',cost_micros='1000000',
+                expected_cost_micros='1000000',hops='1',vertices='[0,2]',arc_ids='[0]',expanded_nodes='2',resolved_incidences='3')]}
+        Evidence.verify_search_batch(records,cell)
+        for record,key,value in [('BATCH','unit','us_per_query'),('BATCH','index_builds','0'),
+                ('BATCH','queries','8'),('BATCH_QUERY','goal','1'),('BATCH_QUERY','cost_micros','2000000'),
+                ('BATCH_QUERY','vertices','[0]'),('BATCH_QUERY','arc_ids','[3]')]:
+            bad=copy.deepcopy(records);bad[record][0][key]=value
+            with self.subTest(key=key),self.assertRaises(ValueError):Evidence.verify_search_batch(bad,cell)
+        records['BATCH_QUERY'][0].update(reachable='false',cost_micros='NA',expected_cost_micros='NA',
+            hops='NA',vertices='[]',arc_ids='[]')
+        Evidence.verify_search_batch(records,cell)
+        cell['subject']='batch_bfs_1';records['BATCH'][0]['caller_setups']='0'
+        records['BATCH_QUERY'][0].update(expanded_nodes='NA',resolved_incidences='NA')
+        Evidence.verify_search_batch(records,cell)
+        records['BATCH_QUERY'][0].update(reachable='true',cost_micros='1000000',expected_cost_micros='1000000',
+            hops='1',vertices='[0,2]',arc_ids='[0]')
+        Evidence.verify_search_batch(records,cell)
+        records['BATCH_QUERY'][0].update(cost_micros='2000000',expected_cost_micros='2000000')
+        with self.assertRaises(ValueError):Evidence.verify_search_batch(records,cell)
+
+    def test_solver_summary_names_the_solver_contract_without_parsing_or_qemu_claims(self):
+        cell=Cell.select('ranking_solvers',workloads=['rank2_1m'],subjects=['rank_hymeko'])[0]
+        campaign={'complete':True,'smoke':False,'runs':1,'suite':'ranking_solvers',
+                  'platform':'native','source_commit':'a'*40,'workloads':['rank2_1m'],
+                  'subjects':['rank_hymeko'],'cells':[dict(id=cell.key,run=1,
+                      records=Evidence.parse(self.native_fixture('rank2_1m')),
+                      resources={'exit_code':0,'peak_rss_bytes':1000,'wall_seconds':1.})]}
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'native').mkdir()
+            (root/'native/campaign.json').write_text(json.dumps(campaign))
+            CampaignSummary(root).write(('native',))
+            provenance=json.loads((root/'source-provenance.json').read_text())
+            self.assertIn('matrix-free GMRES',provenance['measurement_contract'])
+            self.assertNotIn('File phases',provenance['measurement_contract'])
+            svg=(root/'search-platforms.svg').read_text()
+            self.assertIn('PageRank solver strategies',svg)
+            self.assertNotIn('QEMU',svg)
+
+    def test_solver_matrix_separates_structural_power_ordered_power_and_krylov(self):
+        self.assert_matrix_sizes('ranking_solvers', {None:48, 'rank2_1m':6})
+        cells=Cell.select('ranking_solvers',workloads=['chain65k','chain65k@17'],subjects=['rank_ordered','rank_gmres'])
+        self.assertEqual(len(cells),4)
+        self.assertTrue(all(c.environment(1)['HYMEKO_NATIVE_BENCH']=='1' for c in cells))
+        self.assertTrue(all(c.environment(1)['RAYON_NUM_THREADS']=='1' for c in cells))
+        with self.assertRaises(ValueError): Cell.select('ranking_solvers',workloads=['steiner255'])
+
+    def test_auto_selection_requires_timed_policy_and_consistent_execution_evidence(self):
+        cell = Cell.select('ranking_solvers', workloads=['rank2_1m'], subjects=['rank_auto'])[0]
+        self.assertEqual(cell.environment(1)['HYMEKO_NATIVE_BENCH'], '1')
+        records = Evidence.parse(self.native_fixture('rank2_1m'))
+        records['CELL'][0]['subject'] = 'rank_auto'
+        records['AUTO'] = [dict(policy='periodic_power_probe', selection_timed='true',
+            reason='PowerConverged', probe_interval='4', restart_limit='20', max_basis_bytes='67108864',
+            iteration_limit='200', probe_updates='2', selection_checks='1', power_updates='2', gmres_updates='0',
+            restart='0', basis_bytes='none', predicted_power_updates='0', power_work='0', gmres_work='0')]
+        Evidence.verify_native(records, records['CELL'][0])
+        for key, value in [('selection_timed', 'false'), ('power_updates', '1'),
+                           ('reason', 'KrylovEstimate'), ('restart_limit', '21')]:
+            broken = copy.deepcopy(records); broken['AUTO'][0][key] = value
+            with self.assertRaises(ValueError): Evidence.verify_native(broken, broken['CELL'][0])
+        missing = copy.deepcopy(records); del missing['AUTO']
+        with self.assertRaises(ValueError): Evidence.verify_native(missing, missing['CELL'][0])
+        records['NATIVE'][0]['hymeko_iterations'] = '15'
+        records['AUTO'][0].update(reason='KrylovEstimate', probe_updates='4', power_updates='12',
+            gmres_updates='3', restart='3', basis_bytes='72', predicted_power_updates='30',
+            power_work='10000', gmres_work='5000')
+        Evidence.verify_native(records, records['CELL'][0])
+        records['AUTO'][0]['basis_bytes'] = '80'
+        with self.assertRaises(ValueError): Evidence.verify_native(records, records['CELL'][0])
+        records['AUTO'][0]['basis_bytes'] = '67108865'
+        with self.assertRaises(ValueError): Evidence.verify_native(records, records['CELL'][0])
+
+    def test_auto_summary_retains_selection_and_rejects_mixed_process_decisions(self):
+        cell = Cell.select('ranking_solvers', workloads=['rank2_1m'], subjects=['rank_auto'])[0]
+        source = self.native_fixture('rank2_1m', 'rank_auto')
+        source += ('\nEVIDENCE_AUTO\tpolicy=periodic_power_probe\tselection_timed=true'
+                   '\treason=PowerConverged\tprobe_interval=4\trestart_limit=20\tmax_basis_bytes=67108864'
+                   '\titeration_limit=200\tprobe_updates=2\tselection_checks=1\tpower_updates=2\tgmres_updates=0'
+                   '\trestart=0\tbasis_bytes=none\tpredicted_power_updates=0\tpower_work=0\tgmres_work=0')
+        campaign = dict(complete=True, smoke=False, runs=2, suite='ranking_solvers',
+            platform='native', source_commit='a'*40, workloads=['rank2_1m'], subjects=['rank_auto'],
+            cells=[dict(id=cell.key, run=run, records=Evidence.parse(source),
+                        resources=dict(exit_code=0, peak_rss_bytes=1000, wall_seconds=1.)) for run in (1, 2)])
+        summary = CampaignSummary(Path('unused')); summary.accept(campaign)
+        self.assertEqual(summary.rows[0]['algorithm'], 'rank_auto')
+        self.assertEqual(summary.rows[0]['auto_reason'], 'PowerConverged')
+        self.assertEqual(summary.rows[0]['auto_power_updates'], '2')
+        campaign['cells'][1]['records']['AUTO'][0]['reason'] = 'PowerEstimate'
+        with self.assertRaises(ValueError): CampaignSummary(Path('unused')).accept(campaign)
+
+    def assert_matrix_sizes(self, suite, cases):
+        for workload, expected in cases.items():
+            with self.subTest(suite=suite, workload=workload):
+                selected = Cell.select(suite, workloads=None if workload is None else [workload])
+                self.assertEqual(len(selected), expected)
+
+    def test_phase_matrix_pairs_observed_and_unobserved_calls_and_is_opt_in(self):
+        cells=Cell.select('ranking_phases')
+        self.assert_matrix_sizes('ranking_phases', {None:32, 'rank2_1m':4})
+        for cell in cells:
+            observed=cell.subject=='rank_phases' or cell.subject.endswith('-profile')
+            self.assertEqual(cell.environment(1).get('HYMEKO_PHASE_BENCH'), '1' if observed else None)
+        with self.assertRaises(ValueError):Cell.select('ranking_phases',workloads=['steiner255'])
+
+    def test_phase_partition_rejects_missing_samples_and_unrelated_totals(self):
+        cell=dict(subject='rank_phases',repetitions='2',workload='chain65k')
+        records={'CELL':[cell],
+            'SAMPLE':[dict(ordinal=str(i),wall_us='12',repetitions='2') for i in range(9)],
+            'STAGE_SAMPLE':[dict(ordinal=str(i),repetitions='2',incidence_us='2',preparation_us='3',
+                solve_us='5',cleanup_us='1',inner_total_us='11',boundary='same_call_partition') for i in range(9)]}
+        Evidence.verify_stages(records,cell)
+        rows=CampaignSummary.phase_rows('native',dict(id='example',run=1,records=records))
+        self.assertEqual(len(rows),9)
+        self.assertEqual(rows[0]['total_us'],12.)
+        self.assertEqual(rows[0]['inner_total_us'],11.)
+        for key,value in [('inner_total_us','10'),('solve_us','nan'),('repetitions','1'),('boundary','independent_calls')]:
+            bad=copy.deepcopy(records);bad['STAGE_SAMPLE'][0][key]=value
+            with self.subTest(field=key), self.assertRaisesRegex(ValueError,'partition'):
+                Evidence.verify_stages(bad,cell)
+        bad=copy.deepcopy(records);bad['STAGE_SAMPLE'].pop()
+        with self.assertRaises(ValueError):Evidence.verify_stages(bad,cell)
+        bad=copy.deepcopy(records);bad['SAMPLE'][0]['wall_us']='9'
+        with self.assertRaises(ValueError):Evidence.verify_stages(bad,cell)
+        with self.assertRaisesRegex(ValueError,'uninstrumented control'):
+            Evidence.verify_stages(records,dict(subject='rank_hymeko'))
+
+    def test_scaling_matrix_keeps_candidates_and_default_matching_limits(self):
+        cells=Cell.select("routing_scale")
+        self.assert_matrix_sizes('routing_scale', {None:54, 'tour64':5, 'grid512_d511':12})
+        self.assertTrue(any(c.subject=="reticula-unitpath-first" for c in cells))
+        with self.assertRaises(ValueError):Cell.select("routing_scale",workloads=["tour16"])
+
+    def test_routing_matrix_has_full_paths_and_one_metric_tour_case(self):
+        cells=Cell.select("routing")
+        self.assert_matrix_sizes('routing', {None:38, 'tour16':5, 'map128':11})
+        for cell in cells:
+            switch="HYMEKO_EXTERNAL_BENCH" if cell.suite=="external" else "HYMEKO_ASSISTED_BENCH"
+            self.assertEqual(cell.environment(1)[switch],"1")
+        with self.assertRaises(ValueError): Cell.select("routing",workloads=["chain65k"])
+        unit=Cell.select("routing_unit")
+        self.assertEqual(len(unit),4)
+        self.assertEqual({c.workload for c in unit},{"grid200_d80"})
+        self.assertTrue(all(c.subject.endswith("-unitpath-first") for c in unit))
+
+    def test_assisted_selection_reuses_informed_client_and_requires_opt_in(self):
+        cells=Cell.select("assisted")
+        self.assertEqual(len(cells),21)
+        self.assertEqual({c.suite for c in cells},{"informed"})
+        self.assertEqual({c.test for c in cells},{"assisted::assisted_cell"})
+        self.assertTrue(all(c.environment(1)["HYMEKO_ASSISTED_BENCH"]=="1" for c in cells))
+        self.assertTrue(all(c.environment(1)["RAYON_NUM_THREADS"]=="1" for c in cells))
+        self.assertEqual(len(Cell.select("assisted",workloads=["map128"],subjects=["assisted","first_assisted"])),2)
+        with self.assertRaises(ValueError):Cell.select("assisted",workloads=["chain65k"])
+
+    def test_assisted_contract_checks_first_result_cost_and_timing_boundary(self):
+        cell={"subject":"first_assisted","nodes":"40","section":"informed_search"}
+        records={"INPUT":[{"pipeline":"berge_bound_assist","verified":"true","flow":"undirected",
+            "construction_timed":"false","index_timed":"true","caller_setup_timed":"true",
+            "goal_preparation_timed":"true","metric_scope":"resident_ir_to_index_caller_setup_search_and_drop",
+            "start":"0","goal":"39","expected_cost_micros":"12000000"}],
+            "RESULT":[{"cost_micros":"12000000"}]}
+        Evidence.verify_assisted(records,cell)
+        for field,value in [("index_timed","false"),("caller_setup_timed","false"),
+                            ("goal_preparation_timed","false"),("metric_scope","query_only"),("goal","40")]:
+            bad=copy.deepcopy(records);bad["INPUT"][0][field]=value
+            with self.assertRaises(ValueError):Evidence.verify_assisted(bad,cell)
+        bad=copy.deepcopy(records);bad["RESULT"][0]["cost_micros"]="13000000"
+        with self.assertRaises(ValueError):Evidence.verify_assisted(bad,cell)
+
+    def test_external_selection_reuses_native_controls_and_explicit_opt_in(self):
+        matrix = Cell.matrix("external", workloads=["steiner255"])
+        self.assertEqual(len(matrix), 29)
+        selected = Cell.select("external", workloads=["steiner255"],
+            subjects=["reticula-distance-prepared", "components_hymeko", "berge_path"])
+        self.assertEqual(len(selected), 3)
+        foreign = next(c for c in selected if c.suite == "external")
+        self.assertEqual(foreign.test, "external_cell")
+        self.assertEqual(foreign.environment(1)["HYMEKO_EXTERNAL_BENCH"], "1")
+        self.assertEqual(foreign.environment(1)["OPENBLAS_NUM_THREADS"], "1")
+        self.assertEqual({c.test for c in selected if c.suite == "algorithm"},
+                         {"native::native_cell", "ranking::ranking_cell"})
+
+    def test_external_ranking_matrix_keeps_native_controls_and_all_numberings(self):
+        cells=Cell.select('external_ranking')
+        self.assertEqual(len(cells),48)
+        self.assertEqual(len({c.workload for c in cells}),8)
+        selected=Cell.select('external_ranking',workloads=['hub32_1m@17'],
+                             subjects=['xgi-pagerank-first','rank_hymeko','rank_hypergraphz'])
+        self.assertEqual(len(selected),3)
+        self.assertEqual(selected[0].environment(1)['HYMEKO_EXTERNAL_BENCH'],'1')
+        with self.assertRaises(ValueError):Cell.select('external_ranking',workloads=['steiner255'])
+
+    def test_external_ranking_requires_full_residual_and_composition_attribution(self):
+        cell=dict(subject='xgi-pagerank-first',checksum='verified',threads='1',warmups='2',nodes='5')
+        records={'INPUT':[dict(construction_timed='false',cache_policy='first',metric_scope='full_rank',fixture_sha256='a'*64)],
+                 'EXTERNAL':[dict(backend='xgi',operation='pagerank',mode='first',full_result='true',checksum='verified',
+                    version='0.10.2',python='3.12.3',interface='python_api',completed_isolates='0',declared_isolates='2',
+                    native_nodes='5',implementation_sha256='b'*64,native_pagerank='composed_scipy_gmres',query_strategy='factorized')],
+                 'EXTERNAL_RANK':[dict(solver='scipy_gmres',solver_version='1.18.1',flow='undirected',weights='unit',
+                    self_return='true',personalization='uniform',converged='true',score_hash='verified',composition='factorized',
+                    damping='.85',tolerance='1e-10',residual_bound='1e-12',reference_l1='1e-12',mass='1',
+                    max_iterations='200',iterations='8',matvecs='10')]}
+        Evidence.verify_external(records,cell)
+        for key,value in [('solver','native'),('self_return','false'),('converged','false'),('score_hash','wrong'),
+                          ('residual_bound','nan'),('residual_bound','1e-8'),('reference_l1','1e-8'),('mass','0.9'),
+                          ('iterations','201'),('composition','native')]:
+            invalid=copy.deepcopy(records);invalid['EXTERNAL_RANK'][0][key]=value
+            with self.subTest(field=key),self.assertRaises(ValueError):Evidence.verify_external(invalid,cell)
+
+    def test_external_contract_rejects_unverified_domain_and_cache_drift(self):
+        source = self.fixture().replace("EVIDENCE_CELL\t", "EVIDENCE_CELL\tsection=external_graph\tsubject=hypernetx-components-cold\tthreads=1\twarmups=2\trepetitions=1\tnodes=5\t")
+        source += "\nEVIDENCE_INPUT\tconstruction_timed=false\tcache_policy=cold\tmetric_scope=first_query\tfixture_sha256=" + "a"*64
+        source += "\nEVIDENCE_EXTERNAL\tbackend=hypernetx\toperation=components\tmode=cold\tfull_result=true\tchecksum=123\tversion=2.4.3\tpython=3.12.3\tinterface=python_api\tcompleted_isolates=2\tdeclared_isolates=2\tnative_nodes=3\timplementation_sha256=" + "b"*64
+        Evidence.parse(source)
+        self.assert_rejected_mutations(source, [
+            ("full_result=true", "full_result=false"),
+            ("native_nodes=3", "native_nodes=5"),
+            ("cache_policy=cold", "cache_policy=prepared"),
+            ("repetitions=1", "repetitions=2"),
+            ("construction_timed=false", "construction_timed=true"),
+            ("operation=components", "operation=reachable"),
+        ])
+
+    def test_external_dependency_identity_detects_changed_fixture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)/"inputs.json"
+            data.write_text("{}")
+            args = SimpleNamespace(suite="external", algorithm=None, external_python=__file__,
+                external_input=str(data), platform="native", cpu=2)
+            runner = ProcessRunner(args)
+            self.assertEqual(len(runner.dependency_identity()["external_input"]), 64)
+            data.write_text('{"changed":true}')
+            with self.assertRaises(ValueError):
+                runner.dependency_identity()
 
     def assert_rejected_mutations(self, source, replacements):
         for old, new in replacements:
@@ -370,15 +708,28 @@ class EvidenceContract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Campaign.verify_sources(root, manifest)
 
+    def summary_campaign(self, platform):
+        """Synthetic protocol records; no archived timings or local reports required."""
+        cells = []
+        for run in (1, 2):
+            for cell in Cell.select("graph", subjects=["discrete_hops"]):
+                records = Evidence.parse(self.fixture())
+                records["CELL"][0].update(
+                    section="heuristic_preparation", workload=cell.workload,
+                    subject=cell.subject, nodes="3", arcs="2", incidences="4", threads="1",
+                )
+                cells.append(dict(id=cell.key, run=run, records=records,
+                                  resources=dict(exit_code=0, peak_rss_bytes=1000, wall_seconds=1.0)))
+        return dict(complete=True, smoke=False, suite="graph", runs=2,
+                    subjects=["discrete_hops"], source_commit="a" * 40,
+                    platform=platform, cells=cells)
+
     def test_summary_publishes_measured_boundaries_and_exact_hashes(self):
-        original = self.ARCHIVE
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for platform in ("windows", "native"):
                 (root / platform).mkdir()
-                (root / platform / "campaign.json").write_bytes(
-                    (original / platform / "campaign.json").read_bytes()
-                )
+                (root / platform / "campaign.json").write_text(json.dumps(self.summary_campaign(platform)))
             summary = CampaignSummary(root)
             (root / "stages").mkdir()
             (root / "stages" / "independent-evidence.json").write_text("{}")
@@ -537,13 +888,10 @@ class EvidenceContract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Evidence.parse(invalid)
 
-    def test_archived_campaign_rejects_corrupted_provenance_and_process_identity(self):
-        root = self.ARCHIVE
-        original = json.loads(
-            (root / "windows/campaign.json").read_text(encoding="utf8")
-        )
+    def test_campaign_rejects_corrupted_provenance_and_process_identity(self):
+        original = self.summary_campaign("windows")
         for fault in ("source", "checksum", "repetition", "missing"):
-            summary = CampaignSummary(root)
+            summary = CampaignSummary(Path("unused"))
             summary.accept(original)
             changed = copy.deepcopy(original)
             if fault == "source":

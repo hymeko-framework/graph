@@ -11,7 +11,7 @@ use hymeko::ir::ir::{AnnoR, ArcRec, Ir, RefAtomR, SignedRefR};
 use hymeko_graph::direct_ir::{
     BergeCost, BergeHeuristic, DirectedProducerConsumer, HyperTraversal, IncidenceWeightCost,
     InformedSearchError, InformedSearchWorkspace, MetricHeuristic, MetricStepCost,
-    PositionProvider, TraversalWorkspace, Undirected, UnitCost, ZeroHeuristic,
+    PositionProvider, PreparedBergeSearch, TraversalWorkspace, Undirected, UnitCost, ZeroHeuristic,
 };
 use ic::search::{AStar, Dijkstra, SearchCase};
 
@@ -200,6 +200,318 @@ fn inconsistent_admissibility_claim_is_rejected_before_search() {
         .unwrap_err(),
         InformedSearchError::InconsistentHeuristicInOptimalMode
     );
+}
+
+#[test]
+fn prepared_bound_assist_prunes_a_whole_hyperarc_before_member_visits() {
+    let mut ir = Ir::default();
+    let nodes: Vec<_> = (0..10).map(|_| ic::node_decl(&mut ir)).collect();
+    // The large distractor is deliberately before the one-hop goal arc.
+    ic::push_arc(
+        &mut ir,
+        nodes[..9].iter().map(|&d| ic::plus_ref(d, None)).collect(),
+    );
+    ic::push_arc(
+        &mut ir,
+        [nodes[0], nodes[9]]
+            .into_iter()
+            .map(|d| ic::plus_ref(d, None))
+            .collect(),
+    );
+    let index = build_incidence_index(&ir).unwrap();
+    let mut ws = InformedSearchWorkspace::new();
+    let control = SearchCase::new(
+        &HyperTraversal::new(&index),
+        NodeId::new(0),
+        NodeId::new(9),
+        &mut ws,
+    )
+    .run(&Dijkstra::new(&UnitCost, &Undirected))
+    .unwrap()
+    .unwrap();
+    let unassisted = ws.stats();
+    let prepared =
+        PreparedBergeSearch::build(&index, NodeId::new(9), &mut TraversalWorkspace::new()).unwrap();
+    let result = prepared
+        .search(NodeId::new(0), &UnitCost, &Undirected, &mut ws)
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.total_cost, 1.0);
+    assert_eq!(result.path_hash(), control.path_hash());
+    assert!(ws.stats().seeded_bound);
+    assert_eq!(ws.stats().witness_steps, 1);
+    assert_eq!(ws.stats().bound_pruned_arcs, 1);
+    assert_eq!(ws.stats().expanded_arcs, 1);
+    assert_eq!(ws.stats().resolved_incidences, 1);
+    assert_eq!(unassisted.resolved_incidences, 9);
+    assert!(ws.stats().resolved_incidences < unassisted.resolved_incidences);
+}
+
+#[test]
+fn prepared_caller_heuristic_changes_f_and_improves_the_initial_witness() {
+    use std::cell::Cell;
+    struct ExactDistances(Cell<usize>);
+    impl BergeHeuristic for ExactDistances {
+        const ADMISSIBLE: bool = true;
+        const CONSISTENT: bool = true;
+        fn h(&self, _: &Ir, node: DeclId) -> f64 {
+            self.0.set(self.0.get() + 1);
+            // Closed-form shortest distances to 4 for the six edges below.
+            [5.0, 6.0, 3.0, 6.0, 0.0][node.raw()]
+        }
+    }
+    let edges = [
+        (0, 1, 1.0),
+        (1, 4, 9.0),
+        (0, 2, 2.0),
+        (2, 4, 3.0),
+        (0, 3, 1.0),
+        (3, 4, 20.0),
+    ];
+    let ir = ic::weighted_graph_ir(5, &edges);
+    let index = build_incidence_index(&ir).unwrap();
+    let prepared =
+        PreparedBergeSearch::build(&index, NodeId::new(4), &mut TraversalWorkspace::new()).unwrap();
+    let cost = IncidenceWeightCost { base: 0.0 };
+    let mut ws = InformedSearchWorkspace::new();
+    let zero = prepared
+        .search(NodeId::new(0), &cost, &Undirected, &mut ws)
+        .unwrap()
+        .unwrap();
+    let without_caller = ws.stats();
+    let heuristic = ExactDistances(Cell::new(0));
+    let result = prepared
+        .search_with_heuristic(NodeId::new(0), &cost, &heuristic, &Undirected, &mut ws)
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.total_cost, 5.0); // The relaxed-tree witness costs 10.
+    assert_eq!(zero.total_cost, result.total_cost);
+    assert_eq!(
+        Some(result.total_cost),
+        ic::oracle_dijkstra_cost(
+            &ir,
+            &index,
+            NodeId::new(0),
+            NodeId::new(4),
+            OracleCost::Weight { base: 0.0 }
+        )
+    );
+    assert!(heuristic.0.get() > 0);
+    assert!(ws.stats().seeded_bound);
+    assert_eq!(ws.stats().witness_steps, 2);
+    assert!(ws.stats().expanded_nodes < without_caller.expanded_nodes);
+    assert_eq!(ws.stats().expanded_nodes, 3);
+    assert_eq!(without_caller.expanded_nodes, 5);
+    assert_eq!(result.steps[0].to.node, NodeId::new(2));
+}
+
+#[test]
+fn prepared_rejected_directed_witness_does_not_reject_other_routes_or_slots() {
+    use hymeko_graph::direct_ir::TransitionPolicy;
+    for (source, expected) in [
+        (
+            "vv {}\ng { s {} p {} goal {} @shared { (+ s, - p, + goal); } @entry { (- s, + p); } }\n",
+            2.0,
+        ),
+        (
+            "vv {}\ng { s {} goal {} @shared { (+ s, - s, + goal); } }\n",
+            1.0,
+        ),
+    ] {
+        let world = dc::compile(source);
+        let index = build_incidence_index(world.ir()).unwrap();
+        let prepared =
+            PreparedBergeSearch::build(&index, world.node("goal"), &mut TraversalWorkspace::new())
+                .unwrap();
+        let mut ws = InformedSearchWorkspace::new();
+        let path = prepared
+            .search(
+                world.node("s"),
+                &UnitCost,
+                &DirectedProducerConsumer,
+                &mut ws,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(path.total_cost, expected);
+        assert!(!ws.stats().seeded_bound);
+        assert_eq!(ws.stats().witness_steps, 1);
+        for step in &path.steps {
+            assert!(DirectedProducerConsumer.allows(
+                &index.resolve(step.arc, step.from.slot),
+                &index.resolve(step.arc, step.to.slot)
+            ));
+            assert_eq!(step.from.sign, -1);
+            assert_eq!(step.to.sign, 1);
+        }
+        if expected == 1.0 {
+            assert_eq!(path.steps[0].from.slot, 1);
+        }
+    }
+}
+
+#[test]
+fn prepared_zero_cost_and_equal_bound_paths_remain_eligible_and_deterministic() {
+    let ir = ic::weighted_graph_ir(4, &[(0, 1, 0.0), (1, 3, 1.0), (0, 2, 0.0), (2, 3, 1.0)]);
+    let index = build_incidence_index(&ir).unwrap();
+    let prepared =
+        PreparedBergeSearch::build(&index, NodeId::new(3), &mut TraversalWorkspace::new()).unwrap();
+    let mut ws = InformedSearchWorkspace::new();
+    for base in [0.0, 0.25] {
+        let cost = IncidenceWeightCost { base };
+        let mut hash = None;
+        for _ in 0..8 {
+            let path = prepared
+                .search(NodeId::new(0), &cost, &Undirected, &mut ws)
+                .unwrap()
+                .unwrap();
+            assert_eq!(path.total_cost, 1.0 + 2.0 * base);
+            assert_eq!(path.hyperedge_len(), 2);
+            assert!(ws.stats().seeded_bound);
+            assert_eq!(ws.stats().witness_steps, 2);
+            assert_eq!(*hash.get_or_insert(path.path_hash()), path.path_hash());
+        }
+    }
+    let identity = prepared
+        .search(NodeId::new(3), &UnitCost, &Undirected, &mut ws)
+        .unwrap()
+        .unwrap();
+    assert_eq!(identity.total_cost, 0.0);
+    assert!(identity.steps.is_empty());
+    assert_eq!(ws.stats().witness_steps, 0);
+    assert_eq!(ws.stats().expanded_nodes, 0);
+}
+
+#[test]
+fn prepared_overflowing_optional_witness_falls_back_to_a_finite_route() {
+    let ir = ic::weighted_graph_ir(
+        4,
+        &[(0, 1, f64::MAX), (1, 3, f64::MAX), (0, 2, 1.0), (2, 3, 1.0)],
+    );
+    let index = build_incidence_index(&ir).unwrap();
+    let prepared =
+        PreparedBergeSearch::build(&index, NodeId::new(3), &mut TraversalWorkspace::new()).unwrap();
+    let mut ws = InformedSearchWorkspace::new();
+    let path = prepared
+        .search(
+            NodeId::new(0),
+            &IncidenceWeightCost { base: 0.0 },
+            &Undirected,
+            &mut ws,
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(path.total_cost, 2.0);
+    assert_eq!(path.steps[0].to.node, NodeId::new(2));
+    assert!(!ws.stats().seeded_bound);
+    assert_eq!(ws.stats().witness_steps, 2);
+}
+
+#[test]
+fn prepared_bad_heuristics_and_witness_costs_fail_closed() {
+    struct Uncertified;
+    impl BergeHeuristic for Uncertified {
+        const ADMISSIBLE: bool = false;
+        const CONSISTENT: bool = true;
+        fn h(&self, _: &Ir, _: DeclId) -> f64 {
+            panic!("uncertified bound must not run")
+        }
+    }
+    let ir = ic::window_ir(4, 2, false, SignMode::AllPlus);
+    let index = build_incidence_index(&ir).unwrap();
+    let prepared =
+        PreparedBergeSearch::build(&index, NodeId::new(3), &mut TraversalWorkspace::new()).unwrap();
+    let mut ws = InformedSearchWorkspace::new();
+    assert!(matches!(
+        prepared.search_with_heuristic(
+            NodeId::new(0),
+            &UnitCost,
+            &Uncertified,
+            &Undirected,
+            &mut ws
+        ),
+        Err(InformedSearchError::InconsistentHeuristicInOptimalMode)
+    ));
+    assert!(matches!(
+        prepared.search_with_heuristic(
+            NodeId::new(99),
+            &UnitCost,
+            &ZeroHeuristic,
+            &Undirected,
+            &mut ws
+        ),
+        Err(InformedSearchError::InvalidStart { .. })
+    ));
+    for which in [-1.0, f64::NAN, f64::INFINITY] {
+        assert!(matches!(
+            prepared.search(
+                NodeId::new(0),
+                &BadCostModel { which },
+                &Undirected,
+                &mut ws
+            ),
+            Err(InformedSearchError::BadCost { .. })
+        ));
+        assert!(matches!(
+            prepared.search(
+                NodeId::new(0),
+                &IncidenceWeightCost { base: which },
+                &Undirected,
+                &mut ws
+            ),
+            Err(InformedSearchError::BadCost { .. })
+        ));
+    }
+    // Forbidden transitions do not evaluate their costs, including during
+    // optional witness probing. All-plus incidences admit no directed step.
+    assert!(
+        prepared
+            .search(
+                NodeId::new(0),
+                &BadCostModel { which: f64::NAN },
+                &DirectedProducerConsumer,
+                &mut ws
+            )
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn prepared_decimal_bounds_do_not_prune_the_only_feasible_path() {
+    for n in [4, 10, 33] {
+        let edges: Vec<_> = (0..n - 1).map(|i| (i, i + 1, 0.0)).collect();
+        let ir = ic::weighted_graph_ir(n, &edges);
+        let index = build_incidence_index(&ir).unwrap();
+        let prepared =
+            PreparedBergeSearch::build(&index, NodeId::new(n - 1), &mut TraversalWorkspace::new())
+                .unwrap();
+        for base in [
+            0.1,
+            0.3,
+            1e-200,
+            1e200,
+            f64::from_bits(1),
+            f64::MIN_POSITIVE * 0.5,
+        ] {
+            let actual = prepared
+                .search(
+                    NodeId::new(0),
+                    &IncidenceWeightCost { base },
+                    &Undirected,
+                    &mut InformedSearchWorkspace::new(),
+                )
+                .unwrap();
+            let oracle = ic::oracle_dijkstra_cost(
+                &ir,
+                &index,
+                NodeId::new(0),
+                NodeId::new(n - 1),
+                OracleCost::Weight { base },
+            );
+            assert_eq!(actual.map(|p| p.total_cost), oracle, "n={n}, base={base}");
+        }
+    }
 }
 
 fn unit_path_cost<P: hymeko_graph::direct_ir::TransitionPolicy>(
@@ -640,6 +952,25 @@ fn declaration_order_permutation_preserves_cost() {
                 dijkstra.as_ref().map(|p| p.path_hash()),
                 astar.as_ref().map(|p| p.path_hash())
             );
+            let prepared = PreparedBergeSearch::build(
+                traversal.index(),
+                world.node(to),
+                &mut TraversalWorkspace::new(),
+            )
+            .unwrap();
+            let assisted = prepared
+                .search_with_heuristic(
+                    world.node(from),
+                    &UnitCost,
+                    &ZeroHeuristic,
+                    &Undirected,
+                    &mut workspace,
+                )
+                .unwrap();
+            assert_eq!(
+                assisted.map(|p| p.total_cost),
+                dijkstra.as_ref().map(|p| p.total_cost)
+            );
             dijkstra.map(|p| p.total_cost)
         };
         assert_eq!(query(&original, &left), expected);
@@ -832,4 +1163,18 @@ fn consistent_astar_preserves_cheapest_entry_to_shared_arc() {
         .unwrap()
         .unwrap();
     assert_eq!(astar.total_cost, dijkstra.total_cost);
+    let prepared =
+        PreparedBergeSearch::build(&idx, NodeId::new(3), &mut TraversalWorkspace::new()).unwrap();
+    let assisted = prepared
+        .search_with_heuristic(
+            NodeId::new(0),
+            &cost,
+            &ConsistentBound,
+            &Undirected,
+            &mut ws,
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(assisted.total_cost, oracle.unwrap());
+    assert!(ws.stats().seeded_bound);
 }

@@ -1,8 +1,0 @@
-%% P3.1 map routing + admissible heuristics on the direct-Ir path.
-flowchart TD
-    GEN["map_grid_ir / map_grid_with_transport_ir (coords+weights IN the Ir)"] --> IR["canonical Ir"]
-    IR --> IDX["IncidenceIndex"]
-    IDX --> H["test-side BergeHeuristic: IrPositions->Metric ; Discrete(hops*min_cost) ; Combined=max"]
-    H --> AST["astar_berge_path (consistent -> optimal)"]
-    AST --> PROOF["admissible h<=h* ; consistent h(u)<=c+h(v) ; cost==Dijkstra==oracle"]
-    IDX --> DIJ["dijkstra_berge_path (baseline)"]

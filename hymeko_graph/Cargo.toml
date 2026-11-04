@@ -3,13 +3,17 @@ name = "hymeko_graph"
 version = "0.1.0"
 edition = "2024"
 description = "Generic signed-graph cycle and walk enumeration with axiomatic pruning, and direct zero-copy traversal of the canonical HyMeKo IR (hymeko_core::ir). Cycle enumeration can structurally reject candidates that violate domain axioms (Friedler P-graph A1-A5, Cartwright-Harary balance, Davis weak balance, bipartite alternation) BEFORE materialising them; the direct_ir path walks the canonical signed-incidence hypergraph in place, with no star/clique/CSR/SignedGraph materialisation."
-license = "MIT OR Apache-2.0"
+license = "MIT"
 repository = "https://github.com/hymeko-framework/graph"
 keywords = ["graph", "cycle", "signed-graph", "p-graph", "hypergraph"]
 categories = ["algorithms", "data-structures"]
 
 [lib]
 name = "hymeko_graph"
+
+[features]
+# Test-binary-only observation; ordinary builds/tests do not track live heap bytes.
+evidence-heap = []
 
 [dependencies]
 rayon = "1.10"
@@ -22,6 +26,8 @@ dashmap = "6"
 # `SignedGraph` / cycle / walk / spine algorithms remain usable with nothing
 # but rayon + dashmap behind them.
 hymeko_core = { workspace = true }
+# Reuse Tensor's matrix-free Krylov solver at the same revision as Core's tensor.
+hymeko_numerics = { workspace = true }
 
 # No dev-dependencies. The tests here need nothing but the library + the IR it
 # already pulls, and the examples need nothing at all.

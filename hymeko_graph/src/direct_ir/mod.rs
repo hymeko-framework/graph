@@ -46,6 +46,7 @@ pub mod dual;
 pub mod informed;
 pub mod pagerank;
 pub mod s_connect;
+pub mod tour;
 pub mod traversal;
 pub mod workspace;
 
@@ -66,10 +67,12 @@ pub use informed::{
     WeightedBergePath, ZeroHeuristic, astar_berge_path, dijkstra_berge_path,
 };
 pub use pagerank::{
-    PageRank, PageRankConfig, PageRankError, PageRankModel, PageRankOptions, PageRankResult,
-    PageRankWorkspace, RankFlow, RankOrdering, RankWeights,
+    PageRank, PageRankAutoConfig, PageRankAutoReason, PageRankAutoSelection, PageRankConfig,
+    PageRankError, PageRankModel, PageRankOptions, PageRankQuotient, PageRankResult,
+    PageRankSolver, PageRankWorkspace, RankFlow, RankOrdering, RankWeights,
 };
 pub use s_connect::{SComponentLabeling, s_connected_components};
+pub use tour::{BergeTour, Christofides, TourError, TourLimits};
 pub use traversal::{BergeIncidence, BergePath, BergeStep, HyperTraversal, NodeSet};
 pub use workspace::TraversalWorkspace;
 

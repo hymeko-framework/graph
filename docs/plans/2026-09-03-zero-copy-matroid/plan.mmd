@@ -1,7 +1,0 @@
-%% P3.3 zero-copy rank-2 graphic matroid over canonical Ir.
-flowchart TD
-    IR["canonical Ir + IncidenceIndex (borrowed)"] --> FAC["MatroidRef{ir,incidence} : O(1), Copy, 2 words"]
-    FAC --> WS["caller-owned GraphicMatroidWorkspace (DSU: parent/rank/generation/scratch)"]
-    WS --> OPS["rank = N - C ; spanning forest ; weighted basis (greedy = Kruskal) ; incremental cycle"]
-    OPS --> ORACLE["vs exhaustive axioms ; connected_components ; independent Kruskal ; full rebuild"]
-    OPS --> LIM["semantic limit: connectivity only; NOT shortest-path/cardinality/BtB/T-S-norm"]
