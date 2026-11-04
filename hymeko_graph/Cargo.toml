@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Generic signed-graph cycle and walk enumeration with axiomatic pruning, and direct zero-copy traversal of the canonical HyMeKo IR (hymeko_core::ir). Cycle enumeration can structurally reject candidates that violate domain axioms (Friedler P-graph A1-A5, Cartwright-Harary balance, Davis weak balance, bipartite alternation) BEFORE materialising them; the direct_ir path walks the canonical signed-incidence hypergraph in place, with no star/clique/CSR/SignedGraph materialisation."
 license = "MIT"
-repository = "http://amaterasu.local:3000/hymeko/graph"
+repository = "https://github.com/hymeko-framework/graph"
 keywords = ["graph", "cycle", "signed-graph", "p-graph", "hypergraph"]
 categories = ["algorithms", "data-structures"]
 
